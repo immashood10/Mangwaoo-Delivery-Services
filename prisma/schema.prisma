@@ -1,0 +1,449 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Identity ────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  phone     String?  @unique
+  password  String
+  role      Role
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customer      Customer?
+  seller        Seller?
+  rider         Rider?
+  wallet        Wallet?
+  addresses     Address[]
+  notifications Notification[]
+  passwordResetTokens PasswordResetToken[]
+}
+
+// Reset links are delivered over WhatsApp (no email service configured), so
+// the raw token only ever appears in the WhatsApp message itself — the DB
+// stores just its hash, same principle as a password hash.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+enum Role {
+  CUSTOMER
+  SELLER
+  RIDER
+  ADMIN
+}
+
+enum SellerType {
+  MART
+  GULPLAZA_OWNER
+  WHOLESALER
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  orders         Order[]
+  gulplazaOrders GulplazaOrder[]
+  reviews        Review[]
+  conversations  Conversation[]
+  cartItems      CartItem[]
+}
+
+model Seller {
+  id           String     @id @default(cuid())
+  userId       String     @unique
+  user         User       @relation(fields: [userId], references: [id])
+  businessName String
+  sellerType   SellerType @default(MART)
+  isApproved   Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+
+  /// GulPlaza-specific identity verification fields, collected at signup for
+  /// GULPLAZA_OWNER accounts only and reviewed manually before approval.
+  shopNo   String?
+  nicImage String?
+
+  products         Product[]
+  orders           Order[]
+  gulplazaProducts GulplazaProduct[]
+  gulplazaOrders   GulplazaOrder[]
+  conversations    Conversation[]
+  cartItems        CartItem[]
+}
+
+model Rider {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id])
+  vehicleType String?
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  orders            Order[]
+  locations         RiderLocation[]
+  deliveryTrackings DeliveryTracking[]
+}
+
+// ── Catalog ─────────────────────────────────────────────────
+
+model Category {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  imageUrl String?
+  products Product[]
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Decimal
+  stock       Int      @default(0)
+  images      String[] @default([])
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  sellerId   String
+  seller     Seller   @relation(fields: [sellerId], references: [id])
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  orderItems OrderItem[]
+  reviews    Review[]
+}
+
+// ── Ordering ────────────────────────────────────────────────
+
+model Order {
+  id          String      @id @default(cuid())
+  status      OrderStatus @default(PENDING)
+  totalAmount Decimal
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  sellerId   String
+  seller     Seller   @relation(fields: [sellerId], references: [id])
+  riderId    String?
+  rider      Rider?   @relation(fields: [riderId], references: [id])
+  addressId  String
+  address    Address  @relation(fields: [addressId], references: [id])
+  couponId   String?
+  coupon     Coupon?  @relation(fields: [couponId], references: [id])
+
+  items    OrderItem[]
+  payment  Payment?
+  tracking DeliveryTracking?
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+model OrderItem {
+  id       String @id @default(cuid())
+  quantity Int
+  price    Decimal
+
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+// ── Messaging ───────────────────────────────────────────────
+// One running thread per customer-seller pair, shared across both
+// MangwaooMart and GulPlaza products from that seller rather than
+// fragmenting into a separate thread per product.
+
+model Conversation {
+  id          String   @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  sellerId    String
+  seller      Seller   @relation(fields: [sellerId], references: [id])
+  productName String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  messages Message[]
+
+  @@unique([customerId, sellerId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  senderRole     SenderRole
+  body           String
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+}
+
+enum SenderRole {
+  CUSTOMER
+  SELLER
+}
+
+// A live mirror of what's sitting in a customer's client-side cart, synced on
+// every cart change while signed in. Lets a seller see "pending — still in
+// cart" demand for their products even before (or instead of) a real Order
+// gets placed. Rows are simply replaced wholesale on each sync and deleted
+// once the customer checks out (see /api/orders, /api/gulplaza-orders).
+model CartItem {
+  id          String          @id @default(cuid())
+  customerId  String
+  customer    Customer        @relation(fields: [customerId], references: [id])
+  sellerId    String
+  seller      Seller          @relation(fields: [sellerId], references: [id])
+  marketplace CartMarketplace
+  productId   String
+  productName String
+  price       Decimal
+  quantity    Int
+  updatedAt   DateTime        @updatedAt
+  createdAt   DateTime        @default(now())
+
+  @@unique([customerId, productId, marketplace])
+}
+
+enum CartMarketplace {
+  MART
+  GULPLAZA
+}
+
+// ── GulPlaza Marketplace ────────────────────────────────────
+// A separate catalog + order flow restricted to approved Gulplaza owners
+// and wholesalers (Seller.sellerType). Kept independent of Product/Order
+// rather than reusing them, since GulPlaza listings and orders are gated
+// to a different seller population than general MangwaooMart vendors.
+
+model GulplazaCategory {
+  id       String            @id @default(cuid())
+  name     String            @unique
+  imageUrl String?
+  products GulplazaProduct[]
+}
+
+model GulplazaProduct {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Decimal
+  stock       Int      @default(0)
+  images      String[] @default([])
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  sellerId   String
+  seller     Seller           @relation(fields: [sellerId], references: [id])
+  categoryId String
+  category   GulplazaCategory @relation(fields: [categoryId], references: [id])
+
+  orderItems GulplazaOrderItem[]
+}
+
+model GulplazaOrder {
+  id          String      @id @default(cuid())
+  status      OrderStatus @default(PENDING)
+  totalAmount Decimal
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  sellerId   String
+  seller     Seller   @relation(fields: [sellerId], references: [id])
+  addressId  String
+  address    Address  @relation(fields: [addressId], references: [id])
+
+  items   GulplazaOrderItem[]
+  payment GulplazaPayment?
+}
+
+model GulplazaOrderItem {
+  id       String @id @default(cuid())
+  quantity Int
+  price    Decimal
+
+  orderId   String
+  order     GulplazaOrder   @relation(fields: [orderId], references: [id])
+  productId String
+  product   GulplazaProduct @relation(fields: [productId], references: [id])
+}
+
+model GulplazaPayment {
+  id        String        @id @default(cuid())
+  amount    Decimal
+  method    PaymentMethod
+  status    PaymentStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+
+  orderId String        @unique
+  order   GulplazaOrder @relation(fields: [orderId], references: [id])
+}
+
+// ── Payments & Wallet ───────────────────────────────────────
+
+model Payment {
+  id        String        @id @default(cuid())
+  amount    Decimal
+  method    PaymentMethod
+  status    PaymentStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id])
+}
+
+enum PaymentMethod {
+  CASH_ON_DELIVERY
+  CARD
+  WALLET
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model Wallet {
+  id        String   @id @default(cuid())
+  balance   Decimal  @default(0)
+  createdAt DateTime @default(now())
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  transactions Transaction[]
+}
+
+model Transaction {
+  id        String          @id @default(cuid())
+  amount    Decimal
+  type      TransactionType
+  note      String?
+  createdAt DateTime        @default(now())
+
+  walletId String
+  wallet   Wallet @relation(fields: [walletId], references: [id])
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
+// ── Addresses, Reviews, Coupons, Notifications ─────────────
+
+model Address {
+  id        String   @id @default(cuid())
+  label     String?
+  street    String
+  city      String
+  latitude  Float?
+  longitude Float?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  orders         Order[]
+  gulplazaOrders GulplazaOrder[]
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+}
+
+model Coupon {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  discountPercent Float
+  maxUses         Int?
+  usedCount       Int       @default(0)
+  expiresAt       DateTime?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+
+  orders Order[]
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+// ── Delivery Tracking ───────────────────────────────────────
+
+model DeliveryTracking {
+  id        String   @id @default(cuid())
+  status    String
+  latitude  Float?
+  longitude Float?
+  updatedAt DateTime @updatedAt
+
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id])
+  riderId String?
+  rider   Rider?  @relation(fields: [riderId], references: [id])
+}
+
+model RiderLocation {
+  id         String   @id @default(cuid())
+  latitude   Float
+  longitude  Float
+  recordedAt DateTime @default(now())
+
+  riderId String
+  rider   Rider  @relation(fields: [riderId], references: [id])
+}

@@ -1,0 +1,227 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+import { User, MapPin, Banknote, Smartphone, XCircle, PackageSearch, History as HistoryIcon, MessageSquare } from 'lucide-react';
+import MessagesInbox from './MessagesInbox';
+
+type OrderItem = {
+  id: string;
+  productName: string;
+  quantity: number;
+  price: number;
+};
+
+type Order = {
+  id: string;
+  marketplace: 'mart' | 'gulplaza';
+  status: string;
+  totalAmount: number;
+  createdAt: string;
+  sellerName: string;
+  address: string;
+  paymentMethod: string | null;
+  paymentStatus: string | null;
+  items: OrderItem[];
+};
+
+const ORDER_STATUS_STYLES: Record<string, string> = {
+  PENDING: 'bg-yellow-50 text-yellow-700',
+  CONFIRMED: 'bg-blue-50 text-blue-700',
+  PREPARING: 'bg-blue-50 text-blue-700',
+  OUT_FOR_DELIVERY: 'bg-purple-50 text-purple-700',
+  DELIVERED: 'bg-green-50 text-green-700',
+  CANCELLED: 'bg-red-50 text-red-700',
+};
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  CASH_ON_DELIVERY: 'Cash on Delivery',
+  WALLET: 'EasyPaisa / JazzCash',
+  CARD: 'Card',
+  BANK_TRANSFER: 'Bank Transfer',
+};
+
+const CANCELLABLE_STATUSES = ['PENDING', 'CONFIRMED', 'PREPARING'];
+const HISTORY_STATUSES = ['DELIVERED', 'CANCELLED'];
+
+const TABS = [
+  { id: 'orders', label: 'Orders', icon: PackageSearch },
+  { id: 'history', label: 'History', icon: HistoryIcon },
+  { id: 'messages', label: 'Messages', icon: MessageSquare },
+] as const;
+
+type TabId = (typeof TABS)[number]['id'];
+
+function OrderCard({ order, onCancelled }: { order: Order; onCancelled: () => void }) {
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  const handleCancel = async () => {
+    if (!window.confirm('Cancel this order?')) return;
+
+    setIsCancelling(true);
+
+    try {
+      const endpoint =
+        order.marketplace === 'mart' ? `/api/orders/${order.id}/cancel` : `/api/gulplaza-orders/${order.id}/cancel`;
+      const response = await fetch(endpoint, { method: 'PATCH' });
+      if (response.ok) {
+        onCancelled();
+      }
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-gray-100 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div>
+          <p className="text-sm font-semibold text-brand-dark">
+            Order #{order.id.slice(-8).toUpperCase()}
+            <span className="ml-2 rounded-full bg-brand-light px-2 py-0.5 text-[10px] font-semibold uppercase text-brand-gray">
+              {order.marketplace === 'mart' ? 'MangwaooMart' : 'Food'}
+            </span>
+          </p>
+          <p className="text-xs text-brand-gray">
+            Sold by {order.sellerName} &middot;{' '}
+            {new Date(order.createdAt).toLocaleString('en-PK', { dateStyle: 'medium', timeStyle: 'short' })}
+          </p>
+        </div>
+        <span
+          className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+            ORDER_STATUS_STYLES[order.status] ?? 'bg-gray-50 text-brand-gray'
+          }`}
+        >
+          {order.status.replace(/_/g, ' ')}
+        </span>
+      </div>
+
+      <div className="flex items-start gap-2 text-xs text-brand-gray mb-3">
+        <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+        <span>{order.address}</span>
+      </div>
+
+      <ul className="text-sm text-brand-dark space-y-1 mb-3">
+        {order.items.map((item) => (
+          <li key={item.id} className="flex items-center justify-between">
+            <span>
+              {item.productName} <span className="text-brand-gray">x{item.quantity}</span>
+            </span>
+            <span className="text-brand-gray">PKR {(item.price * item.quantity).toLocaleString()}</span>
+          </li>
+        ))}
+      </ul>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3">
+        <span className="inline-flex items-center gap-1.5 text-xs text-brand-gray">
+          {order.paymentMethod === 'CASH_ON_DELIVERY' ? (
+            <Banknote className="w-3.5 h-3.5" />
+          ) : (
+            <Smartphone className="w-3.5 h-3.5" />
+          )}
+          {order.paymentMethod ? PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod : 'N/A'}
+          {order.paymentStatus ? ` · ${order.paymentStatus}` : ''}
+        </span>
+        <span className="font-bold text-brand-red-primary">PKR {order.totalAmount.toLocaleString()}</span>
+      </div>
+
+      {CANCELLABLE_STATUSES.includes(order.status) && (
+        <div className="mt-3 border-t border-gray-100 pt-3">
+          <button
+            type="button"
+            onClick={handleCancel}
+            disabled={isCancelling}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-600 hover:underline disabled:opacity-50"
+          >
+            <XCircle className="w-3.5 h-3.5" />
+            {isCancelling ? 'Cancelling…' : 'Cancel order'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function BuyerDashboard({ customerName, orders }: { customerName: string; orders: Order[] }) {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<TabId>('orders');
+
+  const activeOrders = orders.filter((order) => !HISTORY_STATUSES.includes(order.status));
+  const historyOrders = orders.filter((order) => HISTORY_STATUSES.includes(order.status));
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="flex items-center gap-3 mb-8">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-red-primary/10 text-brand-red-primary">
+          <User className="w-6 h-6" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-brand-dark">My Account</h1>
+          <p className="text-brand-gray">{customerName}</p>
+        </div>
+      </div>
+
+      <div className="mb-8 flex gap-2 border-b border-gray-100">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
+              activeTab === tab.id
+                ? 'border-brand-red-primary text-brand-red-primary'
+                : 'border-transparent text-brand-gray hover:text-brand-dark'
+            }`}
+          >
+            <tab.icon className="w-4 h-4" />
+            {tab.label}
+            {tab.id === 'orders' && activeOrders.length > 0 && (
+              <span className="rounded-full bg-brand-red-primary/10 px-2 py-0.5 text-xs text-brand-red-primary">
+                {activeOrders.length}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'orders' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+          {activeOrders.length === 0 ? (
+            <p className="text-brand-gray text-sm">
+              No active orders. Items you order from MangwaooMart or Food will show up here.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {activeOrders.map((order) => (
+                <OrderCard key={order.id} order={order} onCancelled={() => router.refresh()} />
+              ))}
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {activeTab === 'history' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+          {historyOrders.length === 0 ? (
+            <p className="text-brand-gray text-sm">
+              No past orders yet. Delivered and cancelled orders will show up here.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {historyOrders.map((order) => (
+                <OrderCard key={order.id} order={order} onCancelled={() => router.refresh()} />
+              ))}
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {activeTab === 'messages' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+          <MessagesInbox currentRole="CUSTOMER" />
+        </motion.div>
+      )}
+    </div>
+  );
+}

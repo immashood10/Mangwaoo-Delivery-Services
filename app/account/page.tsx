@@ -1,0 +1,83 @@
+import { redirect } from 'next/navigation';
+import { getSession } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import BuyerDashboard from '@/components/BuyerDashboard';
+
+export default async function AccountPage() {
+  const session = await getSession();
+
+  if (!session || session.role !== 'CUSTOMER') {
+    redirect('/login?next=/account');
+  }
+
+  const customer = await prisma.customer.findUnique({
+    where: { userId: session.userId },
+    include: { user: true },
+  });
+
+  if (!customer) {
+    redirect('/login?next=/account');
+  }
+
+  const [martOrders, gulplazaOrders] = await Promise.all([
+    prisma.order.findMany({
+      where: { customerId: customer.id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: { include: { product: true } },
+        seller: true,
+        address: true,
+        payment: true,
+      },
+    }),
+    prisma.gulplazaOrder.findMany({
+      where: { customerId: customer.id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: { include: { product: true } },
+        seller: true,
+        address: true,
+        payment: true,
+      },
+    }),
+  ]);
+
+  const orders = [
+    ...martOrders.map((order) => ({
+      id: order.id,
+      marketplace: 'mart' as const,
+      status: order.status,
+      totalAmount: Number(order.totalAmount),
+      createdAt: order.createdAt.toISOString(),
+      sellerName: order.seller.businessName,
+      address: `${order.address.street}, ${order.address.city}`,
+      paymentMethod: order.payment?.method ?? null,
+      paymentStatus: order.payment?.status ?? null,
+      items: order.items.map((item) => ({
+        id: item.id,
+        productName: item.product.name,
+        quantity: item.quantity,
+        price: Number(item.price),
+      })),
+    })),
+    ...gulplazaOrders.map((order) => ({
+      id: order.id,
+      marketplace: 'gulplaza' as const,
+      status: order.status,
+      totalAmount: Number(order.totalAmount),
+      createdAt: order.createdAt.toISOString(),
+      sellerName: order.seller.businessName,
+      address: `${order.address.street}, ${order.address.city}`,
+      paymentMethod: order.payment?.method ?? null,
+      paymentStatus: order.payment?.status ?? null,
+      items: order.items.map((item) => ({
+        id: item.id,
+        productName: item.product.name,
+        quantity: item.quantity,
+        price: Number(item.price),
+      })),
+    })),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  return <BuyerDashboard customerName={customer.user.name} orders={orders} />;
+}
