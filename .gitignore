@@ -44,3 +44,10 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# local assistant settings (permissions, commands): not part of the website
+.claude/
+.kilo/
+
+# test production builds next to the dev server
+/.next-*

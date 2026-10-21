@@ -7,7 +7,7 @@ import { checkoutErrorResponse, getCheckoutCustomer, parseDropoff, parseLines, p
  * delivery fee can be worked out; this route takes no coupon.
  */
 export async function POST(request: NextRequest) {
-  const resolved = await getCheckoutCustomer();
+  const resolved = await getCheckoutCustomer({ scope: 'order-placed', limit: 30, windowSeconds: 3600 });
   if ('error' in resolved) return resolved.error;
 
   const body = await request.json().catch(() => null);

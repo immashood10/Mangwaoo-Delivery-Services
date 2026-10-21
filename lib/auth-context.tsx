@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import AccountNoticeModal from '@/components/AccountNoticeModal';
+import { disablePush } from '@/lib/push-client';
 import type { AccountNotice } from '@/lib/ban-duration';
 
 export type AuthUser = {
@@ -60,6 +61,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [applyResponse]);
 
   const logout = useCallback(async () => {
+    // This device stops getting the account's notifications (the next person to log in here chooses for themselves).
+    await disablePush();
     await fetch('/api/auth/logout', { method: 'POST' });
     setUser(null);
   }, []);

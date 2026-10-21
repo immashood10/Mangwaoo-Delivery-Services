@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { notifyAdminsAfterResponse } from '@/lib/notify';
 import { ADMIN_PAGES } from '@/lib/notification-types';
 import { prisma } from '@/lib/prisma';
+import { enforceRateLimits } from '@/lib/rate-limit';
 import { parseSupportBody, previewOf, toSupportMessageView } from '@/lib/support';
 
 async function resolveOwnThread() {
@@ -57,6 +58,9 @@ export async function POST(request: NextRequest) {
   if (!thread) {
     return NextResponse.json({ error: 'Mangwaoo Support has not written to you yet.' }, { status: 404 });
   }
+
+  const limited = await enforceRateLimits([{ scope: 'support-message', subject: thread.id, limit: 60, windowSeconds: 600 }], 'You are sending messages too fast. Please wait a moment.');
+  if (limited) return limited;
 
   const parsed = parseSupportBody(await request.json().catch(() => null));
   if ('error' in parsed) {

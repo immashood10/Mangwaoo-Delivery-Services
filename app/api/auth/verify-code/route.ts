@@ -4,13 +4,14 @@ import { banMessage, banNotice } from '@/lib/ban-duration';
 import { findActiveBan } from '@/lib/bans';
 import { ADMIN_PAGES } from '@/lib/notification-types';
 import { notifyAdminsAfterResponse } from '@/lib/notify';
-import { verifyCode } from '@/lib/phone-verification';
+import { verifyCode, verifyFirebaseToken } from '@/lib/phone-verification';
+import { usesFirebasePhone } from '@/lib/firebase-phone';
 import { CODE_LENGTH } from '@/lib/phone-verification-types';
 
 const JOINED_NOTICES: Partial<Record<string, { title: string; href: string }>> = {
   CUSTOMER: { title: 'New customer', href: ADMIN_PAGES.users },
   SELLER: { title: 'New seller waiting for approval', href: ADMIN_PAGES.sellers },
-  RIDER: { title: 'New rider signed up', href: ADMIN_PAGES.users },
+  RIDER: { title: 'New rider waiting for approval', href: ADMIN_PAGES.riders },
 };
 
 /**
@@ -22,18 +23,21 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const ticket = typeof body?.ticket === 'string' ? body.ticket : '';
   const code = typeof body?.code === 'string' ? body.code.trim() : '';
+  const idToken = typeof body?.idToken === 'string' ? body.idToken : '';
   const remember = body?.remember !== false;
 
   if (!ticket) {
     return NextResponse.json({ error: 'This verification has expired. Please start again.', restart: true }, { status: 400 });
   }
 
-  if (!new RegExp(`^\\d{${CODE_LENGTH}}$`).test(code)) {
+  const firebase = usesFirebasePhone();
+
+  if (firebase ? !idToken : !new RegExp(`^\\d{${CODE_LENGTH}}$`).test(code)) {
     return NextResponse.json({ error: `Please enter the ${CODE_LENGTH}-digit code from WhatsApp.` }, { status: 400 });
   }
 
   const session = await getSession();
-  const result = await verifyCode(ticket, code, session?.userId ?? null);
+  const result = firebase ? await verifyFirebaseToken(ticket, idToken, session?.userId ?? null) : await verifyCode(ticket, code, session?.userId ?? null);
 
   if (!result.ok) {
     return result.response;

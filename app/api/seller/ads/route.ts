@@ -2,6 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ADMIN_PAGES } from '@/lib/notification-types';
 import { notifyAdminsAfterResponse } from '@/lib/notify';
+import { enforceRateLimits } from '@/lib/rate-limit';
 import { resolveSellerApi } from '@/lib/seller-api';
 import { isFoodSeller } from '@/lib/seller-context';
 import { sendWhatsAppNotification } from '@/lib/whatsapp';
@@ -17,6 +18,9 @@ export async function POST(request: NextRequest) {
   if (isFoodSeller(seller)) {
     return NextResponse.json({ error: 'Ads are available for MangwaooMart products.' }, { status: 403 });
   }
+
+  const limited = await enforceRateLimits([{ scope: 'ad-request', subject: seller.id, limit: 20, windowSeconds: 3600 }]);
+  if (limited) return limited;
 
   const body = await request.json().catch(() => null);
   const productId = typeof body?.productId === 'string' ? body.productId : '';

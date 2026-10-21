@@ -8,7 +8,7 @@ import { getCheckoutCustomer, parseCouponCode, parseDropoff, parseLines } from '
  * doesn't fail the request: the answer is the price without it, plus `couponError` saying why.
  */
 export async function POST(request: NextRequest) {
-  const resolved = await getCheckoutCustomer();
+  const resolved = await getCheckoutCustomer({ scope: 'order-quote', limit: 600, windowSeconds: 3600 });
   if ('error' in resolved) return resolved.error;
 
   const body = await request.json().catch(() => null);

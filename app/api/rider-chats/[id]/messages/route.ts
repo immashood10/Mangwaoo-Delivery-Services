@@ -7,6 +7,7 @@ import {
   serializeRiderChatMessage,
 } from '@/lib/rider-chat';
 import { chatDispatchPoint, getOnlineRiders, ridersForLocation } from '@/lib/rider-dispatch';
+import { enforceRateLimits } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -52,6 +53,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (access.chat.status === 'CLOSED') {
     return NextResponse.json({ error: 'This chat has ended.' }, { status: 400 });
   }
+
+  const limited = await enforceRateLimits([{ scope: 'rider-chat-message', subject: `${access.role}:${id}`, limit: 120, windowSeconds: 600 }], 'You are sending messages too fast. Please wait a moment.');
+  if (limited) return limited;
 
   const parsed = await parseIncomingRiderChatMessage(request);
   if ('error' in parsed) {

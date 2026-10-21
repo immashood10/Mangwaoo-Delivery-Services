@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
 import { CheckoutError, type CheckoutLine, type Marketplace } from '@/lib/checkout';
 import { parseCoordinates, type Coordinates } from '@/lib/geo';
+import { enforceRateLimits } from '@/lib/rate-limit';
 
 // What the checkout routes (quote, checkout, and the older per-marketplace order routes) all read from a request.
 
@@ -15,8 +16,8 @@ export const PAYMENT_METHOD_MAP: Record<string, 'CASH_ON_DELIVERY' | 'WALLET'> =
   easypaisa_jazzcash: 'WALLET',
 };
 
-/** The logged-in customer, or the response to send instead. */
-export async function getCheckoutCustomer() {
+/** The logged-in customer, or the response to send instead. `rate` limits how often one customer may call the route. */
+export async function getCheckoutCustomer(rate?: { scope: string; limit: number; windowSeconds: number }) {
   const session = await getSession();
 
   if (!session || session.role !== 'CUSTOMER') {
@@ -32,6 +33,12 @@ export async function getCheckoutCustomer() {
 
   if (!customer) {
     return { error: NextResponse.json({ error: 'Customer account not found.' }, { status: 404 }) };
+  }
+
+  if (rate) {
+    const limited = await enforceRateLimits([{ ...rate, subject: session.userId }], 'You are doing that too often. Please wait a little and try again.');
+
+    if (limited) return { error: limited };
   }
 
   return { customer: { id: customer.id, userId: session.userId } };

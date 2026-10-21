@@ -139,6 +139,7 @@ export async function removeAccount(userId: string, adminId: string): Promise<Re
     await tx.phoneVerification.deleteMany({ where: { userId } });
     await tx.notification.deleteMany({ where: { userId } });
     await tx.supportThread.deleteMany({ where: { userId } });
+    await tx.pushSubscription.deleteMany({ where: { userId } });
     await tx.favourite.deleteMany({ where: { userId } });
     await tx.productLike.deleteMany({ where: { userId } });
     await tx.address.deleteMany({ where: { userId, isSaved: true } });

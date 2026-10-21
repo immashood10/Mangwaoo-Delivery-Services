@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { createSession, verifyPassword } from '@/lib/auth';
+import { createSession, verifyPasswordOrDummy } from '@/lib/auth';
 import { banMessage, banNotice } from '@/lib/ban-duration';
 import { findActiveBan } from '@/lib/bans';
+import { clientIp } from '@/lib/client-ip';
+import { enforceRateLimits } from '@/lib/rate-limit';
 import { canLogIn, requireVerificationAtLogin } from '@/lib/phone-verification';
 
 export async function POST(request: NextRequest) {
@@ -11,12 +13,23 @@ export async function POST(request: NextRequest) {
   const password = typeof body?.password === 'string' ? body.password : '';
   const remember = body?.remember !== false;
 
-  if (!email || !password) {
+  if (!email || !password || email.length > 254 || password.length > 1000) {
     return NextResponse.json({ error: 'Email and password are required.' }, { status: 400 });
   }
 
+  // Guessing passwords: a limit per network address and a stricter one per account.
+  const limited = await enforceRateLimits(
+    [
+      { scope: 'login-ip', subject: clientIp(request), limit: 40, windowSeconds: 600 },
+      { scope: 'login-email', subject: email, limit: 10, windowSeconds: 600 },
+    ],
+    'Too many login attempts. Please wait a few minutes and try again.'
+  );
+
+  if (limited) return limited;
+
   const user = await prisma.user.findUnique({ where: { email } });
-  const passwordMatches = user ? await verifyPassword(password, user.password) : false;
+  const passwordMatches = await verifyPasswordOrDummy(password, user?.password);
 
   // A deleted account has no email or password left, so it never gets this far; the check is for safety.
   if (!user || !passwordMatches || user.deletedAt) {

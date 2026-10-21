@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
 import { ADMIN_PAGES } from '@/lib/notification-types';
 import { notifyAdminsAfterResponse } from '@/lib/notify';
+import { enforceRateLimits } from '@/lib/rate-limit';
 import {
   MAX_RIDER_CHAT_MESSAGE_LENGTH,
   RIDER_CHAT_INCLUDE,
@@ -55,6 +56,9 @@ export async function POST(request: NextRequest) {
       { status: 401 }
     );
   }
+
+  const limited = await enforceRateLimits([{ scope: 'rider-chat-start', subject: customer.id, limit: 20, windowSeconds: 3600 }]);
+  if (limited) return limited;
 
   const body = await request.json().catch(() => null);
   const lat = typeof body?.lat === 'number' ? body.lat : NaN;

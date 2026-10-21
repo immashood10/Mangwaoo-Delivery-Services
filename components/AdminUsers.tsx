@@ -429,6 +429,15 @@ function UserCard({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {user.role === 'RIDER' && user.rider && !user.rider.isApproved ? (
+            <Link
+              href="/admin/riders"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-red-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-red-secondary"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Review &amp; approve
+            </Link>
+          ) : null}
           {user.role === 'SELLER' || user.role === 'RIDER' ? (
             <Link
               href={`/admin/messages?user=${encodeURIComponent(user.id)}`}

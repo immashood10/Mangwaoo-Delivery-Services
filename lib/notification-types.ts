@@ -27,6 +27,7 @@ export const ADMIN_PAGES = {
   chats: '/admin/rider-chats',
   messages: '/admin/messages',
   sellers: '/admin/sellers',
+  riders: '/admin/riders',
   ads: '/admin/ads',
 } as const;
 

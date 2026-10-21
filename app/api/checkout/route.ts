@@ -14,7 +14,7 @@ import {
  * carry the delivery fee for their restaurant → customer distance; a coupon takes a % off the items.
  */
 export async function POST(request: NextRequest) {
-  const resolved = await getCheckoutCustomer();
+  const resolved = await getCheckoutCustomer({ scope: 'order-placed', limit: 30, windowSeconds: 3600 });
   if ('error' in resolved) return resolved.error;
 
   const body = await request.json().catch(() => null);

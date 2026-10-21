@@ -23,6 +23,7 @@ export async function GET(
       'Content-Length': String(attachment.size),
       'Content-Disposition': 'inline',
       'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; sandbox",
       // Attachments never change once sent, but they are private to the chat.
       'Cache-Control': 'private, max-age=31536000, immutable',
     },

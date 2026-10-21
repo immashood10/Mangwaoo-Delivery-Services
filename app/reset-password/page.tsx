@@ -110,7 +110,7 @@ function ResetPasswordForm() {
                       placeholder="Enter a new password"
                       className="w-full pl-11 pr-11 py-3 border border-gray-300 rounded-xl outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"
                       required
-                      minLength={6}
+                      minLength={8}
                     />
                     <button
                       type="button"
@@ -134,7 +134,7 @@ function ResetPasswordForm() {
                       placeholder="Re-enter your new password"
                       className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"
                       required
-                      minLength={6}
+                      minLength={8}
                     />
                   </div>
                 </div>

@@ -111,6 +111,12 @@ export default function Signup() {
                     Log in
                   </Link>
                 </p>
+                <p className="mt-1 text-sm text-brand-gray">
+                  Want to deliver with Mangwaoo?{' '}
+                  <Link href="/rider/signup" className="text-accent font-semibold hover:underline">
+                    Sign up as a rider
+                  </Link>
+                </p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-5">
@@ -183,7 +189,7 @@ export default function Signup() {
                         placeholder="Min. 6 chars"
                         className="w-full pl-11 pr-11 py-3 border border-gray-300 rounded-xl outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"
                         required
-                        minLength={6}
+                        minLength={8}
                       />
                       <button
                         type="button"
@@ -210,7 +216,7 @@ export default function Signup() {
                         placeholder="Re-enter"
                         className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"
                         required
-                        minLength={6}
+                        minLength={8}
                       />
                     </div>
                   </div>

@@ -1,11 +1,12 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import bcrypt from 'bcryptjs';
-import { getRestriction } from '@/lib/bans';
+import { getRestriction, isSessionRevoked } from '@/lib/bans';
 
 const SESSION_COOKIE_NAME = 'mangwaoo_session';
 const REMEMBERED_SESSION_DURATION_SECONDS = 60 * 60 * 24 * 30; // 30 days
 const DEFAULT_SESSION_DURATION_SECONDS = 60 * 60 * 24; // 1 day
+const BCRYPT_COST = 12;
 
 function getSecretKey() {
   const secret = process.env.AUTH_SECRET;
@@ -20,10 +21,27 @@ function getSecretKey() {
 export type SessionPayload = {
   userId: string;
   role: 'CUSTOMER' | 'SELLER' | 'RIDER' | 'ADMIN';
+  /** When the cookie was issued (seconds since 1970); added by the token itself. */
+  iat?: number;
 };
 
 export function hashPassword(password: string) {
-  return bcrypt.hash(password, 10);
+  return bcrypt.hash(password, BCRYPT_COST);
+}
+
+let dummyHash: Promise<string> | undefined;
+
+/**
+ * Checks a password against an account's hash. With no account (unknown email) it still does the same amount of work
+ * against a throw-away hash, so "no such account" and "wrong password" take equally long and answer the same.
+ */
+export async function verifyPasswordOrDummy(password: string, passwordHash: string | null | undefined) {
+  if (passwordHash) return bcrypt.compare(password, passwordHash);
+
+  dummyHash ??= bcrypt.hash('not-a-real-password', BCRYPT_COST);
+  await bcrypt.compare(password, await dummyHash);
+
+  return false;
 }
 
 export function verifyPassword(password: string, passwordHash: string) {
@@ -65,7 +83,8 @@ export async function readSession(): Promise<SessionPayload | null> {
   }
 
   try {
-    const { payload } = await jwtVerify(token, getSecretKey());
+    // Only tokens signed the way this site signs them are accepted.
+    const { payload } = await jwtVerify(token, getSecretKey(), { algorithms: ['HS256'] });
     return payload as unknown as SessionPayload;
   } catch {
     return null;
@@ -83,5 +102,8 @@ export async function getSession(): Promise<SessionPayload | null> {
     return null;
   }
 
-  return (await getRestriction(session.userId)) ? null : session;
+  if (await getRestriction(session.userId)) return null;
+
+  // Cookies issued before the password was last changed or reset are no longer valid.
+  return (await isSessionRevoked(session.userId, session.iat)) ? null : session;
 }

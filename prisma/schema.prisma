@@ -34,6 +34,10 @@ model User {
   /// can be used to sign up again, and it can never log in again; orders, chats and listings keep pointing at the row.
   deletedAt DateTime?
 
+  /// Sessions issued before this moment no longer work (set when the password is changed or reset), so a stolen
+  /// login cookie stops working the moment the real owner changes the password.
+  sessionsValidFrom DateTime?
+
   customer            Customer?
   seller              Seller?
   rider               Rider?
@@ -46,6 +50,7 @@ model User {
   phoneVerification   PhoneVerification?
   bans                UserBan[]
   supportThread       SupportThread?
+  pushSubscriptions   PushSubscription[]
 }
 
 /// The private chat between the admin team and one seller or rider (Admin > Messages). One thread per account; the
@@ -916,4 +921,30 @@ model RiderLocation {
 
   riderId String
   rider   Rider  @relation(fields: [riderId], references: [id])
+}
+
+/// Counters behind the request limits (login, signup, contact, messages…). One row per limit + person (the key is a
+/// SHA-256 hash, so no email or IP address is stored); the count restarts when its window is over.
+model RateLimit {
+  key         String   @id
+  count       Int
+  windowStart DateTime
+
+  @@index([windowStart])
+}
+
+/// A browser/phone that agreed to receive push notifications for an account (Web Push). The endpoint is the address of
+/// the browser's push service; the two keys let the server encrypt a message only that browser can read. Removed at
+/// logout, when the push service says the device is gone, and when the account is deleted.
+model PushSubscription {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+  createdAt  DateTime  @default(now())
+  lastSentAt DateTime?
+
+  @@index([userId])
 }

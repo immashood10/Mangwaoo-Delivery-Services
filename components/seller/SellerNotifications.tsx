@@ -24,6 +24,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
+import PushToggle from '@/components/PushToggle';
 import type { NotificationKind, NotificationSnapshot, SellerNotification } from '@/lib/notification-types';
 
 const POLL_INTERVAL_MS = 12000;
@@ -389,6 +390,8 @@ export function NotificationBell({ onDark = false }: { onDark?: boolean }) {
               })}
             </ul>
           )}
+
+          <PushToggle className="border-t border-gray-100 px-4 py-3" />
         </div>
       ) : null}
     </div>

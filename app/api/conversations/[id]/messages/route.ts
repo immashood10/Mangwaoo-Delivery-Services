@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth';
 import { notifyAfterResponse } from '@/lib/notify';
 import { SELLER_PAGES } from '@/lib/notification-types';
 import { SUPPORT_NAME } from '@/lib/support-types';
+import { enforceRateLimits } from '@/lib/rate-limit';
 
 const MAX_MESSAGE_LENGTH = 2000;
 const PREVIEW_LENGTH = 90;
@@ -87,6 +88,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const resolved = await resolveParticipant(id);
   if ('error' in resolved) return resolved.error;
   const { role } = resolved;
+
+  const limited = await enforceRateLimits([{ scope: 'chat-message', subject: `${role}:${id}`, limit: 60, windowSeconds: 600 }], 'You are sending messages too fast. Please wait a moment.');
+
+  if (limited) return limited;
 
   const body = await request.json().catch(() => null);
   const text = typeof body?.body === 'string' ? body.body.trim() : '';

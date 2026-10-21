@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Bike, Clock, MapPin, Power } from 'lucide-react';
 import RiderChatThread from './RiderChatThread';
 import SupportChat from './SupportChat';
+import PushToggle from './PushToggle';
 import type { RiderChatSummary } from '@/lib/rider-chat-types';
 
 type RiderProfile = { name: string; isApproved: boolean; isAvailable: boolean; vehicleType: string | null };
@@ -101,6 +102,7 @@ export default function RiderDashboard({ rider }: { rider: RiderProfile }) {
   return (
     <div className="space-y-6">
       <SupportChat />
+      <PushToggle className="rounded-2xl bg-surface p-4 shadow-soft" />
       <section className="flex flex-col gap-4 rounded-2xl bg-surface p-5 shadow-soft sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm text-brand-gray">Status{rider.vehicleType ? ` · ${rider.vehicleType}` : ''}</p>

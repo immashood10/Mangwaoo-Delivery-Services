@@ -13,6 +13,12 @@ export type PhoneVerificationInfo = {
   /** Seconds before another code may be requested. */
   retryAfter: number;
   devCode?: string;
+  /**
+   * Present when Firebase sends the code (SMS) instead of WhatsApp: the browser asks Firebase to text this number
+   * (E.164, e.g. +923001234567) and sends the server Firebase's proof once the code is typed. The person's own
+   * number, shown to them after they proved they own the account (password, or the signup form).
+   */
+  firebase?: { phoneNumber: string };
 };
 
 export type VerifiedUser = {

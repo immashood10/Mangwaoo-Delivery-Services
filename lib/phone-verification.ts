@@ -4,6 +4,7 @@ import type { Prisma } from '@/lib/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
 import { isWhatsAppConfigured, sendWhatsAppCode } from '@/lib/whatsapp';
 import { maskPhone, normalizePakistaniMobile, toLocalPhone } from '@/lib/phone';
+import { usesFirebasePhone, verifyFirebasePhoneToken } from '@/lib/firebase-phone';
 import { CODE_LENGTH, type PhoneVerificationInfo, type VerifiedUser } from '@/lib/phone-verification-types';
 
 // WhatsApp verification. A new account only exists as "unverified" until its owner types the code sent to the
@@ -192,7 +193,9 @@ export async function sendVerificationCode(
 
   const code = newCode();
   const ticket = existingTicket ?? newTicket();
-  const delivery = await deliverCode(phone, code);
+  const firebase = usesFirebasePhone();
+  // With Firebase the browser asks Firebase to send the SMS itself, so nothing is delivered from here.
+  const delivery = firebase ? ({ ok: true } as const) : await deliverCode(phone, code);
 
   if (!delivery.ok) {
     return delivery;
@@ -209,7 +212,8 @@ export async function sendVerificationCode(
       ticket,
       phone: maskPhone(phone),
       retryAfter: RESEND_COOLDOWN_SECONDS,
-      ...(delivery.devCode ? { devCode: delivery.devCode } : {}),
+      ...('devCode' in delivery && delivery.devCode ? { devCode: delivery.devCode } : {}),
+      ...(firebase ? { firebase: { phoneNumber: `+${phone}` } } : {}),
     },
     record: {
       purpose,
@@ -349,6 +353,7 @@ export async function requireVerificationAtLogin(request: NextRequest, user: { i
   // A code went out moments ago (they left the code screen and came back): that code still works, so give the
   // new screen a fresh ticket for it instead of sending another message.
   if (
+    !usesFirebasePhone() &&
     existing &&
     existing.purpose === 'ACCOUNT' &&
     existing.phone === whatsappNumber &&
@@ -447,8 +452,90 @@ export type VerifyResult =
   | { ok: true; purpose: Purpose; user: VerifiedUser }
   | { ok: false; response: NextResponse };
 
+type VerificationRow = {
+  id: string;
+  userId: string;
+  purpose: Purpose;
+  phone: string;
+  user: VerifiedUser;
+};
+
+/** The number is proven: mark it confirmed (and, for a number change, store it), and drop the pending verification. */
+async function confirmNumber(row: VerificationRow, now: Date): Promise<VerifyResult> {
+  const newPhone = row.purpose === 'CHANGE' ? toLocalPhone(row.phone) : row.user.phone;
+
+  try {
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: row.userId },
+        data: { phoneVerifiedAt: now, ...(row.purpose === 'CHANGE' ? { phone: newPhone } : {}) },
+      }),
+      prisma.phoneVerification.deleteMany({ where: { id: row.id } }),
+    ]);
+  } catch (error) {
+    if (errorCode(error) === 'P2002') {
+      return { ok: false, response: fail(409, 'Another account already uses this phone number.') };
+    }
+
+    throw error;
+  }
+
+  return { ok: true, purpose: row.purpose, user: { ...row.user, phone: newPhone } };
+}
+
+/**
+ * Firebase flow: the browser typed the SMS code into Firebase and sends the ID token Firebase answered with. It counts
+ * as a try like a typed code does, and must prove exactly the number this verification is for.
+ */
+export async function verifyFirebaseToken(ticket: string, idToken: string, sessionUserId: string | null): Promise<VerifyResult> {
+  const row = await prisma.phoneVerification.findUnique({
+    where: { ticketHash: hashTicket(ticket) },
+    include: { user: { select: { id: true, name: true, email: true, role: true, phone: true } } },
+  });
+
+  if (!row) {
+    return { ok: false, response: fail(400, EXPIRED_VERIFICATION_MESSAGE, { restart: true }) };
+  }
+
+  if (row.purpose === 'CHANGE' && row.userId !== sessionUserId) {
+    return { ok: false, response: fail(401, 'Please log in again to confirm your new number.') };
+  }
+
+  const now = new Date();
+
+  if (row.expiresAt <= now) {
+    return { ok: false, response: fail(400, 'This verification has expired. Tap “Resend code” to get a new one.') };
+  }
+
+  const counted = await prisma.phoneVerification.updateMany({
+    where: { id: row.id, attempts: { lt: MAX_CODE_ATTEMPTS } },
+    data: { attempts: { increment: 1 } },
+  });
+
+  if (counted.count === 0) {
+    return { ok: false, response: fail(429, 'Too many wrong codes. Tap “Resend code” to get a new one.') };
+  }
+
+  const proven = await verifyFirebasePhoneToken(idToken);
+
+  if (!proven.ok) {
+    return { ok: false, response: fail(400, proven.reason) };
+  }
+
+  if (proven.phone !== `+${row.phone}`) {
+    return { ok: false, response: fail(400, 'That code was sent to a different number. Please start again.', { restart: true }) };
+  }
+
+  return confirmNumber(row, now);
+}
+
 /** Checks the code typed on the code screen and, when it is right, confirms the number. */
 export async function verifyCode(ticket: string, code: string, sessionUserId: string | null): Promise<VerifyResult> {
+  // With Firebase there is no code on our side to compare: the number is proven by Firebase's token instead.
+  if (usesFirebasePhone()) {
+    return { ok: false, response: fail(400, 'Please enter the code from the SMS we sent you.') };
+  }
+
   const row = await prisma.phoneVerification.findUnique({
     where: { ticketHash: hashTicket(ticket) },
     include: { user: { select: { id: true, name: true, email: true, role: true, phone: true } } },
@@ -494,23 +581,5 @@ export async function verifyCode(ticket: string, code: string, sessionUserId: st
     };
   }
 
-  const newPhone = row.purpose === 'CHANGE' ? toLocalPhone(row.phone) : row.user.phone;
-
-  try {
-    await prisma.$transaction([
-      prisma.user.update({
-        where: { id: row.userId },
-        data: { phoneVerifiedAt: now, ...(row.purpose === 'CHANGE' ? { phone: newPhone } : {}) },
-      }),
-      prisma.phoneVerification.deleteMany({ where: { id: row.id } }),
-    ]);
-  } catch (error) {
-    if (errorCode(error) === 'P2002') {
-      return { ok: false, response: fail(409, 'Another account already uses this phone number.') };
-    }
-
-    throw error;
-  }
-
-  return { ok: true, purpose: row.purpose, user: { ...row.user, phone: newPhone } };
+  return confirmNumber(row, now);
 }

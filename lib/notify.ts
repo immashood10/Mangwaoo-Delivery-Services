@@ -1,5 +1,6 @@
 import { after } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { sendPushToUsers } from '@/lib/push';
 import type { NotificationKind } from '@/lib/notification-types';
 
 export type NotifyInput = {
@@ -13,16 +14,23 @@ export type NotifyInput = {
 };
 
 async function saveNotification(input: NotifyInput) {
+  const push = { title: input.title, body: input.message, url: input.href, tag: input.refId };
+
   if (input.refId) {
     const refreshed = await prisma.notification.updateMany({
       where: { userId: input.userId, refId: input.refId, isRead: false },
       data: { title: input.title, message: input.message, href: input.href, createdAt: new Date() },
     });
 
-    if (refreshed.count > 0) return;
+    if (refreshed.count > 0) {
+      await sendPushToUsers([input.userId], push);
+      return;
+    }
   }
 
   await prisma.notification.create({ data: input });
+  // The bell shows it inside the site; a push also reaches the phone when the site is closed (never throws).
+  await sendPushToUsers([input.userId], push);
 }
 
 /**

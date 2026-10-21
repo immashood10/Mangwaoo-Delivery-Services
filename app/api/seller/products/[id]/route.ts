@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { isRasterImageDataUrl } from '@/lib/data-url-image';
 import { getSession } from '@/lib/auth';
 import { refreshMartCatalog } from '@/lib/catalog-cache';
 import { Prisma } from '@/lib/generated/prisma/client';
@@ -46,7 +47,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: 'You can upload up to 6 photos per product.' }, { status: 400 });
   }
 
-  if (images.some((url: string) => !url.startsWith('data:image/') || url.length > 3_000_000)) {
+  if (images.some((url: string) => !isRasterImageDataUrl(url))) {
     return NextResponse.json({ error: 'Invalid product image.' }, { status: 400 });
   }
 

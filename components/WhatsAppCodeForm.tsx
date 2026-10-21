@@ -2,17 +2,20 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowLeft, MessageCircle, RotateCw, TriangleAlert } from 'lucide-react';
+import { firebaseErrorMessage, sendFirebaseSms, type FirebaseSms } from '@/lib/firebase-client';
 import { CODE_LENGTH, type PhoneVerificationInfo, type VerifiedUser } from '@/lib/phone-verification-types';
 
 /**
  * The "enter the code we sent to your WhatsApp" screen shared by sign up, log in and the Settings number change.
+ * When Firebase sends the code (`verification.firebase`), the browser asks Firebase to text it when the screen opens and
+ * the typed code is checked by Firebase; the server then verifies Firebase's proof. The wording says SMS instead of WhatsApp.
  * The ticket and everything typed here live in React state only; the server keeps the (hashed) code.
  * Give it `key={verification.ticket}` so a new verification starts with a clean screen.
  */
 export default function WhatsAppCodeForm({
   verification,
   remember = true,
-  title = 'Check your WhatsApp',
+  title,
   verifyLabel = 'Verify and continue',
   compact = false,
   backLabel,
@@ -39,9 +42,45 @@ export default function WhatsAppCodeForm({
   const [devCode, setDevCode] = useState(verification.devCode);
   const [mustStartAgain, setMustStartAgain] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const recaptchaRef = useRef<HTMLDivElement>(null);
+  // Firebase flow: the SMS that is waiting for its code (kept in memory only), and whether it was sent yet.
+  const smsRef = useRef<FirebaseSms | null>(null);
+  const smsStartedRef = useRef(false);
+  const [smsState, setSmsState] = useState<'idle' | 'sending' | 'sent' | 'failed'>(verification.firebase ? 'sending' : 'idle');
+  const [firebaseNumber, setFirebaseNumber] = useState(verification.firebase?.phoneNumber);
+  const usesFirebase = Boolean(firebaseNumber);
+  // The callers' headings talk about WhatsApp; with Firebase the code comes by SMS to the phone.
+  const heading = usesFirebase ? (title ? title.replace('WhatsApp', 'phone number') : 'Check your phone') : (title ?? 'Check your WhatsApp');
 
   useEffect(() => {
     inputRef.current?.focus();
+  }, []);
+
+  /** Asks Firebase to text the code now. */
+  const startSms = async (phoneNumber: string) => {
+    const container = recaptchaRef.current;
+
+    if (!container) return;
+
+    smsRef.current = null;
+    setSmsState('sending');
+
+    try {
+      smsRef.current = await sendFirebaseSms(phoneNumber, container);
+      setSmsState('sent');
+    } catch (smsError) {
+      setSmsState('failed');
+      setError(firebaseErrorMessage(smsError));
+    }
+  };
+
+  // The code screen just opened: send the SMS (once, even when React runs this effect twice in development).
+  useEffect(() => {
+    if (!verification.firebase || smsStartedRef.current) return;
+
+    smsStartedRef.current = true;
+    void startSms(verification.firebase.phoneNumber);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // "Resend code in 42s" counts down once a second.
@@ -63,10 +102,28 @@ export default function WhatsAppCodeForm({
     setIsVerifying(true);
 
     try {
+      let proof: { code: string } | { idToken: string } = { code };
+
+      if (usesFirebase) {
+        if (!smsRef.current) {
+          setError('The SMS has not been sent yet. Tap “Resend code” to get one.');
+          return;
+        }
+
+        try {
+          proof = { idToken: await smsRef.current.confirm(code) };
+        } catch (confirmError) {
+          setError(firebaseErrorMessage(confirmError));
+          setCode('');
+          inputRef.current?.focus();
+          return;
+        }
+      }
+
       const response = await fetch('/api/auth/verify-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticket: verification.ticket, code, remember }),
+        body: JSON.stringify({ ticket: verification.ticket, ...proof, remember }),
       });
       const data = await response.json().catch(() => null);
 
@@ -109,7 +166,15 @@ export default function WhatsAppCodeForm({
       setCooldown(data.verification.retryAfter);
       setDevCode(data.verification.devCode);
       setCode('');
-      setNotice('A new code is on its way to your WhatsApp.');
+
+      if (data.verification.firebase) {
+        setFirebaseNumber(data.verification.firebase.phoneNumber);
+        await startSms(data.verification.firebase.phoneNumber);
+        setNotice('A new code is on its way by SMS.');
+      } else {
+        setNotice('A new code is on its way to your WhatsApp.');
+      }
+
       inputRef.current?.focus();
     } catch {
       setError('Could not reach the server. Please try again.');
@@ -125,13 +190,14 @@ export default function WhatsAppCodeForm({
           <MessageCircle className={compact ? 'h-5 w-5' : 'h-6 w-6'} />
         </div>
         {compact ? (
-          <h3 className="mb-1 text-lg font-bold text-ink">{title}</h3>
+          <h3 className="mb-1 text-lg font-bold text-ink">{heading}</h3>
         ) : (
-          <h1 className="mb-2 text-3xl font-bold text-ink">{title}</h1>
+          <h1 className="mb-2 text-3xl font-bold text-ink">{heading}</h1>
         )}
         <p className={compact ? 'text-sm text-brand-gray' : 'text-brand-gray'}>
-          We sent a {CODE_LENGTH}-digit code to <span className="font-semibold text-ink">{verification.phone}</span> on
-          WhatsApp. Enter it below to continue.
+          {usesFirebase && smsState === 'sending' ? 'Sending' : 'We sent'} a {CODE_LENGTH}-digit code to{' '}
+          <span className="font-semibold text-ink">{verification.phone}</span> {usesFirebase ? 'by SMS' : 'on WhatsApp'}. Enter it below to
+          continue.
         </p>
       </div>
 
@@ -144,6 +210,9 @@ export default function WhatsAppCodeForm({
           </p>
         </div>
       ) : null}
+
+      {/* Google's invisible "are you a robot" check for the SMS lives here (it shows only a small badge). */}
+      <div ref={recaptchaRef} />
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>

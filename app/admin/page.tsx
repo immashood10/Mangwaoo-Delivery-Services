@@ -208,7 +208,7 @@ export default async function AdminDashboardPage({
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 mb-10">
         <StatCard label="Chats waiting for a rider" value={data.waitingChats} icon={Clock} tone="alert" href="/admin/rider-chats?filter=waiting" />
         <StatCard label="Riders online now" value={data.onlineRiders} icon={Bike} tone="good" href="/admin/users?view=riders-online" />
-        <StatCard label="Riders pending approval" value={data.pendingRiders} icon={ShieldCheck} tone="alert" href="/admin/users?view=riders-pending" />
+        <StatCard label="Riders pending approval" value={data.pendingRiders} icon={ShieldCheck} tone="alert" href="/admin/riders" />
         <StatCard label="Food sellers pending" value={data.pendingFoodSellers} icon={Store} tone="alert" href="/admin/users?view=sellers-pending" />
         <StatCard label="Chats with a rider" value={data.activeChats} icon={MessagesSquare} href="/admin/rider-chats?filter=with-rider" />
         <StatCard label="Order chats today" value={data.chatsToday} icon={MessagesSquare} href="/admin/rider-chats?filter=today" />

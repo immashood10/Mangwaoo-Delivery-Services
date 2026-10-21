@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { clearSession, readSession } from '@/lib/auth';
-import { getRestriction, restrictionNotice } from '@/lib/bans';
+import { getRestriction, isSessionRevoked, restrictionNotice } from '@/lib/bans';
 
 export async function GET() {
   const session = await readSession();
@@ -18,6 +18,13 @@ export async function GET() {
     await clearSession();
 
     return NextResponse.json({ user: null, notice: restrictionNotice(restriction) });
+  }
+
+  // The password was changed or reset after this cookie was issued: it is void.
+  if (await isSessionRevoked(session.userId, session.iat)) {
+    await clearSession();
+
+    return NextResponse.json({ user: null });
   }
 
   const user = await prisma.user.findUnique({

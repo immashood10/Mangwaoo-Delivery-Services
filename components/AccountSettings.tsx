@@ -299,7 +299,7 @@ function PasswordForm() {
         <KeyRound className="h-5 w-5 text-accent" />
         Change password
       </h2>
-      <p className="mb-5 text-sm text-brand-gray">Use at least 6 characters.</p>
+      <p className="mb-5 text-sm text-brand-gray">Use at least 8 characters.</p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
