@@ -17,7 +17,11 @@ type Order = {
   id: string;
   marketplace: 'mart' | 'gulplaza';
   status: string;
+  /** The items. What the customer pays is this minus the coupon discount plus the delivery fee (food only). */
   totalAmount: number;
+  deliveryFee: number;
+  discountAmount: number;
+  couponCode: string | null;
   createdAt: string;
   sellerName: string;
   address: string;
@@ -27,12 +31,12 @@ type Order = {
 };
 
 const ORDER_STATUS_STYLES: Record<string, string> = {
-  PENDING: 'bg-yellow-50 text-yellow-700',
-  CONFIRMED: 'bg-blue-50 text-blue-700',
-  PREPARING: 'bg-blue-50 text-blue-700',
+  PENDING: 'bg-yellow-50 text-warning',
+  CONFIRMED: 'bg-blue-50 text-info',
+  PREPARING: 'bg-blue-50 text-info',
   OUT_FOR_DELIVERY: 'bg-purple-50 text-purple-700',
-  DELIVERED: 'bg-green-50 text-green-700',
-  CANCELLED: 'bg-red-50 text-red-700',
+  DELIVERED: 'bg-green-50 text-success',
+  CANCELLED: 'bg-red-50 text-danger',
 };
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
@@ -77,7 +81,7 @@ function OrderCard({ order, onCancelled }: { order: Order; onCancelled: () => vo
     <div className="rounded-xl border border-gray-100 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div>
-          <p className="text-sm font-semibold text-brand-dark">
+          <p className="text-sm font-semibold text-ink">
             Order #{order.id.slice(-8).toUpperCase()}
             <span className="ml-2 rounded-full bg-brand-light px-2 py-0.5 text-[10px] font-semibold uppercase text-brand-gray">
               {order.marketplace === 'mart' ? 'MangwaooMart' : 'Food'}
@@ -102,7 +106,7 @@ function OrderCard({ order, onCancelled }: { order: Order; onCancelled: () => vo
         <span>{order.address}</span>
       </div>
 
-      <ul className="text-sm text-brand-dark space-y-1 mb-3">
+      <ul className="text-sm text-ink space-y-1 mb-3">
         {order.items.map((item) => (
           <li key={item.id} className="flex items-center justify-between">
             <span>
@@ -123,8 +127,22 @@ function OrderCard({ order, onCancelled }: { order: Order; onCancelled: () => vo
           {order.paymentMethod ? PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod : 'N/A'}
           {order.paymentStatus ? ` · ${order.paymentStatus}` : ''}
         </span>
-        <span className="font-bold text-brand-red-primary">PKR {order.totalAmount.toLocaleString()}</span>
+        <span className="font-bold text-accent">
+          PKR {(order.totalAmount - order.discountAmount + order.deliveryFee).toLocaleString()}
+        </span>
       </div>
+
+      {order.discountAmount > 0 || order.deliveryFee > 0 ? (
+        <div className="mt-2 space-y-0.5 text-right text-xs text-brand-gray">
+          <p>Items PKR {order.totalAmount.toLocaleString()}</p>
+          {order.discountAmount > 0 ? (
+            <p className="text-success">
+              Coupon{order.couponCode ? ` ${order.couponCode}` : ''} − PKR {order.discountAmount.toLocaleString()}
+            </p>
+          ) : null}
+          {order.deliveryFee > 0 ? <p>Delivery + PKR {order.deliveryFee.toLocaleString()}</p> : null}
+        </div>
+      ) : null}
 
       {CANCELLABLE_STATUSES.includes(order.status) && (
         <div className="mt-3 border-t border-gray-100 pt-3">
@@ -132,7 +150,7 @@ function OrderCard({ order, onCancelled }: { order: Order; onCancelled: () => vo
             type="button"
             onClick={handleCancel}
             disabled={isCancelling}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-600 hover:underline disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-danger hover:underline disabled:opacity-50"
           >
             <XCircle className="w-3.5 h-3.5" />
             {isCancelling ? 'Cancelling…' : 'Cancel order'}
@@ -153,11 +171,11 @@ export default function BuyerDashboard({ customerName, orders }: { customerName:
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="flex items-center gap-3 mb-8">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-red-primary/10 text-brand-red-primary">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-red-primary/10 text-accent">
           <User className="w-6 h-6" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-brand-dark">My Account</h1>
+          <h1 className="text-2xl font-bold text-ink">My Account</h1>
           <p className="text-brand-gray">{customerName}</p>
         </div>
       </div>
@@ -170,14 +188,14 @@ export default function BuyerDashboard({ customerName, orders }: { customerName:
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
               activeTab === tab.id
-                ? 'border-brand-red-primary text-brand-red-primary'
-                : 'border-transparent text-brand-gray hover:text-brand-dark'
+                ? 'border-accent text-accent'
+                : 'border-transparent text-brand-gray hover:text-ink'
             }`}
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
             {tab.id === 'orders' && activeOrders.length > 0 && (
-              <span className="rounded-full bg-brand-red-primary/10 px-2 py-0.5 text-xs text-brand-red-primary">
+              <span className="rounded-full bg-brand-red-primary/10 px-2 py-0.5 text-xs text-accent">
                 {activeOrders.length}
               </span>
             )}

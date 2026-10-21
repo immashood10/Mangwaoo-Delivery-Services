@@ -101,7 +101,7 @@ export default function VendorProducts({ products }: { products: Product[] }) {
   });
 
   return (
-    <section className="py-16 md:py-24 bg-white">
+    <section className="py-16 md:py-24 bg-surface">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -111,10 +111,10 @@ export default function VendorProducts({ products }: { products: Product[] }) {
           className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-10"
         >
           <div>
-            <span className="inline-block px-4 py-2 bg-brand-red-primary/10 text-brand-red-primary rounded-full text-sm font-semibold mb-4">
+            <span className="inline-block px-4 py-2 bg-brand-red-primary/10 text-accent rounded-full text-sm font-semibold mb-4">
               MangwaooMart
             </span>
-            <h2 className="text-3xl md:text-5xl font-bold text-brand-dark mb-4">
+            <h2 className="text-3xl md:text-5xl font-bold text-ink mb-4">
               Fresh From Our Vendors
             </h2>
             <p className="text-lg text-brand-gray max-w-xl">
@@ -123,7 +123,7 @@ export default function VendorProducts({ products }: { products: Product[] }) {
           </div>
           <Link
             href="/mart"
-            className="inline-flex items-center space-x-2 text-brand-red-primary font-semibold hover:underline shrink-0"
+            className="inline-flex items-center space-x-2 text-accent font-semibold hover:underline shrink-0"
           >
             <span>Browse MangwaooMart</span>
             <ArrowRight className="w-4 h-4" />
@@ -133,17 +133,17 @@ export default function VendorProducts({ products }: { products: Product[] }) {
         <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
           {/* Filters sidebar */}
           <aside className="lg:sticky lg:top-24 lg:w-64 lg:shrink-0">
-            <div className="space-y-6 rounded-2xl border border-gray-100 bg-white p-5 shadow-soft">
+            <div className="space-y-6 rounded-2xl border border-gray-100 bg-surface p-5 shadow-soft">
               <div className="flex items-center justify-between">
-                <h3 className="flex items-center gap-2 text-base font-bold text-brand-dark">
-                  <SlidersHorizontal className="w-4 h-4 text-brand-red-primary" />
+                <h3 className="flex items-center gap-2 text-base font-bold text-ink">
+                  <SlidersHorizontal className="w-4 h-4 text-accent" />
                   Filters
                 </h3>
                 {isFiltered && (
                   <button
                     type="button"
                     onClick={clearFilters}
-                    className="text-xs font-semibold text-brand-red-primary hover:underline"
+                    className="text-xs font-semibold text-accent hover:underline"
                   >
                     Reset
                   </button>
@@ -158,14 +158,14 @@ export default function VendorProducts({ products }: { products: Product[] }) {
                   {SORT_OPTIONS.map((option) => (
                     <label
                       key={option.id}
-                      className="flex cursor-pointer items-center gap-2 text-sm text-brand-dark"
+                      className="flex cursor-pointer items-center gap-2 text-sm text-ink"
                     >
                       <input
                         type="radio"
                         name="sortBy"
                         checked={sortBy === option.id}
                         onChange={() => setSortBy(option.id)}
-                        className="h-4 w-4 border-gray-300 text-brand-red-primary focus:ring-brand-red-primary"
+                        className="h-4 w-4 border-gray-300 text-accent focus:ring-accent"
                       />
                       {option.label}
                     </label>
@@ -181,13 +181,13 @@ export default function VendorProducts({ products }: { products: Product[] }) {
                   {QUICK_FILTERS.map((filter) => (
                     <label
                       key={filter.id}
-                      className="flex cursor-pointer items-center gap-2 text-sm text-brand-dark"
+                      className="flex cursor-pointer items-center gap-2 text-sm text-ink"
                     >
                       <input
                         type="checkbox"
                         checked={quickFilters[filter.id] ?? false}
                         onChange={() => toggleQuickFilter(filter.id)}
-                        className="h-4 w-4 rounded border-gray-300 text-brand-red-primary focus:ring-brand-red-primary"
+                        className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
                       />
                       {filter.label}
                     </label>
@@ -206,7 +206,7 @@ export default function VendorProducts({ products }: { products: Product[] }) {
                     value={categorySearch}
                     onChange={(event) => setCategorySearch(event.target.value)}
                     placeholder="Search categories"
-                    className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none transition focus:border-brand-red-primary focus:ring-2 focus:ring-red-100"
+                    className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"
                   />
                 </div>
                 <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
@@ -216,13 +216,13 @@ export default function VendorProducts({ products }: { products: Product[] }) {
                     visibleCategories.map((category) => (
                       <label
                         key={category.id}
-                        className="flex cursor-pointer items-center gap-2 text-sm text-brand-dark"
+                        className="flex cursor-pointer items-center gap-2 text-sm text-ink"
                       >
                         <input
                           type="checkbox"
                           checked={selectedCategories.includes(category.name)}
                           onChange={() => toggleCategory(category.name)}
-                          className="h-4 w-4 rounded border-gray-300 text-brand-red-primary focus:ring-brand-red-primary"
+                          className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
                         />
                         <span>{category.icon}</span>
                         <span className="truncate">{category.name}</span>
@@ -243,7 +243,7 @@ export default function VendorProducts({ products }: { products: Product[] }) {
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Search items, e.g. milk, tomatoes, snacks..."
-                className="w-full rounded-full border border-gray-300 py-3 pl-11 pr-4 text-sm outline-none transition focus:border-brand-red-primary focus:ring-2 focus:ring-red-100"
+                className="w-full rounded-full border border-gray-300 py-3 pl-11 pr-4 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"
               />
             </div>
 
@@ -253,7 +253,7 @@ export default function VendorProducts({ products }: { products: Product[] }) {
                 <button
                   type="button"
                   onClick={clearFilters}
-                  className="text-sm font-semibold text-brand-red-primary hover:underline"
+                  className="text-sm font-semibold text-accent hover:underline"
                 >
                   Clear filters
                 </button>
@@ -275,7 +275,7 @@ export default function VendorProducts({ products }: { products: Product[] }) {
                   >
                     <Link href={`/mart/${product.id}`} className="flex h-full flex-col p-5">
                       {product.imageUrl ? (
-                        <div className="mb-3 flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl bg-white">
+                        <div className="mb-3 flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl bg-surface">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={product.imageUrl}
@@ -286,10 +286,10 @@ export default function VendorProducts({ products }: { products: Product[] }) {
                       ) : (
                         <div className="mb-3 text-4xl">{product.icon}</div>
                       )}
-                      <h3 className="mb-1 text-sm font-semibold text-brand-dark">{product.name}</h3>
+                      <h3 className="mb-1 text-sm font-semibold text-ink">{product.name}</h3>
                       <p className="mb-3 text-xs text-brand-gray">{product.vendor}</p>
                       <div className="mt-auto flex items-center justify-between">
-                        <span className="font-bold text-brand-red-primary">{product.price}</span>
+                        <span className="font-bold text-accent">{product.price}</span>
                         <AddToCartButton
                           product={product}
                           className="flex items-center gap-1 rounded-full bg-brand-red-primary px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-red-secondary"

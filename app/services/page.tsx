@@ -7,12 +7,12 @@ export default function Services() {
   return (
     <div className="w-full">
       {/* Hero Section */}
-      <section className="py-16 md:py-24 bg-gradient-to-br from-brand-light to-white">
+      <section className="py-16 md:py-24 bg-gradient-to-br from-brand-light to-surface">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <span className="inline-block px-4 py-2 bg-brand-red-primary/10 text-brand-red-primary rounded-full text-sm font-semibold mb-4">
+          <span className="inline-block px-4 py-2 bg-brand-red-primary/10 text-accent rounded-full text-sm font-semibold mb-4">
             Our Services
           </span>
-          <h1 className="text-4xl md:text-5xl font-bold text-brand-dark mb-6">
+          <h1 className="text-4xl md:text-5xl font-bold text-ink mb-6">
             Everything You Need, Delivered Fast
           </h1>
           <p className="text-lg text-brand-gray max-w-2xl mx-auto">
@@ -22,7 +22,7 @@ export default function Services() {
       </section>
 
       {/* Services Detailed */}
-      <section className="py-16 md:py-24 bg-white">
+      <section className="py-16 md:py-24 bg-surface">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
             {SERVICES.map((service, index) => (
@@ -39,7 +39,7 @@ export default function Services() {
 
                 {/* Content */}
                 <div className="space-y-4">
-                  <h2 className="text-3xl md:text-4xl font-bold text-brand-dark">
+                  <h2 className="text-3xl md:text-4xl font-bold text-ink">
                     {service.name}
                   </h2>
                   <p className="text-lg text-brand-gray leading-relaxed">
@@ -48,7 +48,7 @@ export default function Services() {
 
                   {/* Details */}
                   <div className="space-y-3 mt-6">
-                    <h3 className="font-bold text-brand-dark">
+                    <h3 className="font-bold text-ink">
                       What's Included:
                     </h3>
                     <ul className="space-y-2">
@@ -71,11 +71,11 @@ export default function Services() {
                         },
                       ].map((item) => (
                         <li key={item.title} className="flex space-x-3">
-                          <span className="text-brand-red-primary font-bold">
+                          <span className="text-accent font-bold">
                             ✓
                           </span>
                           <div>
-                            <p className="font-semibold text-brand-dark">
+                            <p className="font-semibold text-ink">
                               {item.title}
                             </p>
                             <p className="text-sm text-brand-gray">
@@ -106,7 +106,7 @@ export default function Services() {
       <section className="py-16 md:py-24 bg-brand-light">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-5xl font-bold text-brand-dark mb-6">
+            <h2 className="text-3xl md:text-5xl font-bold text-ink mb-6">
               How It Works
             </h2>
             <p className="text-lg text-brand-gray max-w-2xl mx-auto">
@@ -139,12 +139,12 @@ export default function Services() {
             ].map((item, index) => (
               <div
                 key={index}
-                className="bg-white rounded-2xl p-8 shadow-soft text-center relative"
+                className="bg-surface rounded-2xl p-8 shadow-soft text-center relative"
               >
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-brand-red-primary to-brand-red-secondary flex items-center justify-center text-white font-bold text-xl mx-auto mb-4">
                   {item.step}
                 </div>
-                <h3 className="font-bold text-brand-dark mb-2">
+                <h3 className="font-bold text-ink mb-2">
                   {item.title}
                 </h3>
                 <p className="text-sm text-brand-gray">{item.description}</p>
@@ -152,7 +152,7 @@ export default function Services() {
                 {/* Arrow */}
                 {index < 3 && (
                   <div className="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2">
-                    <ArrowRight className="w-6 h-6 text-brand-red-primary" />
+                    <ArrowRight className="w-6 h-6 text-accent" />
                   </div>
                 )}
               </div>
@@ -162,12 +162,12 @@ export default function Services() {
       </section>
 
       {/* Service Hours */}
-      <section className="py-16 md:py-24 bg-white">
+      <section className="py-16 md:py-24 bg-surface">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
             {/* Hours */}
             <div className="space-y-6">
-              <h2 className="text-3xl md:text-4xl font-bold text-brand-dark">
+              <h2 className="text-3xl md:text-4xl font-bold text-ink">
                 Service Hours
               </h2>
               <div className="bg-gradient-to-br from-brand-red-primary to-brand-red-secondary rounded-2xl p-8 text-white">
@@ -177,7 +177,7 @@ export default function Services() {
                 </p>
               </div>
               <div className="space-y-3">
-                <h3 className="font-bold text-brand-dark">Why 12 PM to 1 AM?</h3>
+                <h3 className="font-bold text-ink">Why 12 PM to 1 AM?</h3>
                 <p className="text-brand-gray leading-relaxed">
                   We've chosen these hours to perfectly align with Karachi's lifestyle. From lunch time through midnight, we're here to serve your cravings and needs. Whether you need breakfast alternatives at noon, lunch, evening snacks, or late-night food and essentials, we've got you covered.
                 </p>
@@ -195,17 +195,17 @@ export default function Services() {
       {/* Service Areas */}
       <section className="py-16 md:py-24 bg-brand-light">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl md:text-4xl font-bold text-brand-dark mb-12 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-ink mb-12 text-center">
             Service Areas
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
             {SERVICE_AREAS.map((area) => (
               <div
                 key={area.id}
-                className="bg-white rounded-2xl p-6 text-center shadow-soft hover:shadow-md transition-all"
+                className="bg-surface rounded-2xl p-6 text-center shadow-soft hover:shadow-md transition-all"
               >
-                <p className="font-bold text-brand-dark mb-2">📍 {area.name}</p>
-                <p className="text-sm text-green-600 font-semibold">Active</p>
+                <p className="font-bold text-ink mb-2">📍 {area.name}</p>
+                <p className="text-sm text-success font-semibold">Active</p>
               </div>
             ))}
           </div>
@@ -228,7 +228,7 @@ export default function Services() {
           </p>
           <Link
             href="/mart"
-            className="inline-flex items-center space-x-2 bg-white text-brand-red-primary px-8 py-4 rounded-2xl font-semibold hover:shadow-2xl transition-all"
+            className="inline-flex items-center space-x-2 bg-surface text-accent px-8 py-4 rounded-2xl font-semibold hover:shadow-2xl transition-all"
           >
             <ShoppingBag className="w-5 h-5" />
             <span>Order Now</span>

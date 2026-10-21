@@ -4,7 +4,9 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { Mail, Lock, Eye, EyeOff, X, Smartphone } from 'lucide-react';
+import WhatsAppCodeForm from '@/components/WhatsAppCodeForm';
 import { useAuth } from '@/lib/auth-context';
+import type { PhoneVerificationInfo } from '@/lib/phone-verification-types';
 
 function FacebookIcon() {
   return (
@@ -45,6 +47,8 @@ export default function SignInModal({
   onClose: () => void;
 }) {
   const { refresh } = useAuth();
+  // Set when the password was right but the WhatsApp number was never confirmed: the code screen takes over.
+  const [verification, setVerification] = useState<PhoneVerificationInfo | null>(null);
   const [formData, setFormData] = useState({ email: '', password: '', remember: false });
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [formError, setFormError] = useState('');
@@ -77,6 +81,11 @@ export default function SignInModal({
 
       const data = await response.json();
 
+      if (data.verification) {
+        setVerification(data.verification);
+        return;
+      }
+
       if (!response.ok) {
         setFormError(data.error ?? 'Something went wrong. Please try again.');
         return;
@@ -91,21 +100,22 @@ export default function SignInModal({
     }
   };
 
+  const handleVerified = async () => {
+    await refresh();
+    onClose();
+  };
+
   const handleSocialLogin = (provider: 'Google' | 'Facebook') => {
     alert(`Continue with ${provider} will be available once the Mangwaoo app backend launches.`);
   };
 
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=${encodeURIComponent(
-    'https://mangwaoo.com/app'
-  )}`;
-
   return createPortal(
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl grid grid-cols-1 md:grid-cols-2">
+      <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-surface shadow-2xl grid grid-cols-1 md:grid-cols-2">
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-3 top-3 z-10 rounded-full border border-white/30 bg-black/20 p-2 text-white hover:bg-black/30 md:border-gray-200 md:bg-white md:text-brand-dark md:hover:bg-gray-100"
+          className="absolute right-3 top-3 z-10 rounded-full border border-white/30 bg-black/20 p-2 text-white hover:bg-black/30 md:border-gray-200 md:bg-surface md:text-ink md:hover:bg-gray-100"
           aria-label="Close sign in"
         >
           <X size={18} />
@@ -117,127 +127,141 @@ export default function SignInModal({
             <span className="text-sm font-semibold uppercase tracking-wide">Coming soon</span>
           </div>
           <h3 className="text-2xl font-bold">Get the Mangwaoo App</h3>
-          <div className="rounded-xl bg-white p-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qrCodeUrl} alt="QR code to download the Mangwaoo app" width={160} height={160} />
-          </div>
           <p className="max-w-xs text-sm text-white/85">
-            Scan this code to download the Mangwaoo app for Android &amp; iOS as soon as it launches.
+            The Mangwaoo app for Android &amp; iOS is launching soon.
           </p>
         </div>
 
         <div className="p-8">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-brand-dark mb-1">Log in</h2>
-            <p className="text-sm text-brand-gray">
-              New to Mangwaoo?{' '}
-              <Link
-                href="/signup"
-                onClick={onClose}
-                className="font-semibold text-brand-red-primary hover:underline"
-              >
-                Create an account
-              </Link>
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-semibold text-brand-dark mb-2">Email</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-brand-gray" />
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  placeholder="your@email.com"
-                  className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl outline-none transition focus:border-brand-red-primary focus:ring-2 focus:ring-red-100"
-                  required
-                />
+          {verification ? (
+            <WhatsAppCodeForm
+              key={verification.ticket}
+              verification={verification}
+              remember={formData.remember}
+              title="Confirm your WhatsApp"
+              verifyLabel="Verify and log in"
+              backLabel="Back to log in"
+              onBack={() => setVerification(null)}
+              onVerified={handleVerified}
+            />
+          ) : (
+            <>
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-ink mb-1">Log in</h2>
+                <p className="text-sm text-brand-gray">
+                  New to Mangwaoo?{' '}
+                  <Link
+                    href="/signup"
+                    onClick={onClose}
+                    className="font-semibold text-accent hover:underline"
+                  >
+                    Create an account
+                  </Link>
+                </p>
               </div>
-            </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-semibold text-brand-dark">Password</label>
-                <Link
-                  href="/forgot-password"
-                  onClick={onClose}
-                  className="text-xs font-semibold text-brand-red-primary hover:underline"
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-ink mb-2">Email</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-brand-gray" />
+                    <input
+                      // text, not email: the admin account logs in with the username "admin"
+                      type="text"
+                      inputMode="email"
+                      autoComplete="username"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      placeholder="your@email.com"
+                      className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-semibold text-ink">Password</label>
+                    <Link
+                      href="/forgot-password"
+                      onClick={onClose}
+                      className="text-xs font-semibold text-accent hover:underline"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-brand-gray" />
+                    <input
+                      type={isPasswordVisible ? 'text' : 'password'}
+                      name="password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      placeholder="Enter your password"
+                      className="w-full pl-11 pr-11 py-3 border border-gray-300 rounded-xl outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"
+                      required
+                      minLength={6}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsPasswordVisible((prev) => !prev)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-gray hover:text-accent"
+                      aria-label={isPasswordVisible ? 'Hide password' : 'Show password'}
+                    >
+                      {isPasswordVisible ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-2 text-sm text-brand-gray">
+                  <input
+                    type="checkbox"
+                    name="remember"
+                    checked={formData.remember}
+                    onChange={handleChange}
+                    className="w-4 h-4 rounded border-gray-300 text-accent focus:ring-accent"
+                  />
+                  Remember me
+                </label>
+
+                {formError ? <p className="text-sm text-danger">{formError}</p> : null}
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full bg-gradient-to-r from-brand-red-primary to-brand-red-secondary text-white py-3 rounded-xl font-semibold hover:shadow-lg transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Forgot password?
-                </Link>
+                  {isSubmitting ? 'Logging in…' : 'Log in'}
+                </button>
+              </form>
+
+              <div className="flex items-center gap-3 my-6">
+                <div className="h-px flex-1 bg-gray-200" />
+                <span className="text-xs text-brand-gray uppercase tracking-wide">or</span>
+                <div className="h-px flex-1 bg-gray-200" />
               </div>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-brand-gray" />
-                <input
-                  type={isPasswordVisible ? 'text' : 'password'}
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  placeholder="Enter your password"
-                  className="w-full pl-11 pr-11 py-3 border border-gray-300 rounded-xl outline-none transition focus:border-brand-red-primary focus:ring-2 focus:ring-red-100"
-                  required
-                  minLength={6}
-                />
+
+              <div className="space-y-3">
                 <button
                   type="button"
-                  onClick={() => setIsPasswordVisible((prev) => !prev)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-gray hover:text-brand-red-primary"
-                  aria-label={isPasswordVisible ? 'Hide password' : 'Show password'}
+                  onClick={() => handleSocialLogin('Google')}
+                  className="flex w-full items-center justify-center gap-3 rounded-xl border border-gray-300 py-3 text-sm font-semibold text-ink hover:bg-gray-50 transition-colors"
                 >
-                  {isPasswordVisible ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  <GoogleIcon />
+                  Continue with Google
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSocialLogin('Facebook')}
+                  className="flex w-full items-center justify-center gap-3 rounded-xl bg-[#1877F2] py-3 text-sm font-semibold text-white hover:bg-[#166fe0] transition-colors"
+                >
+                  <FacebookIcon />
+                  Continue with Facebook
                 </button>
               </div>
-            </div>
-
-            <label className="flex items-center gap-2 text-sm text-brand-gray">
-              <input
-                type="checkbox"
-                name="remember"
-                checked={formData.remember}
-                onChange={handleChange}
-                className="w-4 h-4 rounded border-gray-300 text-brand-red-primary focus:ring-brand-red-primary"
-              />
-              Remember me
-            </label>
-
-            {formError ? <p className="text-sm text-red-600">{formError}</p> : null}
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full bg-gradient-to-r from-brand-red-primary to-brand-red-secondary text-white py-3 rounded-xl font-semibold hover:shadow-lg transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSubmitting ? 'Logging in…' : 'Log in'}
-            </button>
-          </form>
-
-          <div className="flex items-center gap-3 my-6">
-            <div className="h-px flex-1 bg-gray-200" />
-            <span className="text-xs text-brand-gray uppercase tracking-wide">or</span>
-            <div className="h-px flex-1 bg-gray-200" />
-          </div>
-
-          <div className="space-y-3">
-            <button
-              type="button"
-              onClick={() => handleSocialLogin('Google')}
-              className="flex w-full items-center justify-center gap-3 rounded-xl border border-gray-300 py-3 text-sm font-semibold text-brand-dark hover:bg-gray-50 transition-colors"
-            >
-              <GoogleIcon />
-              Continue with Google
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSocialLogin('Facebook')}
-              className="flex w-full items-center justify-center gap-3 rounded-xl bg-[#1877F2] py-3 text-sm font-semibold text-white hover:bg-[#166fe0] transition-colors"
-            >
-              <FacebookIcon />
-              Continue with Facebook
-            </button>
-          </div>
+            </>
+          )}
         </div>
       </div>
     </div>,

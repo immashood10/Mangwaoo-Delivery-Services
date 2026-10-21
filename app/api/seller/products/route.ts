@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
+import { refreshMartCatalog } from '@/lib/catalog-cache';
+import { resolveProductAttributes } from '@/lib/product-attributes';
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -41,6 +43,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Please choose a valid category.' }, { status: 400 });
   }
 
+  // A vehicle ad needs its details (make, model, year, …) and clothes/shoes need their sizes;
+  // other categories carry none.
+  const resolved = resolveProductAttributes(category.name, body?.attributes);
+
+  if ('error' in resolved) {
+    return NextResponse.json({ error: resolved.error }, { status: 400 });
+  }
+
   const product = await prisma.product.create({
     data: {
       name,
@@ -48,10 +58,12 @@ export async function POST(request: NextRequest) {
       price,
       stock,
       images,
+      ...(resolved.attributes ? { attributes: resolved.attributes } : {}),
       categoryId,
       sellerId: seller.id,
     },
   });
+  refreshMartCatalog();
 
   return NextResponse.json({ product }, { status: 201 });
 }

@@ -3,6 +3,21 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ImagePlus, X } from 'lucide-react';
+import SizeFields from './SizeFields';
+import VehicleDetailsFields from './VehicleDetailsFields';
+import {
+  emptySizeDetails,
+  getSizeOptions,
+  isSizedCategory,
+  type SizeDetails,
+} from '@/lib/size-options';
+import {
+  emptyVehicleDetails,
+  isVehicleCategory,
+  parseVehicleDetails,
+  type VehicleDetails,
+  type VehicleFieldKey,
+} from '@/lib/vehicle-details';
 
 type Category = { id: string; name: string };
 
@@ -14,6 +29,10 @@ type EditableProduct = {
   price: number;
   stock: number;
   images: string[];
+  /** Vehicle ads only (Mart): make, model, year, … */
+  attributes?: unknown;
+  /** Clothes and shoes only (Mart): the sizes on offer. */
+  sizes?: SizeDetails | null;
 };
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
@@ -21,12 +40,18 @@ const MAX_IMAGES = 6;
 
 export default function EditProductModal({
   apiBasePath,
+  enableVehicleDetails = false,
+  enableSizes = false,
   categories,
   product,
   onClose,
   onSaved,
 }: {
   apiBasePath: string;
+  /** Show the vehicle detail fields when the "Vehicles" category is selected (MangwaooMart only). */
+  enableVehicleDetails?: boolean;
+  /** Ask for sizes when a clothes/shoes category (Men, Women, Kids) is selected (MangwaooMart only). */
+  enableSizes?: boolean;
   categories: Category[];
   product: EditableProduct;
   onClose: () => void;
@@ -39,15 +64,36 @@ export default function EditProductModal({
     price: String(product.price),
     stock: String(product.stock),
   });
+  const [vehicle, setVehicle] = useState<VehicleDetails>(
+    () => parseVehicleDetails(product.attributes) ?? emptyVehicleDetails()
+  );
+  const [sizes, setSizes] = useState<SizeDetails>(() => product.sizes ?? emptySizeDetails());
   const [images, setImages] = useState<string[]>(product.images);
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const selectedCategoryName = categories.find((category) => category.id === form.categoryId)?.name;
+  const isVehicleAd = enableVehicleDetails && isVehicleCategory(selectedCategoryName);
+  const isSizedAd = enableSizes && isSizedCategory(selectedCategoryName);
+
+  const handleVehicleChange = (key: VehicleFieldKey, value: string) => {
+    setVehicle((prev) => ({ ...prev, [key]: value }));
+  };
 
   const handleChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+
+    if (name === 'categoryId') {
+      // Kids' sizes differ from Men's and Women's: keep only the picks that still exist.
+      const nextCategoryName = categories.find((category) => category.id === value)?.name;
+      setSizes((prev) => {
+        const valid = getSizeOptions(nextCategoryName, prev.sizeType);
+        return { ...prev, sizes: prev.sizes.filter((size) => valid.includes(size)) };
+      });
+    }
   };
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -87,6 +133,12 @@ export default function EditProductModal({
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setFormError('');
+
+    if (isSizedAd && sizes.sizeType !== 'none' && sizes.sizes.length === 0) {
+      setFormError('Please choose at least one size, or pick "Something else (no sizes)".');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -99,6 +151,8 @@ export default function EditProductModal({
           categoryId: form.categoryId,
           price: parseFloat(form.price),
           stock: parseInt(form.stock, 10),
+          ...(isVehicleAd ? { attributes: vehicle } : {}),
+          ...(isSizedAd ? { attributes: sizes } : {}),
           images,
         }),
       });
@@ -121,13 +175,13 @@ export default function EditProductModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-surface p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-brand-dark">Edit product</h2>
+          <h2 className="text-lg font-bold text-ink">Edit product</h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-gray-200 p-2 text-brand-dark hover:bg-gray-100"
+            className="rounded-full border border-gray-200 p-2 text-ink hover:bg-gray-100"
             aria-label="Close"
           >
             <X size={16} />
@@ -136,30 +190,30 @@ export default function EditProductModal({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-semibold text-brand-dark mb-2">Product name</label>
+            <label className="block text-sm font-semibold text-ink mb-2">Product name</label>
             <input
               type="text"
               name="name"
               value={form.name}
               onChange={handleChange}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl outline-none transition focus:border-brand-red-primary focus:ring-2 focus:ring-red-100"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-brand-dark mb-2">Description</label>
+            <label className="block text-sm font-semibold text-ink mb-2">Description</label>
             <textarea
               name="description"
               value={form.description}
               onChange={handleChange}
               rows={2}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl outline-none transition focus:border-brand-red-primary focus:ring-2 focus:ring-red-100"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-brand-dark mb-2">
+            <label className="block text-sm font-semibold text-ink mb-2">
               Product photos ({images.length}/{MAX_IMAGES})
             </label>
             <div className="flex flex-wrap gap-3">
@@ -174,7 +228,7 @@ export default function EditProductModal({
                   <button
                     type="button"
                     onClick={() => removeImage(index)}
-                    className="absolute -right-2 -top-2 rounded-full bg-white border border-gray-200 p-1 text-brand-gray hover:text-brand-red-primary"
+                    className="absolute -right-2 -top-2 rounded-full bg-surface border border-gray-200 p-1 text-brand-gray hover:text-accent"
                     aria-label={`Remove photo ${index + 1}`}
                   >
                     <X size={14} />
@@ -182,7 +236,7 @@ export default function EditProductModal({
                 </div>
               ))}
               {images.length < MAX_IMAGES && (
-                <label className="flex items-center justify-center gap-2 w-20 h-20 rounded-xl border-2 border-dashed border-gray-300 text-brand-gray cursor-pointer hover:border-brand-red-primary hover:text-brand-red-primary transition-colors">
+                <label className="flex items-center justify-center gap-2 w-20 h-20 rounded-xl border-2 border-dashed border-gray-300 text-brand-gray cursor-pointer hover:border-accent hover:text-accent transition-colors">
                   <ImagePlus className="w-5 h-5" />
                   <input type="file" accept="image/*" multiple onChange={handleImageChange} className="hidden" />
                 </label>
@@ -191,12 +245,12 @@ export default function EditProductModal({
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-brand-dark mb-2">Category</label>
+            <label className="block text-sm font-semibold text-ink mb-2">Category</label>
             <select
               name="categoryId"
               value={form.categoryId}
               onChange={handleChange}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl outline-none transition focus:border-brand-red-primary focus:ring-2 focus:ring-red-100"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"
               required
             >
               {categories.map((category) => (
@@ -207,9 +261,17 @@ export default function EditProductModal({
             </select>
           </div>
 
+          {isVehicleAd ? (
+            <VehicleDetailsFields values={vehicle} onChange={handleVehicleChange} idPrefix="edit-vehicle" columns={2} />
+          ) : null}
+
+          {isSizedAd ? (
+            <SizeFields categoryName={selectedCategoryName} value={sizes} onChange={setSizes} idPrefix="edit-size" />
+          ) : null}
+
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-brand-dark mb-2">Price (PKR)</label>
+              <label className="block text-sm font-semibold text-ink mb-2">Price (PKR)</label>
               <input
                 type="number"
                 name="price"
@@ -217,12 +279,12 @@ export default function EditProductModal({
                 onChange={handleChange}
                 min="1"
                 step="1"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl outline-none transition focus:border-brand-red-primary focus:ring-2 focus:ring-red-100"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-brand-dark mb-2">Stock</label>
+              <label className="block text-sm font-semibold text-ink mb-2">Stock</label>
               <input
                 type="number"
                 name="stock"
@@ -230,19 +292,19 @@ export default function EditProductModal({
                 onChange={handleChange}
                 min="0"
                 step="1"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl outline-none transition focus:border-brand-red-primary focus:ring-2 focus:ring-red-100"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"
                 required
               />
             </div>
           </div>
 
-          {formError ? <p className="text-sm text-red-600">{formError}</p> : null}
+          {formError ? <p className="text-sm text-danger">{formError}</p> : null}
 
           <div className="flex gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-xl border border-gray-300 py-3 text-sm font-semibold text-brand-dark hover:bg-gray-50"
+              className="flex-1 rounded-xl border border-gray-300 py-3 text-sm font-semibold text-ink hover:bg-gray-50"
             >
               Cancel
             </button>

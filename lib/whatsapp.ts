@@ -1,7 +1,15 @@
 const WHATSAPP_API_VERSION = 'v21.0';
 
 function messagesUrl(phoneNumberId: string) {
-  return `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${phoneNumberId}/messages`;
+  // WHATSAPP_API_BASE_URL only exists so a test or staging stand-in can take Meta's place.
+  const base = (process.env.WHATSAPP_API_BASE_URL || 'https://graph.facebook.com').replace(/\/+$/, '');
+
+  return `${base}/${WHATSAPP_API_VERSION}/${phoneNumberId}/messages`;
+}
+
+/** Whether the WhatsApp Business Cloud API credentials are set, i.e. whether messages can really be sent. */
+export function isWhatsAppConfigured() {
+  return Boolean(process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_ACCESS_TOKEN);
 }
 
 /**
@@ -60,13 +68,18 @@ export async function sendWhatsAppNotification(message: string) {
  * dashboard (WhatsApp Manager > Message Templates), with exactly as many
  * {{n}} body variables as `bodyParams` provided, in order.
  *
+ * `options.language` is the template's language code (default "en").
+ * `options.buttonParams` fills the template's first button — Meta's
+ * "Authentication" templates carry the code on a copy-code button too.
+ *
  * Requires WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN. Returns
  * whether the send succeeded so callers can decide how to react.
  */
 export async function sendWhatsAppTemplate(
   to: string,
   templateName: string,
-  bodyParams: string[]
+  bodyParams: string[],
+  options: { language?: string; buttonParams?: string[] } = {}
 ): Promise<boolean> {
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
@@ -77,6 +90,22 @@ export async function sendWhatsAppTemplate(
     );
     return false;
   }
+
+  const components = [
+    ...(bodyParams.length > 0
+      ? [{ type: 'body', parameters: bodyParams.map((text) => ({ type: 'text', text })) }]
+      : []),
+    ...(options.buttonParams?.length
+      ? [
+          {
+            type: 'button',
+            sub_type: 'url',
+            index: '0',
+            parameters: options.buttonParams.map((text) => ({ type: 'text', text })),
+          },
+        ]
+      : []),
+  ];
 
   try {
     const response = await fetch(messagesUrl(phoneNumberId), {
@@ -91,10 +120,8 @@ export async function sendWhatsAppTemplate(
         type: 'template',
         template: {
           name: templateName,
-          language: { code: 'en' },
-          ...(bodyParams.length > 0
-            ? { components: [{ type: 'body', parameters: bodyParams.map((text) => ({ type: 'text', text })) }] }
-            : {}),
+          language: { code: options.language ?? 'en' },
+          ...(components.length > 0 ? { components } : {}),
         },
       }),
     });
@@ -110,6 +137,26 @@ export async function sendWhatsAppTemplate(
     console.error('WhatsApp template send failed:', error);
     return false;
   }
+}
+
+/**
+ * Sends the sign-up / log-in verification code to a number's own WhatsApp
+ * (`to` is country-coded digits like "923001234567").
+ *
+ * Uses a pre-approved template (see WHATSAPP_OTP_TEMPLATE_* in .env.example).
+ * By default that is an "Authentication" template, which needs the code in
+ * both the body and the copy-code button; set WHATSAPP_OTP_TEMPLATE_KIND=text
+ * if the template is a plain text one with a single {{1}} variable instead.
+ */
+export async function sendWhatsAppCode(to: string, code: string): Promise<boolean> {
+  const templateName = process.env.WHATSAPP_OTP_TEMPLATE_NAME || 'verification_code';
+  const language = process.env.WHATSAPP_OTP_TEMPLATE_LANGUAGE || 'en';
+  const isAuthenticationTemplate = process.env.WHATSAPP_OTP_TEMPLATE_KIND !== 'text';
+
+  return sendWhatsAppTemplate(to, templateName, [code], {
+    language,
+    ...(isAuthenticationTemplate ? { buttonParams: [code] } : {}),
+  });
 }
 
 /**

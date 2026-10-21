@@ -1,25 +1,59 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Menu, X, MapPin, LocateFixed, Search, ShoppingCart, ShoppingBag, ChevronDown, Store, LogOut, ShieldCheck, PackageSearch } from 'lucide-react';
+import { Menu, X, MapPin, LocateFixed, Search, ShoppingCart, ChevronDown, Store, LogOut, ShieldCheck, PackageSearch, House, Briefcase, Heart, Trash2, Bike, MessagesSquare, LayoutDashboard, Settings, type LucideIcon } from 'lucide-react';
 import { PROFESSIONAL_SERVICES } from '@/lib/data';
+import {
+  ADDRESS_TAGS,
+  MAX_ADDRESS_LABEL_LENGTH,
+  deleteSavedAddress,
+  fetchSavedAddresses,
+  getAddressTag,
+  isSameSpot,
+  onSavedAddressRemoved,
+  saveAddress,
+  type AddressTag,
+  type SavedAddress,
+} from '@/lib/saved-addresses';
+import { LocationError, detectCurrentLocation, fetchVisitorState, saveVisitorState } from '@/lib/current-location';
 import SignInModal from './SignInModal';
+import LocationPrompt from './LocationPrompt';
+import OrderChat from './OrderChat';
+import StoryLogo from './StoryLogo';
+import type { PickedLocation } from './LocationPicker';
 import { useCart } from '@/lib/cart-context';
 import { useAuth } from '@/lib/auth-context';
+import { useDeliveryAddress, type DeliveryAddress } from '@/lib/delivery-address-context';
 
-type AddressSuggestion = {
-  id: string;
-  label: string;
-  postalCode: string;
-  lat: number;
-  lng: number;
+type AddressSuggestion = DeliveryAddress;
+
+const ADDRESS_TAG_ICONS: Record<AddressTag, LucideIcon> = {
+  Home: House,
+  Office: Briefcase,
+  Partner: Heart,
+  Other: MapPin,
 };
+
+// Sign-in and sign-up screens: don't ask for the location on top of them.
+const AUTH_PAGE_PREFIXES = ['/login', '/signup', '/forgot-password', '/reset-password', '/sell'];
+
+function savedToSuggestion(address: SavedAddress): AddressSuggestion {
+  return {
+    id: address.id,
+    label: address.street,
+    postalCode: '',
+    lat: address.lat,
+    lng: address.lng,
+    savedAs: address.label,
+  };
+}
 
 export default function Navbar() {
   const router = useRouter();
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -30,7 +64,24 @@ export default function Navbar() {
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [isLocatingAddress, setIsLocatingAddress] = useState(false);
   const [addressError, setAddressError] = useState('');
-  const [selectedAddress, setSelectedAddress] = useState<AddressSuggestion | null>(null);
+  const { address: selectedAddress, setAddress: setSelectedAddress } = useDeliveryAddress();
+
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [addressStep, setAddressStep] = useState<'pick' | 'save'>('pick');
+  const [saveTag, setSaveTag] = useState<AddressTag>('Home');
+  const [customAddressLabel, setCustomAddressLabel] = useState('');
+  const [isSavingAddress, setIsSavingAddress] = useState(false);
+  const [saveAddressError, setSaveAddressError] = useState('');
+
+  const [isOrderChatOpen, setIsOrderChatOpen] = useState(false);
+  const [orderPickup, setOrderPickup] = useState<PickedLocation | null>(null);
+  // Set when the order chat sent the user to pick an address, so it reopens afterwards.
+  const [resumeOrderChat, setResumeOrderChat] = useState(false);
+
+  // First visit: no address is known yet and the visitor was never asked, so offer to use their location.
+  const [wantsLocationPrompt, setWantsLocationPrompt] = useState(false);
+  const [isPromptLocating, setIsPromptLocating] = useState(false);
+  const [promptError, setPromptError] = useState('');
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -41,6 +92,57 @@ export default function Navbar() {
   const [searchQuery, setSearchQuery] = useState('');
   const { cartCount } = useCart();
   const { user, isLoading: isAuthLoading, logout, isSignInOpen, openSignIn, closeSignIn } = useAuth();
+  const isLoggedIn = Boolean(user);
+  // Only shoppers are asked: sellers and admins don't order for delivery.
+  const canAskLocation = !user || user.role === 'CUSTOMER';
+
+  useEffect(() => {
+    if (isAuthLoading) {
+      return;
+    }
+
+    let isMounted = true;
+
+    // Saved addresses belong to a logged-in account; what a visitor last shared, and whether they were
+    // already asked, is kept for the browser as a whole. Both come from the database.
+    Promise.all([isLoggedIn ? fetchSavedAddresses() : Promise.resolve<SavedAddress[]>([]), fetchVisitorState().catch(() => null)])
+      .then(([addresses, visitor]) => {
+        if (!isMounted) return;
+        setSavedAddresses(addresses);
+        // Start from the most recently saved address (or the spot they last shared) so returning visitors don't have to pick again.
+        const remembered = addresses[0] ? savedToSuggestion(addresses[0]) : (visitor?.location ?? null);
+        setSelectedAddress((current) => current ?? remembered);
+
+        if (!remembered && visitor && !visitor.prompted && canAskLocation) {
+          setWantsLocationPrompt(true);
+        }
+      })
+      .catch(() => {
+        if (isMounted) setSavedAddresses([]);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthLoading, isLoggedIn, canAskLocation, setSelectedAddress]);
+
+  const showLocationPrompt =
+    wantsLocationPrompt &&
+    !selectedAddress &&
+    !isSignInOpen &&
+    !isOrderChatOpen &&
+    !isAddressModalOpen &&
+    !AUTH_PAGE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+
+  // An address removed from Settings must also leave this picker (the navbar stays mounted across pages).
+  useEffect(
+    () =>
+      onSavedAddressRemoved((id) => {
+        setSavedAddresses((prev) => prev.filter((address) => address.id !== id));
+        setSelectedAddress((current) => (current?.id === id ? { ...current, savedAs: undefined } : current));
+      }),
+    [setSelectedAddress]
+  );
 
   useEffect(() => {
     const handleScroll = () => {
@@ -51,7 +153,7 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
-    if (!isAddressModalOpen && !isSignInOpen) {
+    if (!isAddressModalOpen && !isSignInOpen && !isOrderChatOpen && !showLocationPrompt) {
       return;
     }
 
@@ -61,7 +163,7 @@ export default function Navbar() {
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [isAddressModalOpen, isSignInOpen]);
+  }, [isAddressModalOpen, isSignInOpen, isOrderChatOpen, showLocationPrompt]);
 
   useEffect(() => {
     if (!isUserMenuOpen) {
@@ -164,111 +266,201 @@ export default function Navbar() {
     setAddressSuggestions([]);
   };
 
-  const handleLocateMe = () => {
-    if (!navigator.geolocation) {
-      setAddressError('Location access is not supported in this browser.');
+  const openAddressModal = () => {
+    setAddressStep('pick');
+    setSaveAddressError('');
+    setIsAddressModalOpen(true);
+  };
+
+  const closeAddressModal = (addressConfirmed = false) => {
+    setIsAddressModalOpen(false);
+    setAddressStep('pick');
+
+    if (resumeOrderChat) {
+      setResumeOrderChat(false);
+      if (addressConfirmed) setIsOrderChatOpen(true);
+    }
+  };
+
+  const handleOrderNow = () => {
+    if (isAuthLoading) return;
+
+    if (!user) {
+      openSignIn();
       return;
     }
 
+    setIsOrderChatOpen(true);
+  };
+
+  const handleOrderChatNeedsAddress = () => {
+    setIsOrderChatOpen(false);
+    setResumeOrderChat(true);
+    openAddressModal();
+  };
+
+  const handleConfirmAddress = () => {
+    if (!selectedAddress) {
+      return;
+    }
+
+    // The confirmed spot is remembered for this browser (in the database).
+    void saveVisitorState({ location: selectedAddress });
+
+    // Saving a place as Home/Office needs an account; a guest just uses the address.
+    if (!isLoggedIn) {
+      closeAddressModal(true);
+      return;
+    }
+
+    const alreadySaved =
+      selectedAddress.savedAs !== undefined
+        ? savedAddresses.find((address) => address.id === selectedAddress.id)
+        : savedAddresses.find((address) => isSameSpot(address, selectedAddress));
+
+    if (alreadySaved) {
+      setSelectedAddress({ ...selectedAddress, savedAs: alreadySaved.label });
+      closeAddressModal(true);
+      return;
+    }
+
+    // First time this location is used — offer to save it.
+    setSaveTag('Home');
+    setCustomAddressLabel('');
+    setSaveAddressError('');
+    setAddressStep('save');
+  };
+
+  const handleSaveAddress = async () => {
+    if (!selectedAddress) {
+      return;
+    }
+
+    const label = saveTag === 'Other' ? customAddressLabel.trim() || 'Other' : saveTag;
+
+    setIsSavingAddress(true);
+    setSaveAddressError('');
+
+    try {
+      const saved = await saveAddress({
+        label,
+        street: selectedAddress.label,
+        lat: selectedAddress.lat,
+        lng: selectedAddress.lng,
+      });
+
+      setSavedAddresses((prev) => [saved, ...prev]);
+      setSelectedAddress({ ...selectedAddress, id: saved.id, savedAs: saved.label });
+      closeAddressModal(true);
+    } catch (error) {
+      setSaveAddressError((error as Error).message || 'Could not save address. Please try again.');
+    } finally {
+      setIsSavingAddress(false);
+    }
+  };
+
+  const handleDeleteSavedAddress = async (id: string) => {
+    try {
+      await deleteSavedAddress(id);
+      setSavedAddresses((prev) => prev.filter((address) => address.id !== id));
+      setSelectedAddress((current) =>
+        current?.id === id ? { ...current, savedAs: undefined } : current
+      );
+    } catch {
+      setAddressError('Could not remove that address. Please try again.');
+    }
+  };
+
+  const handleLocateMe = async () => {
     setIsLocatingAddress(true);
     setAddressError('');
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
+    try {
+      handleSelectAddressSuggestion(await detectCurrentLocation());
+    } catch (error) {
+      setAddressError(error instanceof LocationError ? error.message : 'Could not detect your address. Please type it manually.');
+    } finally {
+      setIsLocatingAddress(false);
+    }
+  };
 
-        try {
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${latitude}&lon=${longitude}`,
-            { headers: { Accept: 'application/json' } }
-          );
+  // The visitor has answered the first-visit location question (in any way), so it isn't asked again.
+  const finishLocationPrompt = (location?: AddressSuggestion) => {
+    void saveVisitorState({ prompted: true, ...(location ? { location } : {}) });
+    setWantsLocationPrompt(false);
+    setPromptError('');
+  };
 
-          if (!response.ok) {
-            throw new Error('Reverse geocoding failed');
-          }
+  const handlePromptUseLocation = async () => {
+    setIsPromptLocating(true);
+    setPromptError('');
 
-          const result = (await response.json()) as {
-            display_name: string;
-            address?: {
-              postcode?: string;
-              house_number?: string;
-              suburb?: string;
-              neighbourhood?: string;
-              city_district?: string;
-              town?: string;
-              village?: string;
-              city?: string;
-            };
-          };
+    try {
+      const location = await detectCurrentLocation();
+      setSelectedAddress(location);
+      finishLocationPrompt(location);
+    } catch (error) {
+      setPromptError(
+        error instanceof LocationError ? error.message : 'Could not detect your location. Please type your address instead.'
+      );
+    } finally {
+      setIsPromptLocating(false);
+    }
+  };
 
-          const address = result.address ?? {};
-          const areaName =
-            address.suburb ||
-            address.neighbourhood ||
-            address.city_district ||
-            address.town ||
-            address.village ||
-            address.city ||
-            '';
-          const shortLabel = [address.house_number, areaName].filter(Boolean).join(', ');
-
-          const suggestion: AddressSuggestion = {
-            id: `current-${latitude}-${longitude}`,
-            label: shortLabel || result.display_name,
-            postalCode: address.postcode ?? '',
-            lat: latitude,
-            lng: longitude,
-          };
-
-          handleSelectAddressSuggestion(suggestion);
-        } catch {
-          setAddressError('Could not detect your address. Please type it manually.');
-        } finally {
-          setIsLocatingAddress(false);
-        }
-      },
-      () => {
-        setIsLocatingAddress(false);
-        setAddressError('Location access was denied. You can type the address manually instead.');
-      },
-      { enableHighAccuracy: true, timeout: 15000 }
-    );
+  const handlePromptEnterManually = () => {
+    finishLocationPrompt();
+    openAddressModal();
   };
 
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const trimmedQuery = searchQuery.trim();
-    router.push(trimmedQuery ? `/mart?q=${encodeURIComponent(trimmedQuery)}` : '/mart');
+
+    if (!trimmedQuery) {
+      router.push('/gulplaza');
+      return;
+    }
+
+    // Send the delivery address along so restaurants are listed nearest first.
+    const params = new URLSearchParams({ q: trimmedQuery });
+    if (selectedAddress && (selectedAddress.lat !== 0 || selectedAddress.lng !== 0)) {
+      params.set('lat', String(selectedAddress.lat));
+      params.set('lng', String(selectedAddress.lng));
+    }
+    router.push(`/search?${params}`);
   };
 
   return (
     <nav
       className={`sticky top-0 z-50 transition-all duration-300 ${
         isScrolled
-          ? 'bg-white shadow-md'
-          : 'bg-white/95 backdrop-blur-md'
+          ? 'bg-surface shadow-md'
+          : 'bg-surface/95 backdrop-blur-md'
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex min-h-12 flex-wrap items-center justify-start gap-2 border-b border-gray-100 py-2 md:gap-3">
-          <Link href="/" className="mr-2 flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-brand-red-primary to-brand-red-secondary rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">M</span>
-            </div>
-            <span className="font-bold text-lg text-brand-dark">
-              Mangwaoo
-            </span>
-          </Link>
+          <StoryLogo />
 
           <button
             type="button"
-            onClick={() => setIsAddressModalOpen(true)}
-            className="flex max-w-[220px] items-center gap-1.5 rounded-full border border-gray-300 px-3 py-2 text-sm font-medium text-brand-dark hover:border-brand-red-primary hover:text-brand-red-primary transition-colors"
+            onClick={openAddressModal}
+            className="flex max-w-[220px] items-center gap-1.5 rounded-full border border-gray-300 px-3 py-2 text-sm font-medium text-ink hover:border-accent hover:text-accent transition-colors"
           >
-            <MapPin className="w-4 h-4 shrink-0 text-brand-red-primary" />
+            <MapPin className="w-4 h-4 shrink-0 text-accent" />
             <span className="truncate">
-              {selectedAddress ? selectedAddress.label : 'Select your address'}
+              {selectedAddress ? (
+                <>
+                  {selectedAddress.savedAs && (
+                    <span className="font-semibold">{selectedAddress.savedAs} · </span>
+                  )}
+                  {selectedAddress.label}
+                </>
+              ) : (
+                'Select your address'
+              )}
             </span>
           </button>
 
@@ -283,15 +475,25 @@ export default function Navbar() {
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search for food, groceries, shops..."
-                className="w-full rounded-full border border-gray-300 pl-9 pr-4 py-2 text-sm outline-none transition focus:border-brand-red-primary focus:ring-2 focus:ring-red-100"
+                className="w-full rounded-full border border-gray-300 pl-9 pr-4 py-2 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"
               />
             </div>
           </form>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            <Link
+              href="/favourites"
+              className={`rounded-full border p-2.5 transition-colors hover:border-accent hover:text-accent ${
+                pathname === '/favourites' ? 'border-accent text-accent' : 'border-gray-300 text-ink'
+              }`}
+              aria-label="Open favourites"
+              title="Favourites"
+            >
+              <Heart className={`w-4 h-4 ${pathname === '/favourites' ? 'fill-current' : ''}`} />
+            </Link>
             <Link
               href="/cart"
-              className="relative rounded-full border border-gray-300 p-2.5 text-brand-dark hover:border-brand-red-primary hover:text-brand-red-primary transition-colors"
+              className="relative rounded-full border border-gray-300 p-2.5 text-ink hover:border-accent hover:text-accent transition-colors"
               aria-label="Open cart"
             >
               <ShoppingCart className="w-4 h-4" />
@@ -308,9 +510,9 @@ export default function Navbar() {
                 <button
                   type="button"
                   onClick={() => setIsUserMenuOpen((prev) => !prev)}
-                  className="flex items-center gap-2 rounded-full border border-gray-300 px-3 py-2 text-sm font-semibold text-brand-dark hover:border-brand-red-primary hover:text-brand-red-primary transition-colors"
+                  className="flex items-center gap-2 rounded-full border border-gray-300 px-3 py-2 text-sm font-semibold text-ink hover:border-accent hover:text-accent transition-colors"
                 >
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-red-primary/10 text-xs font-bold text-brand-red-primary">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-red-primary/10 text-xs font-bold text-accent">
                     {user.name.charAt(0).toUpperCase()}
                   </span>
                   <span className="max-w-[100px] truncate">{user.name.split(' ')[0]}</span>
@@ -318,42 +520,94 @@ export default function Navbar() {
                 </button>
 
                 {isUserMenuOpen && (
-                  <div className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-xl border border-gray-100 bg-white py-1.5 shadow-lg">
+                  <div className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-xl border border-gray-100 bg-surface py-1.5 shadow-lg">
                     <div className="px-4 py-2 border-b border-gray-50">
-                      <p className="truncate text-sm font-semibold text-brand-dark">{user.name}</p>
+                      <p className="truncate text-sm font-semibold text-ink">{user.name}</p>
                       <p className="text-xs text-brand-gray">
-                        {user.role === 'SELLER' ? 'Seller account' : user.role === 'ADMIN' ? 'Admin account' : 'Customer account'}
+                        {user.role === 'SELLER'
+                          ? 'Seller account'
+                          : user.role === 'ADMIN'
+                            ? 'Admin account'
+                            : user.role === 'RIDER'
+                              ? 'Rider account'
+                              : 'Customer account'}
                       </p>
                     </div>
                     {user.role === 'CUSTOMER' && (
-                      <Link
-                        href="/account"
-                        onClick={() => setIsUserMenuOpen(false)}
-                        className="flex items-center gap-2 px-4 py-2 text-sm text-brand-dark hover:bg-brand-light"
-                      >
-                        <PackageSearch className="w-4 h-4" />
-                        My Orders
-                      </Link>
+                      <>
+                        <Link
+                          href="/account"
+                          onClick={() => setIsUserMenuOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-brand-light"
+                        >
+                          <PackageSearch className="w-4 h-4" />
+                          My Orders
+                        </Link>
+                        <Link
+                          href="/favourites"
+                          onClick={() => setIsUserMenuOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-brand-light"
+                        >
+                          <Heart className="w-4 h-4" />
+                          Favourites
+                        </Link>
+                        <Link
+                          href="/account/settings"
+                          onClick={() => setIsUserMenuOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-brand-light"
+                        >
+                          <Settings className="w-4 h-4" />
+                          Settings
+                        </Link>
+                      </>
                     )}
                     {user.role === 'SELLER' && (
                       <Link
                         href="/seller"
                         onClick={() => setIsUserMenuOpen(false)}
-                        className="flex items-center gap-2 px-4 py-2 text-sm text-brand-dark hover:bg-brand-light"
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-brand-light"
                       >
                         <Store className="w-4 h-4" />
                         Seller Dashboard
                       </Link>
                     )}
-                    {user.role === 'ADMIN' && (
+                    {user.role === 'RIDER' && (
                       <Link
-                        href="/admin/sellers"
+                        href="/rider"
                         onClick={() => setIsUserMenuOpen(false)}
-                        className="flex items-center gap-2 px-4 py-2 text-sm text-brand-dark hover:bg-brand-light"
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-brand-light"
                       >
-                        <ShieldCheck className="w-4 h-4" />
-                        Seller Approvals
+                        <Bike className="w-4 h-4" />
+                        Rider Dashboard
                       </Link>
+                    )}
+                    {user.role === 'ADMIN' && (
+                      <>
+                        <Link
+                          href="/admin"
+                          onClick={() => setIsUserMenuOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-ink hover:bg-brand-light"
+                        >
+                          <LayoutDashboard className="w-4 h-4" />
+                          Admin Dashboard
+                        </Link>
+                        <Link
+                          href="/admin/sellers"
+                          onClick={() => setIsUserMenuOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-brand-light"
+                        >
+                          <ShieldCheck className="w-4 h-4" />
+                          Seller Approvals
+                        </Link>
+                        <Link
+                          href="/admin/rider-chats"
+                          onClick={() => setIsUserMenuOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-brand-light"
+                        >
+                          <MessagesSquare className="w-4 h-4" />
+                          Order Chats
+                        </Link>
+                      </>
                     )}
                     <button
                       type="button"
@@ -363,7 +617,7 @@ export default function Navbar() {
                         router.push('/');
                         router.refresh();
                       }}
-                      className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-brand-dark hover:bg-brand-light"
+                      className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-ink hover:bg-brand-light"
                     >
                       <LogOut className="w-4 h-4" />
                       Logout
@@ -376,25 +630,26 @@ export default function Navbar() {
                 <button
                   type="button"
                   onClick={openSignIn}
-                  className="rounded-full border border-gray-300 px-4 py-2 text-sm font-semibold text-brand-dark hover:border-brand-red-primary hover:text-brand-red-primary transition-colors"
+                  className="rounded-full border border-gray-300 px-4 py-2 text-sm font-semibold text-ink hover:border-accent hover:text-accent transition-colors"
                 >
                   Login
                 </button>
                 <Link
                   href="/signup"
-                  className="rounded-full border border-brand-red-primary px-4 py-2 text-sm font-semibold text-brand-red-primary hover:bg-brand-red-primary hover:text-white transition-colors"
+                  className="rounded-full border border-accent px-4 py-2 text-sm font-semibold text-accent hover:bg-brand-red-primary hover:text-white transition-colors"
                 >
                   Sign up
                 </Link>
               </>
             )}
-            <Link
-              href="/mart"
-              className="flex items-center space-x-2 rounded-full bg-[#9b0000] px-4 py-2 text-sm font-semibold text-white shadow-md shadow-red-200 hover:bg-[#840000] transition-all duration-300"
+            <button
+              type="button"
+              onClick={handleOrderNow}
+              className="flex items-center space-x-2 whitespace-nowrap rounded-full bg-[#9b0000] px-4 py-2 text-sm font-semibold text-white shadow-md shadow-red-200 hover:bg-[#840000] transition-all duration-300"
             >
-              <ShoppingBag className="w-4 h-4" />
-              <span>Order Now!</span>
-            </Link>
+              <MessagesSquare className="w-4 h-4" />
+              <span>Chat with Rider</span>
+            </button>
           </div>
         </div>
 
@@ -404,7 +659,7 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="text-brand-dark hover:text-brand-red-primary transition-colors font-medium"
+                className="text-ink hover:text-accent transition-colors font-medium"
               >
                 {link.name}
               </Link>
@@ -414,20 +669,20 @@ export default function Navbar() {
               <button
                 type="button"
                 onClick={() => setIsServicesMenuOpen((prev) => !prev)}
-                className="flex items-center gap-1 text-brand-dark hover:text-brand-red-primary transition-colors font-medium"
+                className="flex items-center gap-1 text-ink hover:text-accent transition-colors font-medium"
               >
                 Services
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isServicesMenuOpen ? 'rotate-180' : ''}`} />
               </button>
 
               {isServicesMenuOpen && (
-                <div className="absolute left-0 top-full z-50 mt-3 w-64 overflow-hidden rounded-xl border border-gray-100 bg-white py-1.5 shadow-lg">
+                <div className="absolute left-0 top-full z-50 mt-3 w-64 overflow-hidden rounded-xl border border-gray-100 bg-surface py-1.5 shadow-lg">
                   {PROFESSIONAL_SERVICES.map((service) => (
                     <Link
                       key={service.slug}
                       href={`/services-hub#${service.slug}`}
                       onClick={() => setIsServicesMenuOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-brand-dark hover:bg-brand-light"
+                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-brand-light"
                     >
                       <span className="text-base leading-none">{service.icon}</span>
                       {service.name}
@@ -441,7 +696,7 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="text-brand-dark hover:text-brand-red-primary transition-colors font-medium"
+                className="text-ink hover:text-accent transition-colors font-medium"
               >
                 {link.name}
               </Link>
@@ -451,7 +706,7 @@ export default function Navbar() {
           <div className="md:hidden">
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="text-brand-dark hover:text-brand-red-primary"
+              className="text-ink hover:text-accent"
             >
               {isOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
@@ -460,24 +715,136 @@ export default function Navbar() {
 
         {isAddressModalOpen && createPortal(
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="w-full max-w-xs max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-3 shadow-2xl sm:max-w-sm sm:p-4">
+            <div className="w-full max-w-xs max-h-[90vh] overflow-y-auto rounded-2xl bg-surface p-3 shadow-2xl sm:max-w-sm sm:p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm uppercase tracking-[0.3em] text-brand-red-primary">Delivery address</p>
-                  <h3 className="mt-1 text-xl font-semibold text-brand-dark">Select your address</h3>
+                  <p className="text-sm uppercase tracking-[0.3em] text-accent">Delivery address</p>
+                  <h3 className="mt-1 text-xl font-semibold text-ink">
+                    {addressStep === 'save' ? 'Save this location?' : 'Select your address'}
+                  </h3>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsAddressModalOpen(false)}
-                  className="rounded-full border border-gray-200 p-2 text-brand-dark hover:bg-gray-100"
+                  onClick={() => closeAddressModal()}
+                  className="rounded-full border border-gray-200 p-2 text-ink hover:bg-gray-100"
                   aria-label="Close address selector"
                 >
                   <X size={18} />
                 </button>
               </div>
 
+              {addressStep === 'save' && selectedAddress ? (
+                <div className="mt-4 space-y-4">
+                  <div className="flex items-start gap-2 rounded-xl bg-brand-light p-3 text-xs text-ink">
+                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                    <p className="line-clamp-3">{selectedAddress.label}</p>
+                  </div>
+
+                  <div>
+                    <p className="mb-2 text-sm font-semibold text-ink">Where is this place?</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {ADDRESS_TAGS.map((tag) => {
+                        const TagIcon = ADDRESS_TAG_ICONS[tag.value];
+                        const isActive = saveTag === tag.value;
+
+                        return (
+                          <button
+                            key={tag.value}
+                            type="button"
+                            onClick={() => setSaveTag(tag.value)}
+                            aria-pressed={isActive}
+                            className={`flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 text-xs font-semibold transition ${
+                              isActive
+                                ? 'border-accent bg-red-50 text-accent'
+                                : 'border-gray-200 text-ink hover:border-accent/50'
+                            }`}
+                          >
+                            <TagIcon className="h-5 w-5" />
+                            {tag.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {saveTag === 'Other' && (
+                    <label className="block text-xs text-ink">
+                      Name this place
+                      <input
+                        type="text"
+                        value={customAddressLabel}
+                        onChange={(event) => setCustomAddressLabel(event.target.value)}
+                        maxLength={MAX_ADDRESS_LABEL_LENGTH}
+                        className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"
+                        placeholder="e.g. Gym, Ammi's house"
+                        autoFocus
+                      />
+                    </label>
+                  )}
+
+                  {saveAddressError ? <p className="text-xs text-danger">{saveAddressError}</p> : null}
+
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => closeAddressModal(true)}
+                      className="rounded-full border border-gray-300 px-3 py-2 text-sm font-semibold text-ink hover:bg-gray-100"
+                    >
+                      Not now
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSavingAddress}
+                      onClick={handleSaveAddress}
+                      className="rounded-full bg-[#9b0000] px-3 py-2 text-sm font-semibold text-white shadow-md shadow-red-200 hover:bg-[#840000] disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {isSavingAddress ? 'Saving…' : 'Save address'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
               <div className="mt-4 space-y-3">
-                <label className="relative block text-xs text-brand-dark">
+                {savedAddresses.length > 0 && (
+                  <div>
+                    <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-brand-gray">Saved addresses</p>
+                    <ul className="space-y-1.5">
+                      {savedAddresses.map((address) => {
+                        const TagIcon = ADDRESS_TAG_ICONS[getAddressTag(address.label)];
+                        const isSelected = selectedAddress?.id === address.id;
+
+                        return (
+                          <li key={address.id} className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleSelectAddressSuggestion(savedToSuggestion(address))}
+                              className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition ${
+                                isSelected
+                                  ? 'border-accent bg-red-50'
+                                  : 'border-gray-200 hover:border-accent/50'
+                              }`}
+                            >
+                              <TagIcon className="h-4 w-4 shrink-0 text-accent" />
+                              <span className="min-w-0">
+                                <span className="block text-sm font-semibold text-ink">{address.label}</span>
+                                <span className="block truncate text-xs text-brand-gray">{address.street}</span>
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSavedAddress(address.id)}
+                              className="rounded-full p-2 text-brand-gray hover:bg-gray-100 hover:text-danger"
+                              aria-label={`Remove saved address ${address.label}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+
+                <label className="relative block text-xs text-ink">
                   Address / Street
                   <input
                     type="text"
@@ -486,7 +853,7 @@ export default function Navbar() {
                       setAddressQuery(event.target.value);
                       setSelectedAddress(null);
                     }}
-                    className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-brand-red-primary focus:ring-2 focus:ring-red-100"
+                    className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"
                     placeholder="Start typing your street or area"
                     autoComplete="off"
                   />
@@ -496,13 +863,13 @@ export default function Navbar() {
                   )}
 
                   {addressSuggestions.length > 0 && (
-                    <ul className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                    <ul className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-xl border border-gray-200 bg-surface shadow-lg">
                       {addressSuggestions.map((suggestion) => (
                         <li key={suggestion.id}>
                           <button
                             type="button"
                             onClick={() => handleSelectAddressSuggestion(suggestion)}
-                            className="block w-full px-3 py-2 text-left text-xs text-brand-dark hover:bg-red-50"
+                            className="block w-full px-3 py-2 text-left text-xs text-ink hover:bg-red-50"
                           >
                             {suggestion.label}
                           </button>
@@ -515,63 +882,100 @@ export default function Navbar() {
                 <button
                   type="button"
                   onClick={handleLocateMe}
-                  className="flex items-center gap-2 rounded-full bg-red-50 px-3 py-2 text-xs font-semibold text-[#9b0000] hover:bg-red-100"
+                  className="flex items-center gap-2 rounded-full bg-red-50 px-3 py-2 text-xs font-semibold text-accent hover:bg-red-100"
                 >
                   <LocateFixed className="w-4 h-4" />
                   {isLocatingAddress ? 'Locating…' : 'Locate me'}
                 </button>
 
-                {addressError ? <p className="text-xs text-red-600">{addressError}</p> : null}
+                {addressError ? <p className="text-xs text-danger">{addressError}</p> : null}
 
-                <div className="overflow-hidden rounded-xl border border-gray-200">
+                <div className="relative overflow-hidden rounded-xl border border-gray-200">
                   <iframe
+                    key={selectedAddress ? selectedAddress.id : 'karachi'}
                     title="Selected address map"
                     src={
                       selectedAddress
-                        ? `https://www.openstreetmap.org/export/embed.html?bbox=${selectedAddress.lng - 0.01},${selectedAddress.lat - 0.01},${selectedAddress.lng + 0.01},${selectedAddress.lat + 0.01}&layer=mapnik&marker=${selectedAddress.lat},${selectedAddress.lng}`
-                        : 'https://www.openstreetmap.org/export/embed.html?bbox=66.75,24.78,67.17,25.06&layer=mapnik'
+                        ? `https://maps.google.com/maps?q=${selectedAddress.lat},${selectedAddress.lng}&z=17&hl=en&output=embed`
+                        : 'https://maps.google.com/maps?q=Karachi,Pakistan&z=11&hl=en&output=embed'
                     }
-                    className="h-40 w-full border-0"
+                    className="h-56 w-full border-0"
                     loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
                     allowFullScreen
                   />
+                  <button
+                    type="button"
+                    onClick={handleLocateMe}
+                    disabled={isLocatingAddress}
+                    className="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-surface text-gray-600 shadow-md ring-1 ring-black/5 transition hover:text-[#1a73e8] disabled:cursor-wait"
+                    aria-label="Show my location"
+                    title="Show my location"
+                  >
+                    <LocateFixed className={`h-5 w-5 ${isLocatingAddress ? 'animate-pulse text-[#1a73e8]' : ''}`} />
+                  </button>
                 </div>
 
-                <label className="block text-xs text-brand-dark">
+                <label className="block text-xs text-ink">
                   Postal Code
                   <input
                     type="text"
                     value={postalCode}
                     onChange={(event) => setPostalCode(event.target.value)}
-                    className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-brand-red-primary focus:ring-2 focus:ring-red-100"
+                    className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"
                     placeholder="e.g. 75850"
                   />
                 </label>
 
+                {!isLoggedIn && (
+                  <p className="text-xs text-brand-gray">Log in to save places like Home and Office to your account.</p>
+                )}
+
                 <div className="flex items-center justify-end gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={() => setIsAddressModalOpen(false)}
-                    className="rounded-full border border-gray-300 px-3 py-2 text-sm font-semibold text-brand-dark hover:bg-gray-100"
+                    onClick={() => closeAddressModal()}
+                    className="rounded-full border border-gray-300 px-3 py-2 text-sm font-semibold text-ink hover:bg-gray-100"
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
                     disabled={!selectedAddress}
-                    onClick={() => setIsAddressModalOpen(false)}
+                    onClick={handleConfirmAddress}
                     className="rounded-full bg-[#9b0000] px-3 py-2 text-sm font-semibold text-white shadow-md shadow-red-200 hover:bg-[#840000] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Confirm address
                   </button>
                 </div>
               </div>
+              )}
             </div>
           </div>,
           document.body
         )}
 
         <SignInModal isOpen={isSignInOpen} onClose={closeSignIn} />
+
+        {showLocationPrompt && (
+          <LocationPrompt
+            isLocating={isPromptLocating}
+            error={promptError}
+            onUseCurrentLocation={handlePromptUseLocation}
+            onChooseManually={handlePromptEnterManually}
+            onDismiss={() => finishLocationPrompt()}
+          />
+        )}
+
+        {isOrderChatOpen && (
+          <OrderChat
+            onClose={() => setIsOrderChatOpen(false)}
+            address={selectedAddress}
+            onRequestAddress={handleOrderChatNeedsAddress}
+            pickup={orderPickup}
+            onPickupChange={setOrderPickup}
+          />
+        )}
 
         {/* Mobile Navigation */}
         {isOpen && (
@@ -580,7 +984,7 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="block px-4 py-2 text-brand-dark hover:bg-brand-light rounded-lg transition-colors"
+                className="block px-4 py-2 text-ink hover:bg-brand-light rounded-lg transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 {link.name}
@@ -594,7 +998,7 @@ export default function Navbar() {
                   key={service.slug}
                   href={`/services-hub#${service.slug}`}
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-2.5 px-6 py-2 text-brand-dark hover:bg-brand-light rounded-lg transition-colors"
+                  className="flex items-center gap-2.5 px-6 py-2 text-ink hover:bg-brand-light rounded-lg transition-colors"
                 >
                   <span className="text-base leading-none">{service.icon}</span>
                   {service.name}
@@ -606,7 +1010,7 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="block px-4 py-2 text-brand-dark hover:bg-brand-light rounded-lg transition-colors"
+                className="block px-4 py-2 text-ink hover:bg-brand-light rounded-lg transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 {link.name}

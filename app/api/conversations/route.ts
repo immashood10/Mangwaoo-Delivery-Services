@@ -28,7 +28,7 @@ export async function GET() {
       by: ['conversationId'],
       where: {
         conversationId: { in: conversations.map((c) => c.id) },
-        senderRole: 'SELLER',
+        senderRole: { in: ['SELLER', 'ADMIN'] },
         isRead: false,
       },
       _count: true,
@@ -65,7 +65,7 @@ export async function GET() {
     by: ['conversationId'],
     where: {
       conversationId: { in: conversations.map((c) => c.id) },
-      senderRole: 'CUSTOMER',
+      senderRole: { in: ['CUSTOMER', 'ADMIN'] },
       isRead: false,
     },
     _count: true,

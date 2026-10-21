@@ -26,7 +26,7 @@ export default function WhyChooseUs() {
   };
 
   return (
-    <section id="why-us" className="py-16 md:py-24 bg-white">
+    <section id="why-us" className="py-16 md:py-24 bg-surface">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <motion.div
@@ -36,10 +36,10 @@ export default function WhyChooseUs() {
           viewport={{ once: true }}
           className="text-center mb-16"
         >
-          <span className="inline-block px-4 py-2 bg-brand-red-primary/10 text-brand-red-primary rounded-full text-sm font-semibold mb-4">
+          <span className="inline-block px-4 py-2 bg-brand-red-primary/10 text-accent rounded-full text-sm font-semibold mb-4">
             Why Choose Us
           </span>
-          <h2 className="text-3xl md:text-5xl font-bold text-brand-dark mb-6">
+          <h2 className="text-3xl md:text-5xl font-bold text-ink mb-6">
             Experience the Mangwaoo Difference
           </h2>
           <p className="text-lg text-brand-gray max-w-2xl mx-auto">
@@ -73,7 +73,7 @@ export default function WhyChooseUs() {
 
                 {/* Content */}
                 <div className="pt-1">
-                  <h3 className="text-xl font-bold text-brand-dark mb-2">
+                  <h3 className="text-xl font-bold text-ink mb-2">
                     {feature.title}
                   </h3>
                   <p className="text-brand-gray leading-relaxed">

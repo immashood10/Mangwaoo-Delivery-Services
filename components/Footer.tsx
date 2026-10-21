@@ -33,19 +33,21 @@ export default function Footer() {
             <h4 className="font-bold text-lg">Quick Links</h4>
             <ul className="space-y-2 text-gray-400">
               <li>
-                <Link href="/" className="hover:text-brand-red-primary transition-colors">
+                <Link href="/" className="hover:text-accent transition-colors">
                   Home
                 </Link>
               </li>
               <li>
-                <Link href="/services" className="hover:text-brand-red-primary transition-colors">
+                <Link href="/services" className="hover:text-accent transition-colors">
                   Services
                 </Link>
               </li>
               <li>
-                <Link href="/contact" className="hover:text-brand-red-primary transition-colors">
+                <Link href="/contact" className="hover:text-accent transition-colors">
                   Contact
                 </Link>
+              </li>
+              <li>
               </li>
             </ul>
           </div>
@@ -55,7 +57,7 @@ export default function Footer() {
             <h4 className="font-bold text-lg">Service Areas</h4>
             <ul className="space-y-2 text-gray-400 text-sm">
               {SERVICE_AREAS.map((area) => (
-                <li key={area.id} className="hover:text-brand-red-primary transition-colors">
+                <li key={area.id} className="hover:text-accent transition-colors">
                   {area.name}
                 </li>
               ))}
@@ -67,18 +69,18 @@ export default function Footer() {
             <h4 className="font-bold text-lg">Get in Touch</h4>
             <div className="space-y-3 text-gray-400 text-sm">
               <div className="flex items-start space-x-3">
-                <Clock className="w-5 h-5 mt-0.5 text-brand-red-secondary flex-shrink-0" />
+                <Clock className="w-5 h-5 mt-0.5 text-accent flex-shrink-0" />
                 <span>{BRAND.hours}</span>
               </div>
               <div className="flex items-start space-x-3">
-                <Phone className="w-5 h-5 mt-0.5 text-brand-red-secondary flex-shrink-0" />
-                <a href={`tel:${BRAND.phone}`} className="hover:text-brand-red-primary transition-colors">
+                <Phone className="w-5 h-5 mt-0.5 text-accent flex-shrink-0" />
+                <a href={`tel:${BRAND.phone}`} className="hover:text-accent transition-colors">
                   {BRAND.phone}
                 </a>
               </div>
               <div className="flex items-start space-x-3">
-                <Mail className="w-5 h-5 mt-0.5 text-brand-red-secondary flex-shrink-0" />
-                <a href={`mailto:${BRAND.email}`} className="hover:text-brand-red-primary transition-colors">
+                <Mail className="w-5 h-5 mt-0.5 text-accent flex-shrink-0" />
+                <a href={`mailto:${BRAND.email}`} className="hover:text-accent transition-colors">
                   {BRAND.email}
                 </a>
               </div>
@@ -89,10 +91,10 @@ export default function Footer() {
           <div className="flex flex-col md:flex-row justify-between items-center text-gray-400 text-sm">
             <p>&copy; {currentYear} {BRAND.name}. All rights reserved.</p>
             <div className="flex space-x-6 mt-4 md:mt-0">
-              <Link href="#" className="hover:text-brand-red-primary transition-colors">
+              <Link href="#" className="hover:text-accent transition-colors">
                 Privacy Policy
               </Link>
-              <Link href="#" className="hover:text-brand-red-primary transition-colors">
+              <Link href="#" className="hover:text-accent transition-colors">
                 Terms of Service
               </Link>
             </div>

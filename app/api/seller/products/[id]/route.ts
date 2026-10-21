@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
+import { refreshMartCatalog } from '@/lib/catalog-cache';
+import { Prisma } from '@/lib/generated/prisma/client';
+import { resolveProductAttributes } from '@/lib/product-attributes';
 
 async function resolveOwnedProduct(id: string) {
   const session = await getSession();
@@ -52,10 +55,28 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: 'Please choose a valid category.' }, { status: 400 });
   }
 
+  // A vehicle ad needs its details (make, model, year, …) and clothes/shoes need their sizes;
+  // other categories carry none.
+  const details = resolveProductAttributes(category.name, body?.attributes);
+
+  if ('error' in details) {
+    return NextResponse.json({ error: details.error }, { status: 400 });
+  }
+
   const product = await prisma.product.update({
     where: { id },
-    data: { name, description: description || null, categoryId, price, stock, images },
+    data: {
+      name,
+      description: description || null,
+      categoryId,
+      price,
+      stock,
+      images,
+      // Moving a product to a category without extra details clears the old ones (vehicle details or sizes).
+      attributes: details.attributes ?? Prisma.DbNull,
+    },
   });
+  refreshMartCatalog();
 
   return NextResponse.json({ product });
 }
@@ -69,6 +90,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   // delete would either fail on the FK or destroy order history. Unlisting
   // it is what "delete" means from the seller's point of view either way.
   await prisma.product.update({ where: { id }, data: { isActive: false } });
+  refreshMartCatalog();
 
   return NextResponse.json({ success: true });
 }

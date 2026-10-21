@@ -1,19 +1,121 @@
 @import "tailwindcss";
 @config "../tailwind.config.ts";
 
+/*
+ * Colors are semantic variables. Light is the default; the site switches to the
+ * dark set automatically when the visitor's device/browser is in dark mode
+ * (prefers-color-scheme) and falls back to light when there is no preference.
+ *
+ *   bg-surface    cards, panels, inputs            (was bg-white)
+ *   text-ink      primary text                     (was text-brand-dark)
+ *   text-brand-gray  secondary text   bg-brand-light  soft section background
+ *   text-accent   brand-red text/borders/rings     (was text-brand-red-primary)
+ *   text-danger / success / warning / info         status text
+ *
+ * bg-brand-red-*, bg-brand-dark and text-white keep their fixed colors in both
+ * modes (white text sits on them), so use the semantic names above for anything
+ * that should follow the theme.
+ */
 :root {
+  color-scheme: light;
+
   --background: #ffffff;
   --foreground: #111111;
+  --surface: #ffffff;
+  --ink: #111111;
+  --accent: #9b0000;
+  --danger: #dc2626;
+  --success: #15803d;
+  --warning: #a16207;
+  --info: #1d4ed8;
+
   --brand-red-primary: #9b0000;
   --brand-red-secondary: #c1121f;
   --brand-dark: #111111;
   --brand-light: #f8f8f8;
   --brand-gray: #666666;
+
+  --scroll-track: #f1f1f1;
+
+  /* Admin charts (see components/AdminCharts.tsx) */
+  --chart-ink: #0b0b0b;
+  --chart-ink-secondary: #52514e;
+  --chart-ink-muted: #898781;
+  --chart-grid: #e1e0d9;
+  --chart-baseline: #c3c2b7;
+  --chart-surface: #ffffff;
+  --chart-hover: #f3f3f1;
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --background: #121211;
+    --foreground: #f3f2ef;
+    --surface: #1c1c1a;
+    --ink: #f3f2ef;
+    --accent: #ff7a7a;
+    --danger: #f87171;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --info: #7ab4ff;
+
+    --brand-light: #171716;
+    --brand-gray: #a3a29b;
+
+    --scroll-track: #1c1c1a;
+
+    --chart-ink: #ffffff;
+    --chart-ink-secondary: #c3c2b7;
+    --chart-ink-muted: #898781;
+    --chart-grid: #2c2c2a;
+    --chart-baseline: #383835;
+    --chart-surface: #1c1c1a;
+    --chart-hover: #262624;
+    --chart-1: #3987e5;
+    --chart-2: #d95926;
+    --chart-3: #199e70;
+
+    /*
+     * Tailwind's neutral and tint palettes, re-stepped for dark surfaces. Only the
+     * shades the site uses as backgrounds, borders and rings are changed; status
+     * text colors go through text-danger/success/warning/info instead, because
+     * shades like green-600 are also used as filled button backgrounds.
+     */
+    --color-gray-50: #1f1f1d;
+    --color-gray-100: #262624;
+    --color-gray-200: #30302d;
+    --color-gray-300: #44443f;
+
+    --color-red-50: #2b1516;
+    --color-red-100: #4a1c1d;
+    --color-red-200: #5c2224;
+    --color-green-50: #12261a;
+    --color-green-100: #173222;
+    --color-yellow-50: #2a2411;
+    --color-yellow-100: #3a3115;
+    --color-yellow-200: #5a4a14;
+    --color-amber-50: #2b2210;
+    --color-amber-200: #5c4513;
+    --color-blue-50: #11202f;
+    --color-blue-100: #172c42;
+  }
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-accent: var(--accent);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -59,7 +161,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--scroll-track);
 }
 
 ::-webkit-scrollbar-thumb {

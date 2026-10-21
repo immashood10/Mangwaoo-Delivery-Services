@@ -54,10 +54,10 @@ export default function MessagesInbox({ currentRole }: { currentRole: 'CUSTOMER'
       : 'No messages yet. Start a chat with a seller from any product page.';
 
   return (
-    <div className="bg-white rounded-2xl shadow-soft overflow-hidden">
+    <div className="bg-surface rounded-2xl shadow-soft overflow-hidden">
       <div className="flex items-center gap-2 border-b border-gray-100 p-6">
-        <MessageSquare className="w-5 h-5 text-brand-red-primary" />
-        <h2 className="text-lg font-bold text-brand-dark">Messages</h2>
+        <MessageSquare className="w-5 h-5 text-accent" />
+        <h2 className="text-lg font-bold text-ink">Messages</h2>
       </div>
 
       {isLoading ? (
@@ -77,7 +77,7 @@ export default function MessagesInbox({ currentRole }: { currentRole: 'CUSTOMER'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <p className="truncate text-sm font-semibold text-brand-dark">{conversation.counterpartName}</p>
+                  <p className="truncate text-sm font-semibold text-ink">{conversation.counterpartName}</p>
                   {conversation.unreadCount > 0 && (
                     <span className="shrink-0 rounded-full bg-brand-red-primary px-2 py-0.5 text-[10px] font-bold text-white">
                       {conversation.unreadCount}
@@ -85,7 +85,7 @@ export default function MessagesInbox({ currentRole }: { currentRole: 'CUSTOMER'
                   )}
                 </div>
                 {conversation.productName && (
-                  <p className="truncate text-xs text-brand-red-primary">About: {conversation.productName}</p>
+                  <p className="truncate text-xs text-accent">About: {conversation.productName}</p>
                 )}
                 <p className="mt-1 truncate text-xs text-brand-gray">
                   {conversation.lastMessage ?? 'No messages yet'}

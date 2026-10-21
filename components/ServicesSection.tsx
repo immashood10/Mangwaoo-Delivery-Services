@@ -36,10 +36,10 @@ export default function ServicesSection() {
           viewport={{ once: true }}
           className="text-center mb-16"
         >
-          <span className="inline-block px-4 py-2 bg-brand-red-primary/10 text-brand-red-primary rounded-full text-sm font-semibold mb-4">
+          <span className="inline-block px-4 py-2 bg-brand-red-primary/10 text-accent rounded-full text-sm font-semibold mb-4">
             Our Services
           </span>
-          <h2 className="text-3xl md:text-5xl font-bold text-brand-dark mb-6">
+          <h2 className="text-3xl md:text-5xl font-bold text-ink mb-6">
             What We Deliver
           </h2>
           <p className="text-lg text-brand-gray max-w-2xl mx-auto">
@@ -60,7 +60,7 @@ export default function ServicesSection() {
               key={service.id}
               variants={itemVariants}
               whileHover={{ y: -10, transition: { duration: 0.3 } }}
-              className="bg-white rounded-2xl p-8 shadow-soft hover:shadow-md transition-all duration-300 group cursor-pointer"
+              className="bg-surface rounded-2xl p-8 shadow-soft hover:shadow-md transition-all duration-300 group cursor-pointer"
             >
               {/* Icon */}
               <div className="text-5xl mb-6 transform group-hover:scale-110 transition-transform duration-300">
@@ -68,7 +68,7 @@ export default function ServicesSection() {
               </div>
 
               {/* Content */}
-              <h3 className="text-xl font-bold text-brand-dark mb-3">
+              <h3 className="text-xl font-bold text-ink mb-3">
                 {service.name}
               </h3>
               <p className="text-brand-gray text-sm leading-relaxed">

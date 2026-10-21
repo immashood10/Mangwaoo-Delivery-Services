@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { createSession, hashPassword } from '@/lib/auth';
+import { hashPassword } from '@/lib/auth';
+import { DEFAULT_COUNTRY, MAX_PLACE_LENGTH, cleanPlace, parseStoreLocation } from '@/lib/locations';
+import { prepareSignup, signupWriteFailed } from '@/lib/phone-verification';
 
 const SELLER_TYPES = ['MART', 'GULPLAZA_OWNER', 'WHOLESALER'] as const;
 
@@ -12,33 +14,60 @@ export async function POST(request: NextRequest) {
   const phone = typeof body?.phone === 'string' ? body.phone.trim() : '';
   const password = typeof body?.password === 'string' ? body.password : '';
   const sellerType = SELLER_TYPES.includes(body?.sellerType) ? body.sellerType : 'MART';
+  const city = cleanPlace(body?.city);
+  const country = cleanPlace(body?.country) || DEFAULT_COUNTRY;
 
   if (!businessName || !fullName || !email || !phone || password.length < 6) {
     return NextResponse.json({ error: 'Please fill in all fields with a password of at least 6 characters.' }, { status: 400 });
   }
 
-  const existingUser = await prisma.user.findFirst({
-    where: { OR: [{ email }, { phone }] },
-  });
-
-  if (existingUser) {
-    return NextResponse.json({ error: 'An account with this email or phone already exists.' }, { status: 409 });
+  if (city.length > MAX_PLACE_LENGTH || country.length > MAX_PLACE_LENGTH) {
+    return NextResponse.json({ error: `City and country can be up to ${MAX_PLACE_LENGTH} characters.` }, { status: 400 });
   }
 
-  const passwordHash = await hashPassword(password);
+  // Optional pin of the shop / kitchen on the map (food sellers are asked for it at signup).
+  const location = parseStoreLocation(body?.location);
 
-  const user = await prisma.user.create({
-    data: {
-      name: fullName,
-      email,
-      phone,
-      password: passwordHash,
-      role: 'SELLER',
-      seller: { create: { businessName, sellerType } },
-    },
-  });
+  if (location === 'invalid') {
+    return NextResponse.json({ error: 'Please choose your shop location again from the suggestions.' }, { status: 400 });
+  }
 
-  await createSession({ userId: user.id, role: user.role });
+  const passwordHash = hashPassword(password);
 
-  return NextResponse.json({ user: { id: user.id, name: user.name, email: user.email } }, { status: 201 });
+  // Sends the WhatsApp code too; the account below is created unverified and can't log in until it is entered.
+  const signup = await prepareSignup(request, { email, phone });
+
+  if (!signup.ok) {
+    return signup.response;
+  }
+
+  try {
+    await prisma.$transaction(
+      signup.writes(
+        prisma.user.create({
+          data: {
+            name: fullName,
+            email,
+            phone: signup.phone,
+            password: await passwordHash,
+            role: 'SELLER',
+            seller: {
+              create: {
+                businessName,
+                sellerType,
+                city: city || null,
+                country,
+                ...(location ? { latitude: location.lat, longitude: location.lng, locationLabel: location.label } : {}),
+              },
+            },
+            phoneVerification: { create: signup.record },
+          },
+        })
+      )
+    );
+  } catch (error) {
+    return signupWriteFailed(error);
+  }
+
+  return NextResponse.json({ verification: signup.info }, { status: 201 });
 }

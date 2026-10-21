@@ -68,12 +68,12 @@ function ContactForm() {
   return (
     <div className="w-full">
       {/* Hero */}
-      <section className="py-16 md:py-24 bg-gradient-to-br from-brand-light to-white">
+      <section className="py-16 md:py-24 bg-gradient-to-br from-brand-light to-surface">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <span className="inline-block px-4 py-2 bg-brand-red-primary/10 text-brand-red-primary rounded-full text-sm font-semibold mb-4">
+          <span className="inline-block px-4 py-2 bg-brand-red-primary/10 text-accent rounded-full text-sm font-semibold mb-4">
             Get in Touch
           </span>
-          <h1 className="text-4xl md:text-5xl font-bold text-brand-dark mb-6">
+          <h1 className="text-4xl md:text-5xl font-bold text-ink mb-6">
             Contact Mangwaoo
           </h1>
           <p className="text-lg text-brand-gray max-w-2xl mx-auto">
@@ -87,23 +87,23 @@ function ContactForm() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             {/* Form */}
-            <div className="bg-white rounded-3xl p-8 md:p-12 shadow-soft">
-              <h2 className="text-2xl md:text-3xl font-bold text-brand-dark mb-2">
+            <div className="bg-surface rounded-3xl p-8 md:p-12 shadow-soft">
+              <h2 className="text-2xl md:text-3xl font-bold text-ink mb-2">
                 Send us a Message
               </h2>
               <p className="text-sm text-brand-gray mb-6">
-                We&apos;ll receive it on <span className="font-semibold text-brand-dark">{BRAND.phone}</span>.
+                We&apos;ll receive it on <span className="font-semibold text-ink">{BRAND.phone}</span>.
               </p>
 
               {isSubmitted ? (
                 <div className="flex flex-col items-center justify-center text-center py-12">
-                  <CheckCircle2 className="w-12 h-12 text-green-600 mb-4" />
-                  <p className="text-lg font-semibold text-brand-dark mb-2">Message sent!</p>
+                  <CheckCircle2 className="w-12 h-12 text-success mb-4" />
+                  <p className="text-lg font-semibold text-ink mb-2">Message sent!</p>
                   <p className="text-sm text-brand-gray">We&apos;ll get back to you soon.</p>
                   <button
                     type="button"
                     onClick={() => setIsSubmitted(false)}
-                    className="mt-6 text-sm font-semibold text-brand-red-primary hover:underline"
+                    className="mt-6 text-sm font-semibold text-accent hover:underline"
                   >
                     Send another message
                   </button>
@@ -111,7 +111,7 @@ function ContactForm() {
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div>
-                    <label className="block text-sm font-semibold text-brand-dark mb-2">
+                    <label className="block text-sm font-semibold text-ink mb-2">
                       Full Name
                     </label>
                     <input
@@ -120,14 +120,14 @@ function ContactForm() {
                       value={formData.name}
                       onChange={handleChange}
                       placeholder="Your name"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-brand-red-primary focus:ring-1 focus:ring-brand-red-primary"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
                       required
                     />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-semibold text-brand-dark mb-2">
+                      <label className="block text-sm font-semibold text-ink mb-2">
                         Email
                       </label>
                       <input
@@ -136,12 +136,12 @@ function ContactForm() {
                         value={formData.email}
                         onChange={handleChange}
                         placeholder="your@email.com"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-brand-red-primary focus:ring-1 focus:ring-brand-red-primary"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
                         required
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-brand-dark mb-2">
+                      <label className="block text-sm font-semibold text-ink mb-2">
                         Phone
                       </label>
                       <input
@@ -150,20 +150,20 @@ function ContactForm() {
                         value={formData.phone}
                         onChange={handleChange}
                         placeholder="0300-1234567"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-brand-red-primary focus:ring-1 focus:ring-brand-red-primary"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-brand-dark mb-2">
+                    <label className="block text-sm font-semibold text-ink mb-2">
                       Subject
                     </label>
                     <select
                       name="subject"
                       value={formData.subject}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-brand-red-primary focus:ring-1 focus:ring-brand-red-primary"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
                       required
                     >
                       <option value="">Select a subject</option>
@@ -177,7 +177,7 @@ function ContactForm() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-brand-dark mb-2">
+                    <label className="block text-sm font-semibold text-ink mb-2">
                       Message
                     </label>
                     <textarea
@@ -186,12 +186,12 @@ function ContactForm() {
                       onChange={handleChange}
                       placeholder="Tell us what's on your mind..."
                       rows={5}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-brand-red-primary focus:ring-1 focus:ring-brand-red-primary resize-none"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent resize-none"
                       required
                     />
                   </div>
 
-                  {formError ? <p className="text-sm text-red-600">{formError}</p> : null}
+                  {formError ? <p className="text-sm text-danger">{formError}</p> : null}
 
                   <button
                     type="submit"
@@ -208,7 +208,7 @@ function ContactForm() {
             <div className="flex flex-col justify-between">
               <div className="space-y-8 mb-8">
                 <div>
-                  <h3 className="text-2xl font-bold text-brand-dark mb-4">
+                  <h3 className="text-2xl font-bold text-ink mb-4">
                     Why Contact Us?
                   </h3>
                   <ul className="space-y-4">
@@ -231,11 +231,11 @@ function ContactForm() {
                       },
                     ].map((item) => (
                       <li key={item.title} className="flex space-x-3">
-                        <span className="text-brand-red-primary text-xl flex-shrink-0">
+                        <span className="text-accent text-xl flex-shrink-0">
                           ✓
                         </span>
                         <div>
-                          <p className="font-semibold text-brand-dark">
+                          <p className="font-semibold text-ink">
                             {item.title}
                           </p>
                           <p className="text-sm text-brand-gray">
@@ -249,8 +249,8 @@ function ContactForm() {
               </div>
 
               {/* Quick Response */}
-              <div className="bg-gradient-to-r from-brand-red-primary/10 to-brand-red-secondary/10 rounded-2xl p-6 border border-brand-red-primary/20">
-                <p className="text-sm text-brand-dark font-semibold mb-2">
+              <div className="bg-gradient-to-r from-brand-red-primary/10 to-brand-red-secondary/10 rounded-2xl p-6 border border-accent/20">
+                <p className="text-sm text-ink font-semibold mb-2">
                   💬 Quick Response
                 </p>
                 <p className="text-sm text-brand-gray">
@@ -263,9 +263,9 @@ function ContactForm() {
       </section>
 
       {/* FAQ Section */}
-      <section className="py-16 md:py-24 bg-white">
+      <section className="py-16 md:py-24 bg-surface">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl md:text-4xl font-bold text-brand-dark mb-12 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-ink mb-12 text-center">
             Frequently Asked Questions
           </h2>
 
@@ -300,7 +300,7 @@ function ContactForm() {
                 key={index}
                 className="group border border-gray-200 rounded-lg p-6 cursor-pointer"
               >
-                <summary className="font-semibold text-brand-dark flex items-center justify-between">
+                <summary className="font-semibold text-ink flex items-center justify-between">
                   {item.q}
                   <ArrowRight className="w-5 h-5 transform group-open:rotate-90 transition-transform" />
                 </summary>

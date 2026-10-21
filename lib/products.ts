@@ -1,5 +1,6 @@
 import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/prisma';
+import { FOOD_CATALOG_TAG, MART_CATALOG_TAG } from '@/lib/catalog-cache';
 
 // The remote DB round-trip is the single most expensive part of rendering
 // /mart, /gulplaza, and the home page. Both catalog pages read `searchParams`,
@@ -16,7 +17,7 @@ export const getMartProducts = unstable_cache(
       orderBy: { createdAt: 'desc' },
     }),
   ['mart-products'],
-  { revalidate: 300 }
+  { revalidate: 300, tags: [MART_CATALOG_TAG] }
 );
 
 export const getGulplazaProducts = unstable_cache(
@@ -30,5 +31,5 @@ export const getGulplazaProducts = unstable_cache(
       orderBy: { createdAt: 'desc' },
     }),
   ['gulplaza-products'],
-  { revalidate: 300 }
+  { revalidate: 300, tags: [FOOD_CATALOG_TAG] }
 );

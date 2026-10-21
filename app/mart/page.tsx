@@ -2,7 +2,10 @@ import Link from 'next/link';
 import { MART_ADS, MART_CATEGORIES, MART_PRODUCTS } from '@/lib/data';
 import { Store, X, LayoutGrid } from 'lucide-react';
 import AddToCartButton from '@/components/AddToCartButton';
+import FeaturedRow from '@/components/FeaturedRow';
+import SidebarAdCard from '@/components/SidebarAdCard';
 import { getMartProducts } from '@/lib/products';
+import { getRunningAds } from '@/lib/promotions';
 
 const CATEGORY_ICONS: Record<string, string> = Object.fromEntries(
   MART_CATEGORIES.map((category) => [category.name, category.icon])
@@ -25,7 +28,12 @@ export default async function MangwaooMart({
   const query = q?.trim().toLowerCase() ?? '';
   const selectedCategory = category?.trim() || null;
 
-  const sellerProducts = await getMartProducts();
+  // Paid ads load alongside the catalog. The Featured row is left out of search results.
+  const [sellerProducts, sidebarAds, featuredAds] = await Promise.all([
+    getMartProducts(),
+    getRunningAds('SIDEBAR', 3),
+    query ? Promise.resolve([]) : getRunningAds('MAIN_PAGE', 4, selectedCategory),
+  ]);
 
   const allProducts = [
     ...sellerProducts.map((product) => ({
@@ -56,22 +64,22 @@ export default async function MangwaooMart({
   return (
     <div className="w-full">
       {query && (
-        <section className="py-6 bg-white border-b border-gray-100">
+        <section className="py-6 bg-surface border-b border-gray-100">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-brand-gray">
               {hasResults ? (
                 <>
-                  Showing results for <span className="font-semibold text-brand-dark">&ldquo;{q}&rdquo;</span>
+                  Showing results for <span className="font-semibold text-ink">&ldquo;{q}&rdquo;</span>
                 </>
               ) : (
                 <>
-                  No results for <span className="font-semibold text-brand-dark">&ldquo;{q}&rdquo;</span>
+                  No results for <span className="font-semibold text-ink">&ldquo;{q}&rdquo;</span>
                 </>
               )}
             </p>
             <Link
               href="/mart"
-              className="inline-flex items-center gap-1 text-sm font-semibold text-brand-red-primary hover:underline"
+              className="inline-flex items-center gap-1 text-sm font-semibold text-accent hover:underline"
             >
               <X className="w-4 h-4" />
               Clear search
@@ -84,7 +92,7 @@ export default async function MangwaooMart({
         <section className="py-16 text-center">
           <p className="text-brand-gray">
             We couldn&apos;t find anything matching your search. Try a different keyword or{' '}
-            <Link href="/mart" className="text-brand-red-primary font-semibold hover:underline">
+            <Link href="/mart" className="text-accent font-semibold hover:underline">
               browse the full catalog
             </Link>
             .
@@ -98,7 +106,7 @@ export default async function MangwaooMart({
           <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
             {/* Categories */}
             <aside className="lg:sticky lg:top-24 lg:w-56 lg:shrink-0">
-              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-soft">
+              <div className="rounded-2xl border border-gray-100 bg-surface p-4 shadow-soft">
                 <h3 className="mb-3 px-2 text-xs font-bold uppercase tracking-wide text-brand-gray">
                   Categories
                 </h3>
@@ -107,8 +115,8 @@ export default async function MangwaooMart({
                     href={buildCategoryHref(q)}
                     className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
                       !selectedCategory
-                        ? 'bg-brand-red-primary/10 text-brand-red-primary'
-                        : 'text-brand-dark hover:bg-brand-light'
+                        ? 'bg-brand-red-primary/10 text-accent'
+                        : 'text-ink hover:bg-brand-light'
                     }`}
                   >
                     <LayoutGrid className="w-4 h-4 shrink-0" />
@@ -120,8 +128,8 @@ export default async function MangwaooMart({
                       href={buildCategoryHref(q, cat.name)}
                       className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
                         selectedCategory === cat.name
-                          ? 'bg-brand-red-primary/10 text-brand-red-primary'
-                          : 'text-brand-dark hover:bg-brand-light'
+                          ? 'bg-brand-red-primary/10 text-accent'
+                          : 'text-ink hover:bg-brand-light'
                       }`}
                     >
                       <span className="text-lg leading-none">{cat.icon}</span>
@@ -135,7 +143,7 @@ export default async function MangwaooMart({
             {/* Product grid */}
             <div className="min-w-0 flex-1">
               <div className="mb-10">
-                <h2 className="text-3xl md:text-4xl font-bold text-brand-dark mb-3">
+                <h2 className="text-3xl md:text-4xl font-bold text-ink mb-3">
                   {selectedCategory ?? 'Featured Products'}
                 </h2>
                 <p className="text-lg text-brand-gray">
@@ -145,12 +153,14 @@ export default async function MangwaooMart({
                 </p>
               </div>
 
+              <FeaturedRow ads={featuredAds} title="Featured ads" className="mb-10" />
+
               {products.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
                   {products.map((product) => (
                     <div
                       key={product.id}
-                      className="bg-white rounded-2xl shadow-soft hover:shadow-md transition-all duration-300"
+                      className="bg-surface rounded-2xl shadow-soft hover:shadow-md transition-all duration-300"
                     >
                       <Link href={`/mart/${product.id}`} className="flex h-full flex-col p-5">
                         {product.imageUrl ? (
@@ -164,12 +174,12 @@ export default async function MangwaooMart({
                         ) : (
                           <div className="text-4xl mb-3">{product.icon}</div>
                         )}
-                        <h3 className="font-semibold text-brand-dark text-sm mb-1">
+                        <h3 className="font-semibold text-ink text-sm mb-1">
                           {product.name}
                         </h3>
                         <p className="text-xs text-brand-gray mb-3">{product.vendor}</p>
                         <div className="mt-auto flex items-center justify-between">
-                          <span className="font-bold text-brand-red-primary">{product.price}</span>
+                          <span className="font-bold text-accent">{product.price}</span>
                           <AddToCartButton
                             product={product}
                             className="text-xs font-semibold bg-brand-red-primary text-white px-3 py-2 rounded-full hover:bg-brand-red-secondary transition-colors"
@@ -182,7 +192,7 @@ export default async function MangwaooMart({
               ) : (
                 <p className="text-brand-gray text-sm">
                   No products found{selectedCategory ? ` in ${selectedCategory}` : ''}. Try{' '}
-                  <Link href={buildCategoryHref(q)} className="text-brand-red-primary font-semibold hover:underline">
+                  <Link href={buildCategoryHref(q)} className="text-accent font-semibold hover:underline">
                     another category
                   </Link>
                   .
@@ -192,6 +202,9 @@ export default async function MangwaooMart({
 
             {/* Ads */}
             <aside className="lg:sticky lg:top-24 lg:w-64 lg:shrink-0 space-y-4">
+              {sidebarAds.map((ad) => (
+                <SidebarAdCard key={ad.id} ad={ad} />
+              ))}
               {MART_ADS.map((ad) =>
                 ad.external ? (
                   <a
@@ -199,13 +212,13 @@ export default async function MangwaooMart({
                     href={ad.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-soft transition-all duration-300 hover:shadow-md"
+                    className="block overflow-hidden rounded-2xl border border-gray-100 bg-surface shadow-soft transition-all duration-300 hover:shadow-md"
                   >
                     <img src={ad.image} alt={ad.title} className="h-28 w-full object-cover" />
                     <div className="p-4">
-                      <p className="text-sm font-bold text-brand-dark mb-1">{ad.title}</p>
+                      <p className="text-sm font-bold text-ink mb-1">{ad.title}</p>
                       <p className="text-xs text-brand-gray mb-3">{ad.description}</p>
-                      <span className="inline-flex items-center text-xs font-semibold text-brand-red-primary hover:underline">
+                      <span className="inline-flex items-center text-xs font-semibold text-accent hover:underline">
                         {ad.ctaLabel}
                       </span>
                     </div>
@@ -214,13 +227,13 @@ export default async function MangwaooMart({
                   <Link
                     key={ad.id}
                     href={ad.href}
-                    className="block overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-soft transition-all duration-300 hover:shadow-md"
+                    className="block overflow-hidden rounded-2xl border border-gray-100 bg-surface shadow-soft transition-all duration-300 hover:shadow-md"
                   >
                     <img src={ad.image} alt={ad.title} className="h-28 w-full object-cover" />
                     <div className="p-4">
-                      <p className="text-sm font-bold text-brand-dark mb-1">{ad.title}</p>
+                      <p className="text-sm font-bold text-ink mb-1">{ad.title}</p>
                       <p className="text-xs text-brand-gray mb-3">{ad.description}</p>
-                      <span className="inline-flex items-center text-xs font-semibold text-brand-red-primary hover:underline">
+                      <span className="inline-flex items-center text-xs font-semibold text-accent hover:underline">
                         {ad.ctaLabel}
                       </span>
                     </div>
@@ -233,7 +246,7 @@ export default async function MangwaooMart({
       </section>
 
       {/* Sell on MangwaooMart */}
-      <section id="sell-on-mart" className="py-16 md:py-24 bg-white scroll-mt-20">
+      <section id="sell-on-mart" className="py-16 md:py-24 bg-surface scroll-mt-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-gradient-to-br from-brand-red-primary to-brand-red-secondary rounded-3xl p-8 md:p-12 text-white text-center">
             <Store className="w-12 h-12 mx-auto mb-6" />
@@ -245,7 +258,7 @@ export default async function MangwaooMart({
             </p>
             <Link
               href="/sell"
-              className="inline-flex items-center space-x-2 bg-white text-brand-red-primary px-8 py-4 rounded-2xl font-semibold hover:shadow-2xl transition-all"
+              className="inline-flex items-center space-x-2 bg-surface text-accent px-8 py-4 rounded-2xl font-semibold hover:shadow-2xl transition-all"
             >
               <Store className="w-5 h-5" />
               <span>Become a Vendor</span>

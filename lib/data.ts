@@ -241,6 +241,12 @@ export const MART_CATEGORIES = [
     description: 'Clothing, toys, and essentials for kids.',
     icon: '🧒',
   },
+  {
+    id: 10,
+    name: 'Vehicles',
+    description: 'Bikes and other vehicles posted by sellers.',
+    icon: '🏍️',
+  },
 ];
 
 export const GULPLAZA_CATEGORIES = [
@@ -454,5 +460,5 @@ export const STATS = [
   { label: 'Active Areas', value: '5', icon: 'MapPin' },
   { label: 'Service Categories', value: '4', icon: 'Grid' },
   { label: 'Operating Hours', value: '13h', icon: 'Clock' },
-  { label: 'Avg Delivery Time', value: '45 min', icon: 'Zap' },
+  { label: 'Avg Delivery Time', value: '15 min', icon: 'Zap' },
 ];

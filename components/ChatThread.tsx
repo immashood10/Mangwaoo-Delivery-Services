@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
+import { SUPPORT_NAME } from '@/lib/support-types';
 
 type Message = {
   id: string;
-  senderRole: 'CUSTOMER' | 'SELLER';
+  senderRole: 'CUSTOMER' | 'SELLER' | 'ADMIN';
   body: string;
   createdAt: string;
 };
@@ -15,9 +16,14 @@ const POLL_INTERVAL_MS = 4000;
 export default function ChatThread({
   conversationId,
   currentRole,
+  names,
+  placeholder = 'Type a message…',
 }: {
   conversationId: string;
-  currentRole: 'CUSTOMER' | 'SELLER';
+  currentRole: 'CUSTOMER' | 'SELLER' | 'ADMIN';
+  /** Who is who, shown above each bubble (the admin watching a customer-seller chat needs it). */
+  names?: { CUSTOMER: string; SELLER: string };
+  placeholder?: string;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
@@ -110,19 +116,26 @@ export default function ChatThread({
         {isLoading ? (
           <p className="text-center text-sm text-brand-gray">Loading messages…</p>
         ) : messages.length === 0 ? (
-          <p className="text-center text-sm text-brand-gray">No messages yet. Say hello!</p>
+          <p className="text-center text-sm text-brand-gray">{currentRole === 'ADMIN' ? 'No messages in this chat yet.' : 'No messages yet. Say hello!'}</p>
         ) : (
           messages.map((message) => {
             const isOwn = message.senderRole === currentRole;
+            const isSupport = message.senderRole === 'ADMIN';
+            const label = message.senderRole === 'ADMIN' ? SUPPORT_NAME : (names?.[message.senderRole] ?? null);
             return (
               <div key={message.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
                 <div
                   className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm ${
                     isOwn
                       ? 'bg-brand-red-primary text-white'
-                      : 'bg-gray-100 text-brand-dark'
+                      : isSupport
+                        ? 'border border-amber-200 bg-amber-50 text-ink'
+                        : 'bg-gray-100 text-ink'
                   }`}
                 >
+                  {label && !(isOwn && isSupport) ? (
+                    <p className={`mb-0.5 text-[11px] font-semibold ${isOwn ? 'text-white/80' : isSupport ? 'text-warning' : 'text-accent'}`}>{label}</p>
+                  ) : null}
                   <p className="whitespace-pre-wrap break-words">{message.body}</p>
                   <p className={`mt-1 text-[10px] ${isOwn ? 'text-white/70' : 'text-brand-gray'}`}>
                     {new Date(message.createdAt).toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' })}
@@ -135,16 +148,16 @@ export default function ChatThread({
         <div ref={bottomRef} />
       </div>
 
-      {error ? <p className="px-4 text-xs text-red-600">{error}</p> : null}
+      {error ? <p className="px-4 text-xs text-danger">{error}</p> : null}
 
       <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-gray-100 p-3">
         <input
           type="text"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="Type a message…"
+          placeholder={placeholder}
           maxLength={2000}
-          className="flex-1 rounded-full border border-gray-300 px-4 py-2 text-sm outline-none transition focus:border-brand-red-primary focus:ring-2 focus:ring-red-100"
+          className="flex-1 rounded-full border border-gray-300 px-4 py-2 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"
         />
         <button
           type="submit"

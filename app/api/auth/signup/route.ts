@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { createSession, hashPassword } from '@/lib/auth';
+import { hashPassword } from '@/lib/auth';
+import { prepareSignup, signupWriteFailed } from '@/lib/phone-verification';
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
@@ -13,28 +14,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Please fill in all fields with a password of at least 6 characters.' }, { status: 400 });
   }
 
-  const existingUser = await prisma.user.findFirst({
-    where: { OR: [{ email }, { phone }] },
-  });
+  const passwordHash = hashPassword(password);
 
-  if (existingUser) {
-    return NextResponse.json({ error: 'An account with this email or phone already exists.' }, { status: 409 });
+  // Sends the WhatsApp code too; the account below is created unverified and can't log in until it is entered.
+  const signup = await prepareSignup(request, { email, phone });
+
+  if (!signup.ok) {
+    return signup.response;
   }
 
-  const passwordHash = await hashPassword(password);
+  try {
+    await prisma.$transaction(
+      signup.writes(
+        prisma.user.create({
+          data: {
+            name: fullName,
+            email,
+            phone: signup.phone,
+            password: await passwordHash,
+            role: 'CUSTOMER',
+            customer: { create: {} },
+            phoneVerification: { create: signup.record },
+          },
+        })
+      )
+    );
+  } catch (error) {
+    return signupWriteFailed(error);
+  }
 
-  const user = await prisma.user.create({
-    data: {
-      name: fullName,
-      email,
-      phone,
-      password: passwordHash,
-      role: 'CUSTOMER',
-      customer: { create: {} },
-    },
-  });
-
-  await createSession({ userId: user.id, role: user.role });
-
-  return NextResponse.json({ user: { id: user.id, name: user.name, email: user.email } }, { status: 201 });
+  return NextResponse.json({ verification: signup.info }, { status: 201 });
 }

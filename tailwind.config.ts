@@ -14,8 +14,9 @@ const config: Config = {
             secondary: '#C1121F',
           },
           dark: '#111111',
-          light: '#F8F8F8',
-          gray: '#666666',
+          // Follow the theme (see app/globals.css); light is #F8F8F8, dark is set there.
+          light: 'var(--brand-light)',
+          gray: 'var(--brand-gray)',
         },
       },
       fontFamily: {

@@ -61,7 +61,7 @@ export default function AdminSellerApprovals({ sellers }: { sellers: SellerRow[]
 
   return (
     <div className="space-y-4">
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-danger">{error}</p> : null}
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -78,7 +78,7 @@ export default function AdminSellerApprovals({ sellers }: { sellers: SellerRow[]
           <tbody>
             {sellers.map((seller) => (
               <tr key={seller.id} className="border-b border-gray-50 last:border-0">
-                <td className="py-3 pr-4 font-semibold text-brand-dark">{seller.businessName}</td>
+                <td className="py-3 pr-4 font-semibold text-ink">{seller.businessName}</td>
                 <td className="py-3 pr-4 text-brand-gray">
                   {seller.ownerName}
                   <br />
@@ -90,7 +90,7 @@ export default function AdminSellerApprovals({ sellers }: { sellers: SellerRow[]
                 <td className="py-3 pr-4">
                   <span
                     className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-                      seller.isApproved ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'
+                      seller.isApproved ? 'bg-green-50 text-success' : 'bg-yellow-50 text-warning'
                     }`}
                   >
                     {seller.isApproved ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
@@ -106,7 +106,7 @@ export default function AdminSellerApprovals({ sellers }: { sellers: SellerRow[]
                       type="button"
                       disabled={pendingId === seller.id}
                       onClick={() => setApproval(seller.id, false)}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 px-3 py-1.5 text-xs font-semibold text-brand-dark hover:border-red-400 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 px-3 py-1.5 text-xs font-semibold text-ink hover:border-red-400 hover:text-danger disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <XCircle className="w-3.5 h-3.5" />
                       Revoke

@@ -6,12 +6,12 @@ export default function ServicesHub() {
   return (
     <div className="w-full">
       {/* Hero */}
-      <section className="py-16 md:py-24 bg-gradient-to-br from-brand-light to-white">
+      <section className="py-16 md:py-24 bg-gradient-to-br from-brand-light to-surface">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <span className="inline-block px-4 py-2 bg-brand-red-primary/10 text-brand-red-primary rounded-full text-sm font-semibold mb-4">
+          <span className="inline-block px-4 py-2 bg-brand-red-primary/10 text-accent rounded-full text-sm font-semibold mb-4">
             Services
           </span>
-          <h1 className="text-4xl md:text-5xl font-bold text-brand-dark mb-6">
+          <h1 className="text-4xl md:text-5xl font-bold text-ink mb-6">
             Skilled Professionals, On Demand
           </h1>
           <p className="text-lg text-brand-gray max-w-2xl mx-auto">
@@ -21,19 +21,19 @@ export default function ServicesHub() {
       </section>
 
       {/* Services grid */}
-      <section className="py-16 md:py-24 bg-white">
+      <section className="py-16 md:py-24 bg-surface">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {PROFESSIONAL_SERVICES.map((service) => (
               <div
                 key={service.id}
                 id={service.slug}
-                className="scroll-mt-24 flex flex-col rounded-2xl border border-gray-100 bg-white p-6 shadow-soft hover:shadow-md transition-all duration-300"
+                className="scroll-mt-24 flex flex-col rounded-2xl border border-gray-100 bg-surface p-6 shadow-soft hover:shadow-md transition-all duration-300"
               >
                 <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-red-primary/10 text-3xl">
                   {service.icon}
                 </div>
-                <h2 className="text-xl font-bold text-brand-dark mb-2">{service.name}</h2>
+                <h2 className="text-xl font-bold text-ink mb-2">{service.name}</h2>
                 <p className="text-brand-gray leading-relaxed mb-6 flex-1">{service.description}</p>
                 <Link
                   href={`/contact?service=${encodeURIComponent(service.name)}`}
@@ -57,7 +57,7 @@ export default function ServicesHub() {
           </p>
           <Link
             href="/contact"
-            className="inline-flex items-center space-x-2 bg-white text-brand-red-primary px-8 py-4 rounded-2xl font-semibold hover:shadow-2xl transition-all"
+            className="inline-flex items-center space-x-2 bg-surface text-accent px-8 py-4 rounded-2xl font-semibold hover:shadow-2xl transition-all"
           >
             <MessageCircle className="w-5 h-5" />
             <span>Message Us</span>

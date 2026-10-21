@@ -28,8 +28,8 @@ export default function Hero() {
   };
 
   return (
-    <section className="relative min-h-[600px] md:min-h-[700px] flex items-center overflow-hidden bg-white">
-      <div className="absolute inset-0 bg-gradient-to-br from-brand-light via-white to-white opacity-60" />
+    <section className="relative min-h-[600px] md:min-h-[700px] flex items-center overflow-hidden bg-surface">
+      <div className="absolute inset-0 bg-gradient-to-br from-brand-light via-surface to-surface opacity-60" />
 
       <div className="absolute top-0 right-0 w-96 h-96 bg-brand-red-primary/5 rounded-full blur-3xl" />
       <div className="absolute bottom-0 left-0 w-80 h-80 bg-brand-red-secondary/5 rounded-full blur-3xl" />
@@ -43,17 +43,17 @@ export default function Hero() {
         >
           <div className="space-y-6">
             <motion.div variants={itemVariants}>
-              <span className="inline-block px-4 py-2 bg-brand-red-primary/10 text-brand-red-primary rounded-full text-sm font-semibold">
+              <span className="inline-block px-4 py-2 bg-brand-red-primary/10 text-accent rounded-full text-sm font-semibold">
                 Fast Delivery Across Karachi
               </span>
             </motion.div>
 
             <motion.h1
               variants={itemVariants}
-              className="text-4xl md:text-5xl lg:text-6xl font-bold text-brand-dark leading-tight"
+              className="text-4xl md:text-5xl lg:text-6xl font-bold text-ink leading-tight"
             >
               Karachi&apos;s Trusted{' '}
-              <span className="bg-gradient-to-r from-brand-red-primary to-brand-red-secondary bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-brand-red-primary to-brand-red-secondary bg-clip-text text-transparent dark:from-accent dark:to-accent">
                 Delivery Service
               </span>
             </motion.h1>
@@ -75,7 +75,7 @@ export default function Hero() {
               </Link>
               <Link
                 href="/services"
-                className="group flex items-center justify-center space-x-2 border-2 border-brand-red-primary text-brand-red-primary px-8 py-4 rounded-2xl font-semibold hover:bg-brand-red-primary hover:text-white transition-all duration-300"
+                className="group flex items-center justify-center space-x-2 border-2 border-accent text-accent px-8 py-4 rounded-2xl font-semibold hover:bg-brand-red-primary hover:text-white transition-all duration-300"
               >
                 <span>Explore Services</span>
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -84,8 +84,8 @@ export default function Hero() {
 
             <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-8">
               {STATS.map((stat) => (
-                <div key={stat.label} className="bg-white rounded-2xl p-4 shadow-soft text-center">
-                  <p className="text-2xl font-bold text-brand-red-primary">{stat.value}</p>
+                <div key={stat.label} className="bg-surface rounded-2xl p-4 shadow-soft text-center">
+                  <p className="text-2xl font-bold text-accent">{stat.value}</p>
                   <p className="text-xs text-brand-gray mt-1">{stat.label}</p>
                 </div>
               ))}
@@ -117,7 +117,7 @@ export default function Hero() {
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
-                className="absolute inset-0 rounded-full border-2 border-dashed border-brand-red-primary/30"
+                className="absolute inset-0 rounded-full border-2 border-dashed border-accent/30"
               />
             </div>
           </motion.div>

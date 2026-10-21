@@ -5,12 +5,12 @@ import { MapPin, ArrowRight } from 'lucide-react';
 export default function Areas() {
   return (
     <div className="w-full">
-      <section className="py-16 md:py-24 bg-gradient-to-br from-brand-light to-white">
+      <section className="py-16 md:py-24 bg-gradient-to-br from-brand-light to-surface">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <span className="inline-block px-4 py-2 bg-brand-red-primary/10 text-brand-red-primary rounded-full text-sm font-semibold mb-4">
+          <span className="inline-block px-4 py-2 bg-brand-red-primary/10 text-accent rounded-full text-sm font-semibold mb-4">
             Coverage Map
           </span>
-          <h1 className="text-4xl md:text-5xl font-bold text-brand-dark mb-6">
+          <h1 className="text-4xl md:text-5xl font-bold text-ink mb-6">
             Service Areas
           </h1>
           <p className="text-lg text-brand-gray max-w-2xl mx-auto">
@@ -19,13 +19,13 @@ export default function Areas() {
         </div>
       </section>
 
-      <section className="py-16 md:py-24 bg-white">
+      <section className="py-16 md:py-24 bg-surface">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-16">
             <div className="relative h-96 bg-gradient-to-br from-blue-50 to-blue-100 rounded-3xl overflow-hidden shadow-soft">
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center">
-                  <MapPin className="w-20 h-20 text-brand-red-primary mx-auto opacity-50 mb-4" />
+                  <MapPin className="w-20 h-20 text-accent mx-auto opacity-50 mb-4" />
                   <p className="text-lg font-semibold text-brand-gray">
                     Service Coverage Map
                   </p>
@@ -41,18 +41,18 @@ export default function Areas() {
         </div>
       </section>
 
-      <section className="py-16 md:py-24 bg-white">
+      <section className="py-16 md:py-24 bg-surface">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-gradient-to-r from-brand-red-primary/10 to-brand-red-secondary/10 border border-brand-red-primary/20 rounded-3xl p-8 md:p-12">
-            <h2 className="text-2xl md:text-3xl font-bold text-brand-dark mb-6">
+          <div className="bg-gradient-to-r from-brand-red-primary/10 to-brand-red-secondary/10 border border-accent/20 rounded-3xl p-8 md:p-12">
+            <h2 className="text-2xl md:text-3xl font-bold text-ink mb-6">
               Expansion Plans
             </h2>
             <p className="text-brand-gray leading-relaxed mb-6">
               Mangwaoo is growing! We are actively working to expand our service areas to more neighborhoods across Karachi.
             </p>
 
-            <div className="bg-white rounded-2xl p-6 mb-6">
-              <h3 className="font-bold text-brand-dark mb-4">
+            <div className="bg-surface rounded-2xl p-6 mb-6">
+              <h3 className="font-bold text-ink mb-4">
                 Coming Soon to More Areas:
               </h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -101,7 +101,7 @@ export default function Areas() {
             <div className="flex justify-center">
               <Link
                 href="/contact"
-                className="inline-flex items-center space-x-2 bg-white text-brand-red-primary px-8 py-4 rounded-2xl font-semibold hover:shadow-2xl transition-all"
+                className="inline-flex items-center space-x-2 bg-surface text-accent px-8 py-4 rounded-2xl font-semibold hover:shadow-2xl transition-all"
               >
                 <span>Check Delivery Availability</span>
                 <ArrowRight className="w-5 h-5" />

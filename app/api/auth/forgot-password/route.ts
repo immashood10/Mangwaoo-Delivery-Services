@@ -25,7 +25,9 @@ export async function POST(request: NextRequest) {
 
   // Always return the same generic response whether or not the account
   // exists, so this endpoint can't be used to enumerate registered emails.
-  if (!user || !user.phone) {
+  // An account that never confirmed its WhatsApp number is just an unfinished
+  // signup, so it gets no reset link either.
+  if (!user || !user.phone || !user.phoneVerifiedAt) {
     return genericResponse();
   }
 

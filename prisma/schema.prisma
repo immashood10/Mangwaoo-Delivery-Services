@@ -25,13 +25,111 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  customer      Customer?
-  seller        Seller?
-  rider         Rider?
-  wallet        Wallet?
-  addresses     Address[]
-  notifications Notification[]
+  /// When the WhatsApp number on the account was confirmed with a code. Nobody can log in before this is set
+  /// (the admin account is exempt). Accounts that existed before verification was introduced were marked
+  /// confirmed when it launched.
+  phoneVerifiedAt DateTime?
+
+  /// Set when an admin deleted the account (Admin > Users). Its personal details are erased, so the email and number
+  /// can be used to sign up again, and it can never log in again; orders, chats and listings keep pointing at the row.
+  deletedAt DateTime?
+
+  customer            Customer?
+  seller              Seller?
+  rider               Rider?
+  wallet              Wallet?
+  addresses           Address[]
+  notifications       Notification[]
   passwordResetTokens PasswordResetToken[]
+  productLikes        ProductLike[]
+  favourites          Favourite[]
+  phoneVerification   PhoneVerification?
+  bans                UserBan[]
+  supportThread       SupportThread?
+}
+
+/// The private chat between the admin team and one seller or rider (Admin > Messages). One thread per account; the
+/// admin starts it, and the seller/rider can answer in it. Emptied when the account is deleted.
+model SupportThread {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  messages SupportMessage[]
+}
+
+model SupportMessage {
+  id        String        @id @default(cuid())
+  threadId  String
+  thread    SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  /// true: written by an admin ("Mangwaoo Support"); false: by the seller/rider
+  fromAdmin Boolean
+  body      String
+  /// Read by the other side (admin messages: by the seller/rider; their messages: by an admin)
+  isRead    Boolean       @default(false)
+  createdAt DateTime      @default(now())
+
+  @@index([threadId, createdAt])
+}
+
+/// A ban an admin put on an account (Admin > Users). While one is running the account can't log in, and sessions it
+/// already has stop working within seconds. The row stays after it ends or is lifted, as history.
+model UserBan {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// When it ends; null for a permanent ban.
+  endsAt        DateTime?
+  permanent     Boolean   @default(false)
+  /// The length the admin typed, in words ("7 days"): the message the user sees stays "banned for 7 days from Mangwaoo".
+  durationLabel String
+  /// Shown to the user with the ban message.
+  reason        String?
+  createdAt     DateTime  @default(now())
+  /// Set when the ban was lifted early, or replaced by a new one.
+  liftedAt      DateTime?
+
+  @@index([userId, createdAt])
+}
+
+enum PhoneVerificationPurpose {
+  /// The number the account was created with: signing up, or logging in before it was confirmed.
+  ACCOUNT
+  /// A new number the customer wants to switch to in Settings; the account keeps its old number until the code is entered.
+  CHANGE
+}
+
+/// The WhatsApp code an account is waiting to be confirmed with (one at a time per account). The browser holds
+/// only an opaque "ticket" in memory while the code screen is open; the database stores the hash of the ticket
+/// and a keyed hash of the code, so neither can be read back from the table.
+model PhoneVerification {
+  id         String                   @id @default(cuid())
+  userId     String                   @unique
+  user       User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose    PhoneVerificationPurpose
+  /// The number the code was sent to, as country-coded digits (923001234567).
+  phone      String
+  ticketHash String                   @unique
+  codeHash   String
+  expiresAt  DateTime
+  /// Wrong guesses made against the current code; it stops working after a few.
+  attempts   Int                      @default(0)
+  createdAt  DateTime                 @default(now())
+}
+
+/// One row per WhatsApp code actually sent. It limits how often a number (and a network) can be messaged, and it
+/// outlives the account on purpose: starting the signup over must not reset the limit. Rows older than a day are purged.
+model PhoneVerificationSend {
+  id        String   @id @default(cuid())
+  phone     String
+  /// Keyed hash of the requester's IP address, never the address itself.
+  ipHash    String
+  createdAt DateTime @default(now())
+
+  @@index([phone, createdAt])
+  @@index([ipHash, createdAt])
 }
 
 // Reset links are delivered over WhatsApp (no email service configured), so
@@ -71,6 +169,8 @@ model Customer {
   reviews        Review[]
   conversations  Conversation[]
   cartItems      CartItem[]
+  riderChats     RiderChat[]
+  couponRedemptions CouponRedemption[]
 }
 
 model Seller {
@@ -87,7 +187,18 @@ model Seller {
   shopNo   String?
   nicImage String?
 
+  /// Where the store is based; shown on its public store page and on its ads.
+  country String  @default("Pakistan")
+  city    String?
+
+  /// Where the shop / kitchen is on the map. Food search lists the restaurants nearest
+  /// to the customer's delivery address first; sellers without a pin are listed last.
+  latitude      Float?
+  longitude     Float?
+  locationLabel String?
+
   products         Product[]
+  productAds       ProductAd[]
   orders           Order[]
   gulplazaProducts GulplazaProduct[]
   gulplazaOrders   GulplazaOrder[]
@@ -100,12 +211,44 @@ model Rider {
   userId      String   @unique
   user        User     @relation(fields: [userId], references: [id])
   vehicleType String?
+  // Vehicle registration (not required for bicycles) and national ID, both
+  // reviewed by an admin together with the CNIC photos before approval.
+  numberPlate String?
+  cnicNumber  String?  @unique
   isAvailable Boolean  @default(true)
+  isApproved  Boolean  @default(false)
   createdAt   DateTime @default(now())
+
+  // Latest GPS fix sent from the rider dashboard while online — used to
+  // dispatch new order chats to the nearest riders.
+  lastLatitude  Float?
+  lastLongitude Float?
+  lastSeenAt    DateTime?
 
   orders            Order[]
   locations         RiderLocation[]
   deliveryTrackings DeliveryTracking[]
+  riderChats        RiderChat[]
+  documents         RiderDocument[]
+}
+
+enum RiderDocumentKind {
+  CNIC_FRONT
+  CNIC_BACK
+}
+
+/// Identity document photos uploaded at rider signup; only admins can view them.
+model RiderDocument {
+  id        String            @id @default(cuid())
+  riderId   String
+  rider     Rider             @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  kind      RiderDocumentKind
+  mimeType  String
+  size      Int
+  data      Bytes
+  createdAt DateTime          @default(now())
+
+  @@unique([riderId, kind])
 }
 
 // ── Catalog ─────────────────────────────────────────────────
@@ -119,11 +262,15 @@ model Category {
 
 model Product {
   id          String   @id @default(cuid())
+  // Public 10-digit "Ad ID" shown on the ad page (the cuid stays the URL key)
+  adNumber    Int      @unique @default(autoincrement())
   name        String
   description String?
   price       Decimal
   stock       Int      @default(0)
   images      String[] @default([])
+  // Category-specific details, e.g. a vehicle ad's make/model/year (see lib/vehicle-details.ts)
+  attributes  Json?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
 
@@ -134,16 +281,109 @@ model Product {
 
   orderItems OrderItem[]
   reviews    Review[]
+  likes      ProductLike[]
+  ads        ProductAd[]
+}
+
+enum AdPlacement {
+  // The ad column on the right of MangwaooMart
+  SIDEBAR
+  // The "Featured" rows on the home page and at the top of MangwaooMart
+  MAIN_PAGE
+  // A story on the Mangwaoo logo for one day (a Story row is made when an admin approves it)
+  STORY
+}
+
+enum AdStatus {
+  // Requested and paid for by the seller; waiting for an admin to check the payment
+  PENDING
+  // Approved: runs from startsAt to endsAt
+  ACTIVE
+  REJECTED
+}
+
+/// A seller paying to feature one of their products for a week (see lib/ad-config.ts).
+model ProductAd {
+  id              String      @id @default(cuid())
+  placement       AdPlacement
+  status          AdStatus    @default(PENDING)
+  // PKR charged, fixed at the time of the request
+  amount          Int
+  // The seller's EasyPaisa / JazzCash transaction id, checked by an admin
+  paymentRef      String
+  rejectionReason String?
+  // Set when an admin approves: the ad runs for a week from then
+  startsAt        DateTime?
+  endsAt          DateTime?
+  reviewedAt      DateTime?
+  // Set when an admin deletes an ended or declined request from the Ad Requests list. The row stays,
+  // so a transaction id that was paid for can't be used for another ad.
+  deletedAt       DateTime?
+  createdAt       DateTime    @default(now())
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sellerId  String
+  seller    Seller  @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  /// The story a STORY ad is shown as while it runs.
+  story Story?
+
+  @@index([status, placement, endsAt])
+  @@index([sellerId, createdAt])
+}
+
+/// A signed-in user's "like" (heart) on an ad; one per user and ad.
+model ProductLike {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([productId])
+}
+
+enum FavouriteKind {
+  RESTAURANT
+  DISH
+}
+
+/// A restaurant or dish a signed-in user saved with the heart button, so it is quick to find and order again.
+/// Liked MangwaooMart ads (ProductLike) show up on the same Favourites page.
+model Favourite {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      FavouriteKind
+  /// The Seller id (RESTAURANT) or GulplazaProduct id (DISH). No foreign key: items that are later
+  /// unlisted are simply left out when the list is shown.
+  targetId  String
+  createdAt DateTime      @default(now())
+
+  @@unique([userId, kind, targetId])
+  @@index([userId, createdAt])
 }
 
 // ── Ordering ────────────────────────────────────────────────
 
 model Order {
-  id          String      @id @default(cuid())
-  status      OrderStatus @default(PENDING)
-  totalAmount Decimal
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id           String      @id @default(cuid())
+  status       OrderStatus @default(PENDING)
+  /// The items only (what the seller earns). The customer pays this minus `discountAmount`; MangwaooMart orders have no delivery fee.
+  totalAmount  Decimal
+  /// Taken off by the coupon (paid by Mangwaoo, not the seller)
+  discountAmount Decimal   @default(0)
+  // Optional message from the customer to the vendor, entered at checkout
+  note         String?
+  // The seller removed this finished order from their dashboard (the customer's history is untouched)
+  sellerHidden Boolean     @default(false)
+  // When the seller marked it delivered; "products sold" in the seller's stats counts from here
+  deliveredAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   customerId String
   customer   Customer @relation(fields: [customerId], references: [id])
@@ -155,6 +395,8 @@ model Order {
   address    Address  @relation(fields: [addressId], references: [id])
   couponId   String?
   coupon     Coupon?  @relation(fields: [couponId], references: [id])
+  redemptionId String?
+  redemption CouponRedemption? @relation(fields: [redemptionId], references: [id])
 
   items    OrderItem[]
   payment  Payment?
@@ -171,7 +413,7 @@ enum OrderStatus {
 }
 
 model OrderItem {
-  id       String @id @default(cuid())
+  id       String  @id @default(cuid())
   quantity Int
   price    Decimal
 
@@ -211,16 +453,101 @@ model Message {
   createdAt      DateTime     @default(now())
 }
 
+// ── Order chat: customer ↔ nearest rider (admin can join) ──
+
+model RiderChat {
+  id              String          @id @default(cuid())
+  customerId      String
+  customer        Customer        @relation(fields: [customerId], references: [id])
+  // null while OPEN; set to the first nearby rider who replies
+  riderId         String?
+  rider           Rider?          @relation(fields: [riderId], references: [id])
+  // Drop-off (delivery) location
+  latitude        Float
+  longitude       Float
+  addressText     String
+  // Pickup location (where the rider collects the order). Null on chats
+  // created before pickup was asked for; riders are dispatched by this point.
+  pickupLatitude  Float?
+  pickupLongitude Float?
+  pickupText      String?
+  status          RiderChatStatus @default(OPEN)
+  claimedAt       DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  messages    RiderChatMessage[]
+  attachments RiderChatAttachment[]
+
+  @@index([status])
+}
+
+enum RiderChatStatus {
+  OPEN
+  ACTIVE
+  CLOSED
+}
+
+model RiderChatMessage {
+  id           String               @id @default(cuid())
+  chatId       String
+  chat         RiderChat            @relation(fields: [chatId], references: [id])
+  type         RiderChatMessageType @default(TEXT)
+  senderRole   RiderChatSender
+  senderName   String
+  body         String
+  // LOCATION messages
+  latitude     Float?
+  longitude    Float?
+  // VOICE messages
+  durationSec  Int?
+  // IMAGE / VOICE messages — the file bytes live in their own table so
+  // message lists never load blobs
+  attachmentId String?              @unique
+  attachment   RiderChatAttachment? @relation(fields: [attachmentId], references: [id], onDelete: SetNull)
+  createdAt    DateTime             @default(now())
+
+  @@index([chatId, createdAt])
+}
+
+enum RiderChatMessageType {
+  TEXT
+  IMAGE
+  VOICE
+  LOCATION
+}
+
+model RiderChatAttachment {
+  id        String    @id @default(cuid())
+  chatId    String
+  chat      RiderChat @relation(fields: [chatId], references: [id])
+  mimeType  String
+  size      Int
+  data      Bytes
+  createdAt DateTime  @default(now())
+
+  message RiderChatMessage?
+
+  @@index([chatId])
+}
+
+enum RiderChatSender {
+  CUSTOMER
+  RIDER
+  ADMIN
+}
+
 enum SenderRole {
   CUSTOMER
   SELLER
+  /// An admin joining a customer-seller chat (shown as "Mangwaoo Support")
+  ADMIN
 }
 
-// A live mirror of what's sitting in a customer's client-side cart, synced on
-// every cart change while signed in. Lets a seller see "pending — still in
-// cart" demand for their products even before (or instead of) a real Order
-// gets placed. Rows are simply replaced wholesale on each sync and deleted
-// once the customer checks out (see /api/orders, /api/gulplaza-orders).
+// A signed-in customer's cart. This is the cart of record (nothing is kept in the browser): it is loaded
+// after login and replaced wholesale on every change (see /api/cart). Because it is in the database,
+// a seller also sees "pending — still in cart" demand for their products even before (or instead of)
+// a real Order gets placed. Rows are deleted once the customer checks out.
 model CartItem {
   id          String          @id @default(cuid())
   customerId  String
@@ -232,6 +559,9 @@ model CartItem {
   productName String
   price       Decimal
   quantity    Int
+  // Set when the seller removes this from their "Pending — still in cart" list;
+  // it comes back only if the customer changes the quantity.
+  dismissedAt DateTime?
   updatedAt   DateTime        @updatedAt
   createdAt   DateTime        @default(now())
 
@@ -241,6 +571,73 @@ model CartItem {
 enum CartMarketplace {
   MART
   GULPLAZA
+}
+
+/// An anonymous browser. It is identified by an opaque cookie whose random token is never stored — only
+/// its SHA-256 hash is the id here — so everything the site remembers about a visitor lives in the
+/// database and nothing is kept in the browser's own storage (localStorage and friends).
+model Visitor {
+  id         String   @id
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  /// When the first-visit "where should we deliver?" question was answered (or dismissed).
+  locationPromptedAt DateTime?
+
+  /// The delivery location the visitor last shared or confirmed.
+  lastLatitude      Float?
+  lastLongitude     Float?
+  lastLocationLabel String?
+  lastPostalCode    String?
+
+  @@index([lastSeenAt])
+}
+
+enum StoryKind {
+  /// A photo with an optional caption.
+  IMAGE
+  /// A message on a coloured background.
+  TEXT
+}
+
+/// A WhatsApp-status style story the admin puts on the website logo. Everyone can open it from the logo
+/// until `expiresAt` (a day after it was posted), then it disappears.
+model Story {
+  id         String     @id @default(cuid())
+  kind       StoryKind
+  /// The caption under a photo, or the message of a TEXT story.
+  caption    String?
+  /// TEXT stories only: a background colour key from lib/story-types.ts.
+  background String?
+  /// IMAGE stories only: the photo, served by /api/stories/[id]/image.
+  mimeType   String?
+  size       Int?
+  data       Bytes?
+  /// Where a tap on the story's button goes (an internal path). Ad stories link to their product.
+  href       String?
+  /// Set for a paid "Story ad": the ad it was made from. Such a story is managed through Ad Requests.
+  adId       String?    @unique
+  ad         ProductAd? @relation(fields: [adId], references: [id], onDelete: Cascade)
+  createdAt  DateTime   @default(now())
+  expiresAt  DateTime
+
+  views StoryView[]
+
+  @@index([expiresAt])
+}
+
+/// One viewer having watched one story (the admin sees the count, and the logo ring turns grey once
+/// a viewer has seen everything).
+model StoryView {
+  id        String   @id @default(cuid())
+  storyId   String
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  /// "u:<user id>" for a logged-in account (follows it to any device), "v:<Visitor id>" for an anonymous browser.
+  viewerKey String
+  createdAt DateTime @default(now())
+
+  @@unique([storyId, viewerKey])
+  @@index([viewerKey])
 }
 
 // ── GulPlaza Marketplace ────────────────────────────────────
@@ -275,11 +672,22 @@ model GulplazaProduct {
 }
 
 model GulplazaOrder {
-  id          String      @id @default(cuid())
-  status      OrderStatus @default(PENDING)
-  totalAmount Decimal
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id           String      @id @default(cuid())
+  status       OrderStatus @default(PENDING)
+  /// The dishes only (what the seller earns). The customer pays this minus `discountAmount` plus `deliveryFee`.
+  totalAmount  Decimal
+  /// Fuel cost of the ride from the restaurant to the customer (see lib/delivery.ts), paid to the rider
+  deliveryFee  Decimal     @default(0)
+  /// Taken off by the coupon (paid by Mangwaoo, not the seller)
+  discountAmount Decimal   @default(0)
+  // Optional message from the customer to the vendor, entered at checkout
+  note         String?
+  // The seller removed this finished order from their dashboard (the customer's history is untouched)
+  sellerHidden Boolean     @default(false)
+  // When the seller marked it delivered; "products sold" in the seller's stats counts from here
+  deliveredAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   customerId String
   customer   Customer @relation(fields: [customerId], references: [id])
@@ -287,13 +695,17 @@ model GulplazaOrder {
   seller     Seller   @relation(fields: [sellerId], references: [id])
   addressId  String
   address    Address  @relation(fields: [addressId], references: [id])
+  couponId   String?
+  coupon     Coupon?  @relation(fields: [couponId], references: [id])
+  redemptionId String?
+  redemption CouponRedemption? @relation(fields: [redemptionId], references: [id])
 
   items   GulplazaOrderItem[]
   payment GulplazaPayment?
 }
 
 model GulplazaOrderItem {
-  id       String @id @default(cuid())
+  id       String  @id @default(cuid())
   quantity Int
   price    Decimal
 
@@ -378,6 +790,9 @@ model Address {
   latitude  Float?
   longitude Float?
   isDefault Boolean  @default(false)
+  // true = saved by the customer from the address picker (Home/Office/...);
+  // false = one-off snapshot created when an order is placed
+  isSaved   Boolean  @default(false)
   createdAt DateTime @default(now())
 
   userId String
@@ -399,28 +814,83 @@ model Review {
   product    Product  @relation(fields: [productId], references: [id])
 }
 
-model Coupon {
-  id              String    @id @default(cuid())
-  code            String    @unique
-  discountPercent Float
-  maxUses         Int?
-  usedCount       Int       @default(0)
-  expiresAt       DateTime?
-  isActive        Boolean   @default(true)
-  createdAt       DateTime  @default(now())
+enum CouponScope {
+  ALL
+  FOOD
+  MART
+}
 
-  orders Order[]
+/// A discount code the admin makes (Admin > Discount). The customer enters it in the cart before checking out;
+/// it takes `discountPercent` off the items (never the delivery fee), and Mangwaoo bears the cost: the seller is
+/// still paid the full item price.
+model Coupon {
+  id                String      @id @default(cuid())
+  /// Stored in capitals; customers can type it in any case.
+  code              String      @unique
+  /// Shown to the admin, and to the customer once the code is applied (e.g. "Eid offer").
+  description       String?
+  discountPercent   Float
+  /// The most one order can be reduced by, in PKR; null = no cap.
+  maxDiscountAmount Decimal?
+  /// The items it applies to must add up to at least this many PKR; null = no minimum.
+  minOrderAmount    Decimal?
+  appliesTo         CouponScope @default(ALL)
+  onePerCustomer    Boolean     @default(true)
+  maxUses           Int?
+  /// Checkouts that used it and were not cancelled entirely.
+  usedCount         Int         @default(0)
+  expiresAt         DateTime?
+  isActive          Boolean     @default(true)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  orders         Order[]
+  gulplazaOrders GulplazaOrder[]
+  redemptions    CouponRedemption[]
+}
+
+/// One row per checkout that used a coupon (a checkout can create several orders). It is what "used once" and the
+/// usage limit count, and it is given back (`cancelledAt`) when every order of the checkout ends up cancelled.
+model CouponRedemption {
+  id          String    @id @default(cuid())
+  couponId    String
+  coupon      Coupon    @relation(fields: [couponId], references: [id])
+  customerId  String
+  customer    Customer  @relation(fields: [customerId], references: [id])
+  createdAt   DateTime  @default(now())
+  cancelledAt DateTime?
+
+  orders         Order[]
+  gulplazaOrders GulplazaOrder[]
+
+  @@index([couponId, customerId])
 }
 
 model Notification {
-  id        String   @id @default(cuid())
+  id        String           @id @default(cuid())
+  type      NotificationType
   title     String
   message   String
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
+  // Dashboard page the notification is about (e.g. /seller/cart); opening that page marks it seen
+  href      String?
+  // Groups repeat events (same customer + product, same chat) into one unread notification
+  refId     String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
 
   userId String
-  user   User   @relation(fields: [userId], references: [id])
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+}
+
+enum NotificationType {
+  CART
+  ORDER
+  MESSAGE
+  LIKE
+  ACCOUNT
+  AD
 }
 
 // ── Delivery Tracking ───────────────────────────────────────
@@ -432,8 +902,8 @@ model DeliveryTracking {
   longitude Float?
   updatedAt DateTime @updatedAt
 
-  orderId String @unique
-  order   Order  @relation(fields: [orderId], references: [id])
+  orderId String  @unique
+  order   Order   @relation(fields: [orderId], references: [id])
   riderId String?
   rider   Rider?  @relation(fields: [riderId], references: [id])
 }

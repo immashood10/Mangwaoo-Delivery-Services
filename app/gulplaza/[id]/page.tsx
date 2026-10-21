@@ -5,6 +5,7 @@ import { GULPLAZA_CATEGORIES } from '@/lib/data';
 import { prisma } from '@/lib/prisma';
 import AddToCartButton from '@/components/AddToCartButton';
 import ChatWidget from '@/components/ChatWidget';
+import FavouriteButton from '@/components/FavouriteButton';
 
 const CATEGORY_ICONS: Record<string, string> = Object.fromEntries(
   GULPLAZA_CATEGORIES.map((category) => [category.name, category.icon])
@@ -51,7 +52,7 @@ export default async function GulplazaProductDetail({
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <Link
           href="/gulplaza"
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-red-primary hover:underline mb-8"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:underline mb-8"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Food
@@ -68,19 +69,22 @@ export default async function GulplazaProductDetail({
           </div>
 
           <div className="space-y-5">
-            <span className="inline-block px-3 py-1 bg-brand-red-primary/10 text-brand-red-primary rounded-full text-xs font-semibold">
-              {product.category}
-            </span>
-            <h1 className="text-3xl md:text-4xl font-bold text-brand-dark">{product.name}</h1>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="inline-block px-3 py-1 bg-brand-red-primary/10 text-accent rounded-full text-xs font-semibold">
+                {product.category}
+              </span>
+              <FavouriteButton kind="DISH" id={product.id} name={product.name} variant="outline" />
+            </div>
+            <h1 className="text-3xl md:text-4xl font-bold text-ink">{product.name}</h1>
             <p className="text-sm text-brand-gray">Sold by {product.vendor}</p>
-            <p className="text-3xl font-bold text-brand-red-primary">{product.price}</p>
+            <p className="text-3xl font-bold text-accent">{product.price}</p>
 
-            <p className={`text-sm font-semibold ${product.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <p className={`text-sm font-semibold ${product.stock > 0 ? 'text-success' : 'text-danger'}`}>
               {product.stock > 0 ? `In stock (${product.stock} available)` : 'Out of stock'}
             </p>
 
             <div>
-              <h2 className="text-sm font-bold text-brand-dark mb-2">Description</h2>
+              <h2 className="text-sm font-bold text-ink mb-2">Description</h2>
               <p className="text-brand-gray leading-relaxed">{product.description}</p>
             </div>
 

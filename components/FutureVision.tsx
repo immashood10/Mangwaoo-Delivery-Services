@@ -40,7 +40,7 @@ export default function FutureVision() {
           viewport={{ once: true }}
           className="text-center mb-16"
         >
-          <span className="inline-block px-4 py-2 bg-brand-red-primary/20 text-brand-red-primary rounded-full text-sm font-semibold mb-4">
+          <span className="inline-block px-4 py-2 bg-brand-red-primary/20 text-accent rounded-full text-sm font-semibold mb-4">
             Our Vision
           </span>
           <h2 className="text-3xl md:text-5xl font-bold mb-6">
@@ -82,7 +82,7 @@ export default function FutureVision() {
 
                 {/* Content */}
                 <div className="pb-8 pt-2 flex-grow">
-                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 md:p-8 border border-white/10 hover:border-brand-red-primary/50 transition-colors duration-300">
+                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 md:p-8 border border-white/10 hover:border-accent/50 transition-colors duration-300">
                     <div className="flex items-start gap-4 mb-4">
                       <h3 className="text-2xl md:text-3xl font-bold">
                         {phase.phase}: {phase.title}
@@ -120,7 +120,7 @@ export default function FutureVision() {
           className="mt-16 text-center"
         >
           <p className="text-gray-300 mb-6 flex items-center justify-center gap-2">
-            <Zap className="w-5 h-5 text-brand-red-primary" />
+            <Zap className="w-5 h-5 text-accent" />
             More exciting features coming soon!
           </p>
           <p className="text-gray-400">

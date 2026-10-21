@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
+import { refreshFoodCatalog } from '@/lib/catalog-cache';
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -59,6 +60,7 @@ export async function POST(request: NextRequest) {
       sellerId: seller.id,
     },
   });
+  refreshFoodCatalog();
 
   return NextResponse.json({ product }, { status: 201 });
 }

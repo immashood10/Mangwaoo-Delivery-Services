@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import bcrypt from 'bcryptjs';
+import { getRestriction } from '@/lib/bans';
 
 const SESSION_COOKIE_NAME = 'mangwaoo_session';
 const REMEMBERED_SESSION_DURATION_SECONDS = 60 * 60 * 24 * 30; // 30 days
@@ -54,7 +55,8 @@ export async function clearSession() {
   cookieStore.delete(SESSION_COOKIE_NAME);
 }
 
-export async function getSession(): Promise<SessionPayload | null> {
+/** What the session cookie says, without asking whether the account was banned or deleted since. */
+export async function readSession(): Promise<SessionPayload | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
@@ -68,4 +70,18 @@ export async function getSession(): Promise<SessionPayload | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * The logged-in account, or null. A banned or deleted account counts as logged out even though its cookie is still
+ * valid for weeks, so a ban ends the person's session on their very next request.
+ */
+export async function getSession(): Promise<SessionPayload | null> {
+  const session = await readSession();
+
+  if (!session) {
+    return null;
+  }
+
+  return (await getRestriction(session.userId)) ? null : session;
 }

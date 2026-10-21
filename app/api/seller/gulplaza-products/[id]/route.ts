@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
+import { refreshFoodCatalog } from '@/lib/catalog-cache';
 
 async function resolveOwnedProduct(id: string) {
   const session = await getSession();
@@ -65,6 +66,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     where: { id },
     data: { name, description: description || null, categoryId, price, stock, images },
   });
+  refreshFoodCatalog();
 
   return NextResponse.json({ product });
 }
@@ -75,6 +77,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   if ('error' in resolved) return resolved.error;
 
   await prisma.gulplazaProduct.update({ where: { id }, data: { isActive: false } });
+  refreshFoodCatalog();
 
   return NextResponse.json({ success: true });
 }

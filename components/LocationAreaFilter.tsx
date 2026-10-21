@@ -3,34 +3,13 @@
 import { useMemo, useState } from 'react';
 import { LocateFixed, MapPin, Navigation, Search } from 'lucide-react';
 import { SERVICE_AREAS } from '@/lib/data';
-
-type Coordinates = {
-  lat: number;
-  lng: number;
-};
+import { distanceInKm, type Coordinates } from '@/lib/geo';
 
 type LocationAreaFilterProps = {
   variant?: 'compact' | 'detailed';
 };
 
 const NEARBY_BUFFER_KM = 1.5;
-
-function distanceInKm(from: Coordinates, to: Coordinates) {
-  const earthRadiusKm = 6371;
-  const latDistance = ((to.lat - from.lat) * Math.PI) / 180;
-  const lngDistance = ((to.lng - from.lng) * Math.PI) / 180;
-  const fromLat = (from.lat * Math.PI) / 180;
-  const toLat = (to.lat * Math.PI) / 180;
-
-  const haversine =
-    Math.sin(latDistance / 2) * Math.sin(latDistance / 2) +
-    Math.cos(fromLat) *
-      Math.cos(toLat) *
-      Math.sin(lngDistance / 2) *
-      Math.sin(lngDistance / 2);
-
-  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
-}
 
 export default function LocationAreaFilter({ variant = 'compact' }: LocationAreaFilterProps) {
   const [pickupLocation, setPickupLocation] = useState<Coordinates | null>(null);
@@ -106,11 +85,11 @@ export default function LocationAreaFilter({ variant = 'compact' }: LocationArea
 
   return (
     <div className="space-y-8">
-      <div className="bg-white rounded-2xl shadow-soft border border-black/5 p-4 md:p-6">
+      <div className="bg-surface rounded-2xl shadow-soft border border-black/5 p-4 md:p-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-end">
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
             <label className="block">
-              <span className="block text-sm font-semibold text-brand-dark mb-2">
+              <span className="block text-sm font-semibold text-ink mb-2">
                 Pickup location
               </span>
               <div className="relative">
@@ -118,7 +97,7 @@ export default function LocationAreaFilter({ variant = 'compact' }: LocationArea
                 <select
                   value={selectedAreaId}
                   onChange={(event) => handleAreaChange(event.target.value)}
-                  className="w-full appearance-none rounded-xl border border-black/10 bg-white py-3 pl-10 pr-4 text-brand-dark outline-none transition focus:border-brand-red-primary focus:ring-2 focus:ring-brand-red-primary/20"
+                  className="w-full appearance-none rounded-xl border border-black/10 bg-surface py-3 pl-10 pr-4 text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
                 >
                   <option value="">Select your nearest area</option>
                   {SERVICE_AREAS.map((area) => (
@@ -140,14 +119,14 @@ export default function LocationAreaFilter({ variant = 'compact' }: LocationArea
             </button>
           </div>
 
-          <div className="rounded-xl bg-brand-light px-4 py-3 text-sm font-semibold text-brand-dark">
+          <div className="rounded-xl bg-brand-light px-4 py-3 text-sm font-semibold text-ink">
             {isFiltered ? `${areaCountText} nearby` : 'All active areas'}
           </div>
         </div>
 
         {(locationStatus || locationLabel) && (
-          <div className="mt-4 flex items-start gap-2 rounded-xl bg-brand-red-primary/10 p-3 text-sm text-brand-dark">
-            <Navigation className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand-red-primary" />
+          <div className="mt-4 flex items-start gap-2 rounded-xl bg-brand-red-primary/10 p-3 text-sm text-ink">
+            <Navigation className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent" />
             <p>
               {locationLabel && <span className="font-semibold">{locationLabel}: </span>}
               {locationStatus}
@@ -168,8 +147,8 @@ export default function LocationAreaFilter({ variant = 'compact' }: LocationArea
             key={area.id}
             className={
               variant === 'detailed'
-                ? 'bg-white rounded-2xl p-8 shadow-soft hover:shadow-md transition-all'
-                : 'bg-white rounded-2xl p-6 shadow-soft hover:shadow-md transition-all duration-300 text-center group'
+                ? 'bg-surface rounded-2xl p-8 shadow-soft hover:shadow-md transition-all'
+                : 'bg-surface rounded-2xl p-6 shadow-soft hover:shadow-md transition-all duration-300 text-center group'
             }
           >
             {variant === 'detailed' ? (
@@ -178,10 +157,10 @@ export default function LocationAreaFilter({ variant = 'compact' }: LocationArea
                   {index + 1}
                 </div>
                 <div className="min-w-0 flex-grow">
-                  <h3 className="text-xl font-bold text-brand-dark mb-3">{area.name}</h3>
+                  <h3 className="text-xl font-bold text-ink mb-3">{area.name}</h3>
                   <p className="text-brand-gray leading-relaxed mb-4">{area.description}</p>
                   <div className="space-y-2">
-                    <p className="text-sm font-semibold text-brand-dark">What You Get:</p>
+                    <p className="text-sm font-semibold text-ink">What You Get:</p>
                     <ul className="text-sm text-brand-gray space-y-1">
                       <li>Fast delivery service</li>
                       <li>Trusted delivery partners</li>
@@ -190,7 +169,7 @@ export default function LocationAreaFilter({ variant = 'compact' }: LocationArea
                     </ul>
                   </div>
                   {area.distanceKm !== null && (
-                    <p className="mt-4 text-sm font-semibold text-brand-red-primary">
+                    <p className="mt-4 text-sm font-semibold text-accent">
                       {area.distanceKm.toFixed(1)} km from pickup
                     </p>
                   )}
@@ -199,17 +178,17 @@ export default function LocationAreaFilter({ variant = 'compact' }: LocationArea
             ) : (
               <>
                 <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-brand-red-primary/20 to-brand-red-secondary/20 rounded-full group-hover:from-brand-red-primary group-hover:to-brand-red-secondary transition-all duration-300 mb-4">
-                  <MapPin className="w-6 h-6 text-brand-red-primary group-hover:text-white transition-colors duration-300" />
+                  <MapPin className="w-6 h-6 text-accent group-hover:text-white transition-colors duration-300" />
                 </div>
-                <h3 className="font-bold text-brand-dark mb-2">{area.name}</h3>
+                <h3 className="font-bold text-ink mb-2">{area.name}</h3>
                 <p className="text-sm text-brand-gray">{area.description}</p>
                 {area.distanceKm !== null && (
-                  <p className="mt-3 text-xs font-semibold text-brand-red-primary">
+                  <p className="mt-3 text-xs font-semibold text-accent">
                     {area.distanceKm.toFixed(1)} km away
                   </p>
                 )}
                 <div className="mt-4">
-                  <span className="inline-block px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
+                  <span className="inline-block px-3 py-1 bg-green-100 text-success rounded-full text-xs font-semibold">
                     Active
                   </span>
                 </div>
