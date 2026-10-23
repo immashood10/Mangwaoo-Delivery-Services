@@ -29,8 +29,8 @@ export default function FindingRider({ initialChat }: { initialChat: RiderChatSu
     return (
       <div className="mx-auto max-w-md px-4 py-24 text-center">
         <PackageSearch className="mx-auto mb-4 h-12 w-12 text-brand-gray" />
-        <h1 className="mb-2 text-xl font-bold text-ink">This order chat was removed</h1>
-        <p className="mb-6 text-brand-gray">Mangwaoo Support closed it. You can place a new order any time.</p>
+        <h1 className="mb-2 text-xl font-bold text-ink">This order chat is no longer available</h1>
+        <p className="mb-6 text-brand-gray">It was cancelled or removed by Mangwaoo Support. You can place a new order any time.</p>
         <Link href="/gulplaza" className="inline-flex rounded-xl bg-brand-red-primary px-6 py-3 text-sm font-semibold text-white hover:bg-brand-red-secondary">
           Browse Food
         </Link>

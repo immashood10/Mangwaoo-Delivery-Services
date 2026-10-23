@@ -111,19 +111,39 @@ export type CommissionResult = {
   change: WalletChange | null;
 };
 
+export type CloseResult = {
+  /** false when the chat no longer exists (it was cancelled in the meantime). */
+  found: boolean;
+  /** The commission charged to the rider; null when nothing was charged. */
+  commission: CommissionResult | null;
+};
+
 /**
- * Ends an order chat. A chat that a rider had claimed (ACTIVE) also charges the rider Mangwaoo's commission, exactly
- * once: the percentage of the delivery charge, which is what the rider declared but never less than the petrol for the
- * ride (`minimumFeeForChat`). Closing a chat nobody claimed, or one that is already closed, only closes it.
+ * Finishes an order chat. With `charge`, a chat that a rider had claimed (ACTIVE) also charges the rider Mangwaoo's
+ * commission, exactly once: the percentage of the delivery charge, which is what the rider declared but never less than
+ * the petrol for the ride (`minimumFeeForChat`). That is what a delivered order is: the rider's "Complete order" or the
+ * customer's "Order received". Without `charge` (an admin closing a chat) it only closes it; so does closing a chat
+ * nobody claimed or one that is already closed. A cancelled order never comes through here: `cancelOrderChat` deletes it.
  */
-export async function closeOrderChat(chatId: string, declaredFee: number | null): Promise<CommissionResult | null> {
+export async function closeOrderChat(chatId: string, options: { declaredFee: number | null; charge: boolean }): Promise<CloseResult> {
+  const { declaredFee, charge } = options;
+
   return prisma.$transaction(async (tx) => {
     const closed = await tx.riderChat.updateMany({ where: { id: chatId, status: 'ACTIVE' }, data: { status: 'CLOSED' } });
 
     if (closed.count === 0) {
-      await tx.riderChat.updateMany({ where: { id: chatId, status: 'OPEN' }, data: { status: 'CLOSED' } });
-      return null;
+      const existing = await tx.riderChat.findUnique({ where: { id: chatId }, select: { status: true } });
+
+      if (!existing) return { found: false, commission: null };
+
+      if (existing.status === 'OPEN') {
+        await tx.riderChat.updateMany({ where: { id: chatId, status: 'OPEN' }, data: { status: 'CLOSED' } });
+      }
+
+      return { found: true, commission: null };
     }
+
+    if (!charge) return { found: true, commission: null };
 
     const chat = await tx.riderChat.findUnique({
       where: { id: chatId },
@@ -138,7 +158,7 @@ export async function closeOrderChat(chatId: string, declaredFee: number | null)
       },
     });
 
-    if (!chat?.riderId || !chat.rider) return null;
+    if (!chat?.riderId || !chat.rider) return { found: true, commission: null };
 
     await lockRider(tx, chat.riderId);
 
@@ -160,7 +180,7 @@ export async function closeOrderChat(chatId: string, declaredFee: number | null)
       percent: settings.commissionPercent,
     };
 
-    if (commission <= 0) return { ...result, change: null };
+    if (commission <= 0) return { found: true, commission: { ...result, change: null } };
 
     await tx.riderLedgerEntry.create({
       data: {
@@ -173,7 +193,7 @@ export async function closeOrderChat(chatId: string, declaredFee: number | null)
       },
     });
 
-    return { ...result, change: await recomputeWallet(tx, chat.riderId) };
+    return { found: true, commission: { ...result, change: await recomputeWallet(tx, chat.riderId) } };
   }, TRANSACTION_OPTIONS);
 }
 

@@ -481,10 +481,10 @@ export default function Navbar() {
             </div>
           </form>
 
-          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5 min-[360px]:flex-nowrap sm:flex-wrap sm:gap-2">
             <Link
               href="/favourites"
-              className={`rounded-full border p-2.5 transition-colors hover:border-accent hover:text-accent ${
+              className={`shrink-0 rounded-full border p-2 transition-colors hover:border-accent hover:text-accent sm:p-2.5 ${
                 pathname === '/favourites' ? 'border-accent text-accent' : 'border-gray-300 text-ink'
               }`}
               aria-label="Open favourites"
@@ -494,7 +494,7 @@ export default function Navbar() {
             </Link>
             <Link
               href="/cart"
-              className="relative rounded-full border border-gray-300 p-2.5 text-ink hover:border-accent hover:text-accent transition-colors"
+              className="relative shrink-0 rounded-full border border-gray-300 p-2 text-ink hover:border-accent hover:text-accent transition-colors sm:p-2.5"
               aria-label="Open cart"
             >
               <ShoppingCart className="w-4 h-4" />
@@ -513,12 +513,12 @@ export default function Navbar() {
                 <button
                   type="button"
                   onClick={() => setIsUserMenuOpen((prev) => !prev)}
-                  className="flex items-center gap-2 rounded-full border border-gray-300 px-3 py-2 text-sm font-semibold text-ink hover:border-accent hover:text-accent transition-colors"
+                  className="flex shrink-0 items-center gap-1.5 rounded-full border border-gray-300 px-2 py-1.5 text-sm font-semibold text-ink hover:border-accent hover:text-accent transition-colors sm:gap-2 sm:px-3 sm:py-2"
                 >
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-red-primary/10 text-xs font-bold text-accent">
                     {user.name.charAt(0).toUpperCase()}
                   </span>
-                  <span className="max-w-[100px] truncate">{user.name.split(' ')[0]}</span>
+                  <span className="hidden max-w-[100px] truncate min-[400px]:inline">{user.name.split(' ')[0]}</span>
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
 
@@ -642,13 +642,13 @@ export default function Navbar() {
                 <button
                   type="button"
                   onClick={openSignIn}
-                  className="rounded-full border border-gray-300 px-4 py-2 text-sm font-semibold text-ink hover:border-accent hover:text-accent transition-colors"
+                  className="shrink-0 rounded-full border border-gray-300 px-3 py-2 text-sm font-semibold text-ink hover:border-accent hover:text-accent transition-colors sm:px-4"
                 >
                   Login
                 </button>
                 <Link
                   href="/signup"
-                  className="rounded-full border border-accent px-4 py-2 text-sm font-semibold text-accent hover:bg-brand-red-primary hover:text-white transition-colors"
+                  className="shrink-0 whitespace-nowrap rounded-full border border-accent px-3 py-2 text-sm font-semibold text-accent hover:bg-brand-red-primary hover:text-white transition-colors sm:px-4"
                 >
                   Sign up
                 </Link>
@@ -657,10 +657,12 @@ export default function Navbar() {
             <button
               type="button"
               onClick={handleOrderNow}
-              className="flex items-center space-x-2 whitespace-nowrap rounded-full bg-[#9b0000] px-4 py-2 text-sm font-semibold text-white shadow-md shadow-red-200 hover:bg-[#840000] transition-all duration-300"
+              aria-label="Chat with Rider"
+              className="flex shrink-0 items-center space-x-1.5 whitespace-nowrap rounded-full bg-[#9b0000] px-3 py-2 text-sm font-semibold text-white shadow-md shadow-red-200 hover:bg-[#840000] transition-all duration-300 sm:space-x-2 sm:px-4"
             >
               <MessagesSquare className="w-4 h-4" />
-              <span>Chat with Rider</span>
+              <span className="min-[480px]:hidden">Chat</span>
+              <span className="hidden min-[480px]:inline">Chat with Rider</span>
             </button>
           </div>
         </div>

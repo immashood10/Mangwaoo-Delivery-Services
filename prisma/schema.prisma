@@ -302,9 +302,24 @@ model RiderTopUp {
   reviewedAt      DateTime?
   createdAt       DateTime         @default(now())
 
+  /// The screenshot of the payment the rider attached (optional).
+  screenshot RiderTopUpScreenshot?
+
   @@index([status, createdAt])
   @@index([riderId, createdAt])
   @@index([transactionId])
+}
+
+/// The photo a rider attached to a recharge request (a screenshot of the payment). The bytes live in their own table so
+/// lists of requests never load them; only admins can view it.
+model RiderTopUpScreenshot {
+  id        String     @id @default(cuid())
+  topUpId   String     @unique
+  topUp     RiderTopUp @relation(fields: [topUpId], references: [id], onDelete: Cascade)
+  mimeType  String
+  size      Int
+  data      Bytes
+  createdAt DateTime   @default(now())
 }
 
 /// The commission rule, editable by an admin (Admin > Rider Wallets). A single row with id "default".

@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Bike, Flag, MapPin, Send, X } from 'lucide-react';
+import { Bike, CheckCircle2, Flag, MapPin, Send, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import ConfirmDialog from './ConfirmDialog';
 import RiderChatThread from './RiderChatThread';
 import LocationPicker, { type PickedLocation } from './LocationPicker';
 import RouteSummary from './RouteSummary';
@@ -15,12 +16,20 @@ type DeliveryAddress = {
   lng: number;
 };
 
-function ChatStatusBanner({ chat }: { chat: RiderChatSummary }) {
+function ChatStatusBanner({ chat, onReceived }: { chat: RiderChatSummary; onReceived: () => void }) {
   if (chat.status === 'ACTIVE') {
     return (
       <div className="flex items-center gap-2 bg-green-50 px-4 py-2 text-xs font-semibold text-success">
-        <Bike className="h-4 w-4" />
-        {chat.riderName ?? 'Your rider'} is chatting with you
+        <Bike className="h-4 w-4 shrink-0" />
+        <span className="min-w-0 flex-1 truncate">{chat.riderName ?? 'Your rider'} is chatting with you</span>
+        <button
+          type="button"
+          onClick={onReceived}
+          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success px-3 py-1 text-xs font-semibold text-white hover:opacity-90"
+        >
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Order received
+        </button>
       </div>
     );
   }
@@ -63,8 +72,10 @@ export default function OrderChat({
   const [isLoadingChat, setIsLoadingChat] = useState(isCustomer);
   const [draft, setDraft] = useState('');
   const [isStarting, setIsStarting] = useState(false);
-  const [isEnding, setIsEnding] = useState(false);
+  // Which question is open: ending the chat cancels the order; "Order received" finishes a delivered one.
+  const [confirming, setConfirming] = useState<'cancel' | 'received' | null>(null);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     if (!isCustomer) return;
@@ -125,6 +136,7 @@ export default function OrderChat({
 
       setChat(data.chat);
       setDraft('');
+      setNotice('');
     } catch {
       setError('Could not reach the server.');
     } finally {
@@ -132,16 +144,48 @@ export default function OrderChat({
     }
   };
 
-  const handleEnd = async () => {
-    if (!chat || isEnding) return;
-
-    setIsEnding(true);
+  /** "End chat" = cancel the order: the chat is deleted for both sides. Answers with a problem to show, or null. */
+  const cancelOrder = async (): Promise<string | null> => {
+    if (!chat) return null;
 
     try {
-      await fetch(`/api/rider-chats/${chat.id}/close`, { method: 'POST' });
-      setChat(null);
-    } finally {
-      setIsEnding(false);
+      const response = await fetch(`/api/rider-chats/${chat.id}/cancel`, { method: 'POST' });
+      const data = await response.json().catch(() => null);
+
+      // 404: it is already gone (the rider cancelled at the same moment), which is what was wanted anyway.
+      if (response.ok || response.status === 404) {
+        setChat(null);
+        setConfirming(null);
+        setError('');
+        setNotice('Your order was cancelled and the chat has been removed.');
+
+        return null;
+      }
+
+      return data?.error ?? 'Could not cancel the order. Please try again.';
+    } catch {
+      return 'Could not reach the server. Please try again.';
+    }
+  };
+
+  /** "Order received": the order was delivered, so the chat ends (and the rider's commission is charged). */
+  const markReceived = async (): Promise<string | null> => {
+    if (!chat) return null;
+
+    try {
+      const response = await fetch(`/api/rider-chats/${chat.id}/close`, { method: 'POST' });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok && response.status !== 404) {
+        return data?.error ?? 'Could not finish the order. Please try again.';
+      }
+
+      setChat({ ...chat, status: 'CLOSED' });
+      setConfirming(null);
+
+      return null;
+    } catch {
+      return 'Could not reach the server. Please try again.';
     }
   };
 
@@ -162,7 +206,7 @@ export default function OrderChat({
   } else if (chat) {
     content = (
       <>
-        <ChatStatusBanner chat={chat} />
+        <ChatStatusBanner chat={chat} onReceived={() => setConfirming('received')} />
         <RouteSummary chat={chat} className="max-h-40 overflow-y-auto border-b border-gray-100 px-4 py-2" />
         <RiderChatThread
           key={chat.id}
@@ -171,7 +215,8 @@ export default function OrderChat({
           onChatUpdate={setChat}
           onMissing={() => {
             setChat(null);
-            setError('This order chat was removed by Mangwaoo Support. You can start a new one below.');
+            setNotice('');
+            setError('This order chat has been removed. If the order was cancelled you will see it in your notifications. You can start a new order below.');
           }}
           placeholder="Message your rider…"
         />
@@ -258,9 +303,8 @@ export default function OrderChat({
             {chat && chat.status !== 'CLOSED' && (
               <button
                 type="button"
-                onClick={handleEnd}
-                disabled={isEnding}
-                className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-ink hover:border-red-300 hover:text-danger disabled:opacity-60"
+                onClick={() => setConfirming('cancel')}
+                className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-ink hover:border-red-300 hover:text-danger"
               >
                 End chat
               </button>
@@ -286,9 +330,33 @@ export default function OrderChat({
         </div>
 
         {error ? <p className="px-4 pt-2 text-xs text-danger">{error}</p> : null}
+        {notice ? (
+          <p role="status" className="px-4 pt-2 text-xs font-semibold text-success">
+            {notice}
+          </p>
+        ) : null}
 
         {content}
       </div>
+
+      {confirming === 'cancel' ? (
+        <ConfirmDialog
+          title="End chat?"
+          message="Are you sure you want to end this chat?"
+          note="Order will be cancelled and chats will disappear."
+          onConfirm={cancelOrder}
+          onCancel={() => setConfirming(null)}
+        />
+      ) : null}
+      {confirming === 'received' ? (
+        <ConfirmDialog
+          title="Order received?"
+          message="Did your order arrive? This finishes the order and ends the chat."
+          note="You can place a new order after this."
+          onConfirm={markReceived}
+          onCancel={() => setConfirming(null)}
+        />
+      ) : null}
     </div>,
     document.body
   );

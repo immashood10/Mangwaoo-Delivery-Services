@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, ArrowLeft, Bike, CheckCircle2, ChevronRight, Clock, Headset, Inbox, MapPin, MessagesSquare, Power, Wallet } from 'lucide-react';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import RiderChatThread from '@/components/RiderChatThread';
 import SupportChat from '@/components/SupportChat';
 import { holdMessage, useRider } from '@/components/rider/RiderShell';
@@ -145,11 +146,21 @@ export function RiderHome() {
 }
 
 /**
- * The rider finishes an order here: they say what delivery charge they got, Mangwaoo's commission on it is shown, and
- * on confirming the order ends and the commission goes on their wallet (the server never works from less than the
- * petrol for the ride, so the number can't be gamed).
+ * What a rider can do with an order they have taken, along the top of its chat:
+ * - **Complete order**: they say what delivery charge they received, Mangwaoo's commission on it is shown, and on
+ *   confirming the order ends and the commission goes on their wallet (the server never works from less than the
+ *   petrol for the ride, so the number can't be gamed);
+ * - **End chat**: cancels the order (the chat is deleted for both sides, nothing is charged), after a confirmation.
  */
-function CompleteOrder({ chat, onCompleted }: { chat: RiderChatSummary; onCompleted: (text: string, onHold: boolean) => void }) {
+function OrderActions({
+  chat,
+  onCompleted,
+  onEndChat,
+}: {
+  chat: RiderChatSummary;
+  onCompleted: (text: string, onHold: boolean) => void;
+  onEndChat: () => void;
+}) {
   const { rules } = useRider();
   const minimum = minimumFeeForChat(chat);
   const [isOpen, setIsOpen] = useState(false);
@@ -204,75 +215,89 @@ function CompleteOrder({ chat, onCompleted }: { chat: RiderChatSummary; onComple
     }
   };
 
-  if (!isOpen) {
-    return (
-      <div className="mb-3 flex justify-end">
-        <button
-          type="button"
-          onClick={() => setIsOpen(true)}
-          className="inline-flex items-center gap-2 rounded-full bg-success px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
-        >
-          <CheckCircle2 className="h-4 w-4" />
-          Complete order
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <form onSubmit={handleSubmit} noValidate className="mb-3 rounded-xl border border-green-200 bg-green-50 p-4">
-      <p className="font-bold text-ink">Complete this order</p>
-      <p className="mt-0.5 text-sm text-brand-gray">Delivered? Tell us the delivery charge you received for it.</p>
-
-      <label htmlFor="complete-fee" className="mt-3 block text-sm font-semibold text-ink">
-        Delivery charge (PKR)
-      </label>
-      <input
-        id="complete-fee"
-        type="number"
-        inputMode="numeric"
-        min={minimum > 0 ? minimum : 1}
-        max={MAX_DECLARED_FEE_PKR}
-        step="1"
-        value={fee}
-        onChange={(event) => {
-          setFee(event.target.value);
-          setError('');
-        }}
-        className="mt-1 w-full rounded-xl border border-gray-300 bg-surface px-4 py-2.5 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-red-100"
-        placeholder={minimum > 0 ? String(minimum) : 'e.g. 150'}
-      />
-      <p className="mt-1.5 text-xs text-brand-gray">
-        {minimum > 0 ? `Not less than ${formatPkr(minimum)} (the petrol for this ride). ` : ''}
-        Mangwaoo keeps {rules.commissionPercent}%{commission > 0 ? `: ${formatPkr(commission)} on this order` : ''}, which is added to your account.
-      </p>
-
-      {error ? (
-        <p role="alert" className="mt-2 text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          type="submit"
-          disabled={isSaving}
-          className="rounded-full bg-success px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
-        >
-          {isSaving ? 'Completing…' : 'Yes, order delivered'}
-        </button>
-        <button type="button" onClick={() => setIsOpen(false)} disabled={isSaving} className="rounded-full border border-gray-300 px-5 py-2 text-sm font-semibold text-ink hover:bg-surface">
-          Not yet
-        </button>
+    <div className="mb-3 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="w-full min-w-0 truncate text-sm font-semibold text-ink sm:w-auto sm:flex-1">Order chat · {chat.customerName}</p>
+        <div className="flex shrink-0 gap-2">
+          {!isOpen ? (
+            <button
+              type="button"
+              onClick={() => setIsOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-success px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Complete order
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onEndChat}
+            className="rounded-full border border-gray-300 px-4 py-2 text-sm font-semibold text-ink hover:border-red-300 hover:text-danger"
+          >
+            End chat
+          </button>
+        </div>
       </div>
-    </form>
+
+      {isOpen ? (
+        <form onSubmit={handleSubmit} noValidate className="rounded-xl border border-green-200 bg-green-50 p-4">
+          <p className="font-bold text-ink">Complete this order</p>
+          <p className="mt-0.5 text-sm text-brand-gray">Delivered? Tell us the delivery charge you received for it.</p>
+
+          <label htmlFor="complete-fee" className="mt-3 block text-sm font-semibold text-ink">
+            Delivery charge (PKR)
+          </label>
+          <input
+            id="complete-fee"
+            type="number"
+            inputMode="numeric"
+            min={minimum > 0 ? minimum : 1}
+            max={MAX_DECLARED_FEE_PKR}
+            step="1"
+            value={fee}
+            onChange={(event) => {
+              setFee(event.target.value);
+              setError('');
+            }}
+            className="mt-1 w-full rounded-xl border border-gray-300 bg-surface px-4 py-2.5 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-red-100"
+            placeholder={minimum > 0 ? String(minimum) : 'e.g. 150'}
+          />
+          <p className="mt-1.5 text-xs text-brand-gray">
+            {minimum > 0 ? `Not less than ${formatPkr(minimum)} (the petrol for this ride). ` : ''}
+            Mangwaoo keeps {rules.commissionPercent}%{commission > 0 ? `: ${formatPkr(commission)} on this order` : ''}, which is added to your account.
+          </p>
+
+          {error ? (
+            <p role="alert" className="mt-2 text-sm text-danger">
+              {error}
+            </p>
+          ) : null}
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="rounded-full bg-success px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+            >
+              {isSaving ? 'Completing…' : 'Yes, order delivered'}
+            </button>
+            <button type="button" onClick={() => setIsOpen(false)} disabled={isSaving} className="rounded-full border border-gray-300 px-5 py-2 text-sm font-semibold text-ink hover:bg-surface">
+              Not yet
+            </button>
+          </div>
+        </form>
+      ) : null}
+    </div>
   );
 }
 
 /** New requests, or the rider's accepted chats: the list on the left and the order chat on the right. */
 export function RiderOrders({ mode }: { mode: 'requests' | 'chats' }) {
-  const { rider, wallet, requests, chats } = useRider();
+  const { rider, wallet, requests, chats, dropChat } = useRider();
   const [selectedChat, setSelectedChat] = useState<RiderChatSummary | null>(null);
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [notice, setNotice] = useState('');
   const [receipt, setReceipt] = useState<{ chatId: string; text: string; onHold: boolean } | null>(null);
   const isRequests = mode === 'requests';
   const items = isRequests ? requests : chats;
@@ -280,11 +305,41 @@ export function RiderOrders({ mode }: { mode: 'requests' | 'chats' }) {
   const isMine = selectedChat ? chats.some((chat) => chat.id === selectedChat.id) : false;
   const finished = receipt && selectedChat && receipt.chatId === selectedChat.id ? receipt : null;
 
+  // "End chat" cancels the order: the chat is deleted for both sides. Answers with a problem to show, or null.
+  const cancelChat = async (): Promise<string | null> => {
+    if (!selectedChat) return null;
+
+    try {
+      const response = await fetch(`/api/rider-chats/${selectedChat.id}/cancel`, { method: 'POST' });
+      const data = await response.json().catch(() => null);
+
+      // 404: it is already gone (the customer cancelled at the same moment), which is what was wanted anyway.
+      if (response.ok || response.status === 404) {
+        dropChat(selectedChat.id);
+        setSelectedChat(null);
+        setConfirmEnd(false);
+        setNotice('Order cancelled. The chat has been removed.');
+
+        return null;
+      }
+
+      return data?.error ?? 'Could not cancel the order. Please try again.';
+    } catch {
+      return 'Could not reach the server. Please try again.';
+    }
+  };
+
   if (!rider.isApproved) return <PendingApproval />;
 
   return (
     <div className="space-y-6">
       {isRequests ? <HoldBanner /> : null}
+      {notice ? (
+        <p role="status" className="flex items-center gap-2 rounded-xl bg-green-50 px-4 py-3 text-sm font-semibold text-success">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          {notice}
+        </p>
+      ) : null}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr]">
         <section className={`space-y-2 ${selectedChat ? 'hidden lg:block' : ''}`}>
           <h1 className="text-sm font-bold uppercase tracking-wide text-ink">
@@ -328,9 +383,27 @@ export function RiderOrders({ mode }: { mode: 'requests' | 'chats' }) {
                   ) : null}
                 </div>
               ) : isMine ? (
-                <CompleteOrder key={`complete-${selectedChat.id}`} chat={selectedChat} onCompleted={(text, onHold) => setReceipt({ chatId: selectedChat.id, text, onHold })} />
+                <OrderActions
+                  key={`actions-${selectedChat.id}`}
+                  chat={selectedChat}
+                  onCompleted={(text, onHold) => setReceipt({ chatId: selectedChat.id, text, onHold })}
+                  onEndChat={() => setConfirmEnd(true)}
+                />
               ) : null}
-              <RiderChatThread key={selectedChat.id} chatId={selectedChat.id} currentRole="RIDER" placeholder="Message the customer…" />
+              {/* A fixed height for the conversation, so the bar above it (and the Complete form) can come and go without pushing the message box out of the card. */}
+              <div className="h-[28rem]">
+                <RiderChatThread
+                  key={selectedChat.id}
+                  chatId={selectedChat.id}
+                  currentRole="RIDER"
+                  placeholder="Message the customer…"
+                  onMissing={() => {
+                    dropChat(selectedChat.id);
+                    setSelectedChat(null);
+                    setNotice('This order was cancelled and the chat has been removed.');
+                  }}
+                />
+              </div>
             </>
           ) : (
             <div className="flex h-full min-h-[24rem] flex-col items-center justify-center text-center text-brand-gray">
@@ -340,6 +413,16 @@ export function RiderOrders({ mode }: { mode: 'requests' | 'chats' }) {
           )}
         </section>
       </div>
+
+      {confirmEnd ? (
+        <ConfirmDialog
+          title="End chat?"
+          message="Are you sure you want to end this chat?"
+          note="Order will be cancelled and chats will disappear."
+          onConfirm={cancelChat}
+          onCancel={() => setConfirmEnd(false)}
+        />
+      ) : null}
     </div>
   );
 }

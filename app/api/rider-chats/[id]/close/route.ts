@@ -6,9 +6,11 @@ import { closeOrderChat } from '@/lib/rider-wallet';
 import { MAX_DECLARED_FEE_PKR, RECHARGE_TITLE, formatPkr, rechargeMessage } from '@/lib/rider-wallet-config';
 
 /**
- * Ends an order chat (the customer's "End chat", the rider's "Complete order", an admin's "Close"). When a rider had
- * taken the order, this is also the moment Mangwaoo's commission is charged to the rider's wallet. A rider may send
- * `{ fee }`, the delivery charge they got; the commission never works from less than the petrol for the ride.
+ * Finishes a delivered order: the rider's "Complete order" or the customer's "Order received". When a rider had taken
+ * the order this is the moment Mangwaoo's commission is charged to the rider's wallet. A rider may send `{ fee }`, the
+ * delivery charge they got; the commission never works from less than the petrol for the ride. An admin's "Close"
+ * only closes the chat (no commission: use Rider Wallets > Adjust if one is due). "End chat" is NOT this: it cancels
+ * the order and deletes the chat (`/cancel`).
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -37,7 +39,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
   }
 
-  const result = await closeOrderChat(id, declaredFee);
+  const { found, commission: result } = await closeOrderChat(id, { declaredFee, charge: access.role !== 'ADMIN' });
+
+  if (!found) {
+    return NextResponse.json({ error: 'This order chat is no longer available.' }, { status: 404 });
+  }
 
   if (result?.change?.startedHold && result.change.orderAccess === 'AUTO') {
     const { change } = result;

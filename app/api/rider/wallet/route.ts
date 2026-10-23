@@ -4,9 +4,11 @@ import { prisma } from '@/lib/prisma';
 import { AD_PAYMENT, normalizePaymentRef } from '@/lib/ad-config';
 import { ADMIN_PAGES } from '@/lib/notification-types';
 import { notifyAdminsAfterResponse } from '@/lib/notify';
+import { detectRasterImage } from '@/lib/image-signature';
 import { enforceRateLimits } from '@/lib/rate-limit';
 import { getWalletSettings } from '@/lib/rider-wallet';
 import {
+  MAX_PAYMENT_SCREENSHOT_BYTES,
   MAX_TOP_UP_PKR,
   MIN_TOP_UP_PKR,
   RIDER_TOP_UP_METHODS,
@@ -52,7 +54,16 @@ export async function GET() {
       where: { riderId: rider.id },
       orderBy: { createdAt: 'desc' },
       take: 20,
-      select: { id: true, amount: true, method: true, transactionId: true, status: true, rejectionReason: true, createdAt: true },
+      select: {
+        id: true,
+        amount: true,
+        method: true,
+        transactionId: true,
+        status: true,
+        rejectionReason: true,
+        createdAt: true,
+        screenshot: { select: { id: true } },
+      },
     }),
     prisma.riderLedgerEntry.count({ where: { riderId: rider.id, type: 'COMMISSION' } }),
   ]);
@@ -68,7 +79,7 @@ export async function GET() {
         ordersOnCredit: settings.ordersOnCredit,
       },
       entries: entries.map((entry) => ({ ...entry, createdAt: entry.createdAt.toISOString() })),
-      topUps: topUps.map((topUp) => ({ ...topUp, createdAt: topUp.createdAt.toISOString() })),
+      topUps: topUps.map(({ screenshot, ...topUp }) => ({ ...topUp, hasScreenshot: screenshot !== null, createdAt: topUp.createdAt.toISOString() })),
       payment: { method: AD_PAYMENT.method, accountNumber: AD_PAYMENT.accountNumber, accountName: AD_PAYMENT.accountName },
     },
     { headers: { 'Cache-Control': 'no-store' } }
@@ -81,10 +92,41 @@ export async function POST(request: NextRequest) {
 
   if (!rider) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
 
-  const body = await request.json().catch(() => null);
-  const amount = typeof body?.amount === 'number' ? body.amount : Number(body?.amount);
-  const method = typeof body?.method === 'string' ? body.method : '';
-  const transactionId = normalizePaymentRef(body?.transactionId);
+  // The dashboard sends a form (so a screenshot can come along); plain JSON still works.
+  let fields: { amount?: unknown; method?: unknown; transactionId?: unknown } | null;
+  let screenshot: { mimeType: string; data: Uint8Array<ArrayBuffer> } | null = null;
+
+  if ((request.headers.get('content-type') ?? '').startsWith('multipart/form-data')) {
+    const form = await request.formData().catch(() => null);
+
+    if (!form) return NextResponse.json({ error: 'Please fill in the recharge form.' }, { status: 400 });
+
+    fields = { amount: form.get('amount'), method: form.get('method'), transactionId: form.get('transactionId') };
+
+    const file = form.get('screenshot');
+
+    if (file instanceof File && file.size > 0) {
+      if (file.size > MAX_PAYMENT_SCREENSHOT_BYTES) {
+        return NextResponse.json({ error: 'The screenshot is too large (max 3 MB).' }, { status: 400 });
+      }
+
+      const data = new Uint8Array(await file.arrayBuffer());
+      // The type comes from the bytes, not from what the browser says the file is.
+      const mimeType = detectRasterImage(data);
+
+      if (!mimeType) {
+        return NextResponse.json({ error: 'The screenshot must be a JPG, PNG or WebP picture.' }, { status: 400 });
+      }
+
+      screenshot = { mimeType, data };
+    }
+  } else {
+    fields = await request.json().catch(() => null);
+  }
+
+  const amount = typeof fields?.amount === 'number' ? fields.amount : Number(fields?.amount);
+  const method = typeof fields?.method === 'string' ? fields.method : '';
+  const transactionId = normalizePaymentRef(fields?.transactionId);
 
   if (!Number.isInteger(amount) || amount < MIN_TOP_UP_PKR || amount > MAX_TOP_UP_PKR) {
     return NextResponse.json(
@@ -118,12 +160,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'This transaction ID has already been used.' }, { status: 409 });
   }
 
-  const topUp = await prisma.riderTopUp.create({ data: { riderId: rider.id, amount, method, transactionId } });
+  const topUp = await prisma.riderTopUp.create({
+    data: {
+      riderId: rider.id,
+      amount,
+      method,
+      transactionId,
+      ...(screenshot ? { screenshot: { create: { mimeType: screenshot.mimeType, size: screenshot.data.byteLength, data: screenshot.data } } } : {}),
+    },
+  });
 
   notifyAdminsAfterResponse(async () => ({
     type: 'ACCOUNT' as const,
     title: 'Rider recharge waiting',
-    message: `${rider.user.name} sent ${formatPkr(amount)} by ${method} (ID ${transactionId}).`,
+    message: `${rider.user.name} sent ${formatPkr(amount)} by ${method} (ID ${transactionId})${screenshot ? ', with a screenshot' : ''}.`,
     href: ADMIN_PAGES.riderWallets,
     refId: `rider-topup:${topUp.id}`,
   }));

@@ -8,7 +8,8 @@ export type NotifyInput = {
   type: NotificationKind;
   title: string;
   message: string;
-  href: string;
+  /** The page this is about (opening it marks the notification seen); null for a notice that belongs to no page. */
+  href: string | null;
   /** Repeat events with the same refId fold into one unread notification instead of piling up. */
   refId?: string;
 };

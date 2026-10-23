@@ -327,7 +327,7 @@ export function NotificationBell({ onDark = false }: { onDark?: boolean }) {
         aria-haspopup="dialog"
         aria-expanded={isOpen}
         aria-label={total > 0 ? `Notifications, ${total} new` : 'Notifications'}
-        className={`relative rounded-full border p-2.5 transition-colors ${
+        className={`relative shrink-0 rounded-full border p-2 transition-colors sm:p-2.5 ${
           onDark
             ? 'border-white/20 text-white hover:bg-white/10'
             : 'border-gray-200 text-ink hover:border-accent hover:text-accent'

@@ -45,6 +45,8 @@ type RiderContextValue = {
   toggleOnline: () => Promise<void>;
   requests: RiderChatSummary[];
   chats: RiderChatSummary[];
+  /** Takes a chat out of the lists at once (the rider just cancelled it, or it was cancelled under them). */
+  dropChat: (chatId: string) => void;
 };
 
 const RiderContext = createContext<RiderContextValue | null>(null);
@@ -79,6 +81,8 @@ function RiderProvider({
   const [requests, setRequests] = useState<RiderChatSummary[]>([]);
   const [chats, setChats] = useState<RiderChatSummary[]>([]);
   const coords = useRef<{ lat: number; lng: number } | null>(null);
+  // Chats cancelled here: a poll that was already on its way must not bring them back (ids are never reused).
+  const droppedChats = useRef(new Set<string>());
 
   const sendPresence = useCallback(async (available: boolean) => {
     try {
@@ -137,8 +141,10 @@ function RiderProvider({
         if (!response.ok) return;
         const data = await response.json();
         if (active) {
-          setRequests(data.requests ?? []);
-          setChats(data.chats ?? []);
+          const alive = (chat: RiderChatSummary) => !droppedChats.current.has(chat.id);
+
+          setRequests(((data.requests ?? []) as RiderChatSummary[]).filter(alive));
+          setChats(((data.chats ?? []) as RiderChatSummary[]).filter(alive));
           if (data.wallet) setWallet(data.wallet);
         }
       } catch {
@@ -170,9 +176,15 @@ function RiderProvider({
     await sendPresence(next);
   }, [isOnline, wallet.hold, sendPresence]);
 
+  const dropChat = useCallback((chatId: string) => {
+    droppedChats.current.add(chatId);
+    setRequests((current) => current.filter((chat) => chat.id !== chatId));
+    setChats((current) => current.filter((chat) => chat.id !== chatId));
+  }, []);
+
   const value = useMemo(
-    () => ({ rider, wallet, rules, isOnline, hasLocation, error, toggleOnline, requests, chats }),
-    [rider, wallet, rules, isOnline, hasLocation, error, toggleOnline, requests, chats]
+    () => ({ rider, wallet, rules, isOnline, hasLocation, error, toggleOnline, requests, chats, dropChat }),
+    [rider, wallet, rules, isOnline, hasLocation, error, toggleOnline, requests, chats, dropChat]
   );
 
   return <RiderContext.Provider value={value}>{children}</RiderContext.Provider>;

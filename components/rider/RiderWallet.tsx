@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
-import { AlertTriangle, CheckCircle2, Clock, Wallet, XCircle } from 'lucide-react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { AlertTriangle, CheckCircle2, Clock, ImageUp, Paperclip, Wallet, X, XCircle } from 'lucide-react';
+import { compressImage } from '@/lib/client-image';
 import {
   MAX_TOP_UP_PKR,
   MIN_TOP_UP_PKR,
@@ -24,7 +25,16 @@ type WalletView = {
     ordersOnCredit: number;
   };
   entries: { id: string; type: RiderLedgerKind; amount: number; baseAmount: number | null; note: string | null; createdAt: string }[];
-  topUps: { id: string; amount: number; method: string; transactionId: string; status: RiderTopUpState; rejectionReason: string | null; createdAt: string }[];
+  topUps: {
+    id: string;
+    amount: number;
+    method: string;
+    transactionId: string;
+    status: RiderTopUpState;
+    rejectionReason: string | null;
+    hasScreenshot: boolean;
+    createdAt: string;
+  }[];
   payment: { method: string; accountNumber: string; accountName: string };
 };
 
@@ -38,6 +48,7 @@ const ENTRY_LABELS: Record<RiderLedgerKind, string> = {
 
 const INPUT_CLASS =
   'w-full rounded-xl border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-red-100';
+const LABEL_CLASS = 'mb-1.5 block text-sm font-semibold text-ink';
 
 function formatWhen(iso: string) {
   return new Date(iso).toLocaleString('en-PK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Karachi' });
@@ -77,6 +88,10 @@ export default function RiderWallet() {
   const [isSending, setIsSending] = useState(false);
   const [formError, setFormError] = useState('');
   const [sent, setSent] = useState(false);
+  // The screenshot of the payment (optional): shrunk in the browser, kept only in memory until it is sent.
+  const [screenshot, setScreenshot] = useState<{ blob: Blob; url: string } | null>(null);
+  const [isPreparing, setIsPreparing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Bumped after sending a recharge request so the lists refresh at once instead of at the next poll.
   const [reloadKey, setReloadKey] = useState(0);
@@ -115,6 +130,34 @@ export default function RiderWallet() {
     };
   }, [reloadKey]);
 
+  // The preview's address is released when the picture is replaced, removed or the page is left.
+  useEffect(() => {
+    return () => {
+      if (screenshot) URL.revokeObjectURL(screenshot.url);
+    };
+  }, [screenshot]);
+
+  const handlePickScreenshot = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    event.target.value = '';
+
+    if (!file) return;
+
+    setFormError('');
+    setIsPreparing(true);
+
+    try {
+      const blob = await compressImage(file, { maxDimension: 1400, quality: 0.8 });
+
+      setScreenshot({ blob, url: URL.createObjectURL(blob) });
+    } catch (error) {
+      setFormError((error as Error).message || 'Could not read this picture. Please try another one.');
+    } finally {
+      setIsPreparing(false);
+    }
+  };
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setIsSending(true);
@@ -122,11 +165,14 @@ export default function RiderWallet() {
     setSent(false);
 
     try {
-      const response = await fetch('/api/rider/wallet', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: Number(amount), method, transactionId }),
-      });
+      const body = new FormData();
+
+      body.set('amount', amount);
+      body.set('method', method);
+      body.set('transactionId', transactionId);
+      if (screenshot) body.set('screenshot', screenshot.blob, 'payment.jpg');
+
+      const response = await fetch('/api/rider/wallet', { method: 'POST', body });
       const data = await response.json().catch(() => null);
 
       if (!response.ok) {
@@ -137,6 +183,7 @@ export default function RiderWallet() {
       setSent(true);
       setAmount('');
       setTransactionId('');
+      setScreenshot(null);
       setReloadKey((key) => key + 1);
     } catch {
       setFormError('Could not reach the server. Please try again.');
@@ -222,7 +269,7 @@ export default function RiderWallet() {
             Every order you complete adds Mangwaoo&apos;s {wallet.commissionPercent}% of the delivery charge to what you owe.
           </li>
           <li>You can have {wallet.ordersOnCredit} finished orders unpaid. After that, recharge your account to receive the next order.</li>
-          <li>Pay by {payment.method}, send us the transaction ID below, and Mangwaoo adds the money to your account.</li>
+          <li>Pay by {payment.method}, send us the transaction ID (and a screenshot of the payment) below, and Mangwaoo adds the money to your account.</li>
         </ul>
       </section>
 
@@ -289,6 +336,40 @@ export default function RiderWallet() {
             />
           </div>
 
+          <div className="sm:col-span-3">
+            <p className={LABEL_CLASS}>Screenshot of the payment (optional)</p>
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePickScreenshot} aria-label="Choose a screenshot of the payment" />
+            {screenshot ? (
+              <div className="flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={screenshot.url} alt="Your payment screenshot" className="h-20 w-20 rounded-xl border border-gray-200 object-cover" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-ink">Screenshot added</p>
+                  <div className="mt-1 flex flex-wrap gap-3 text-xs font-semibold">
+                    <button type="button" onClick={() => fileInputRef.current?.click()} className="text-accent hover:underline">
+                      Change
+                    </button>
+                    <button type="button" onClick={() => setScreenshot(null)} className="inline-flex items-center gap-1 text-danger hover:underline">
+                      <X className="h-3 w-3" />
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isPreparing}
+                className="inline-flex items-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-2.5 text-sm font-semibold text-ink hover:border-accent hover:text-accent disabled:opacity-60"
+              >
+                <ImageUp className="h-4 w-4" />
+                {isPreparing ? 'Preparing…' : 'Add screenshot'}
+              </button>
+            )}
+            <p className="mt-1.5 text-xs text-brand-gray">A screenshot of the EasyPaisa payment message helps Mangwaoo check your payment faster.</p>
+          </div>
+
           {formError ? (
             <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm text-danger sm:col-span-3">
               {formError}
@@ -325,6 +406,12 @@ export default function RiderWallet() {
                     ID {topUp.transactionId} · {formatWhen(topUp.createdAt)}
                     {topUp.status === 'REJECTED' && topUp.rejectionReason ? ` · ${topUp.rejectionReason}` : ''}
                   </p>
+                  {topUp.hasScreenshot ? (
+                    <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-brand-gray">
+                      <Paperclip className="h-3 w-3" />
+                      Screenshot attached
+                    </p>
+                  ) : null}
                 </div>
                 <TopUpStatus status={topUp.status} />
               </li>

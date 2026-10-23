@@ -18,6 +18,8 @@ export const MAX_TOP_UP_PKR = 100000;
 /** The most a rider may declare as the delivery charge of one order. */
 export const MAX_DECLARED_FEE_PKR = 100000;
 export const MAX_WALLET_NOTE_LENGTH = 200;
+/** The screenshot a rider may attach to a recharge request (the browser shrinks it first, so this is generous). */
+export const MAX_PAYMENT_SCREENSHOT_BYTES = 3 * 1024 * 1024;
 export const MAX_ADJUSTMENT_PKR = 1000000;
 
 export const RIDER_TOP_UP_METHODS = ['EasyPaisa', 'JazzCash', 'Bank transfer'] as const;

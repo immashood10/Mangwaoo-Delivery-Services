@@ -47,6 +47,8 @@ export default async function AdminRiderWalletsPage() {
         method: true,
         transactionId: true,
         createdAt: true,
+        // Only whether a screenshot exists: the picture itself is loaded by the admin-only screenshot route.
+        screenshot: { select: { id: true } },
         rider: { select: { user: { select: { name: true, phone: true } } } },
       },
     }),
@@ -99,6 +101,7 @@ export default async function AdminRiderWalletsPage() {
           amount: topUp.amount,
           method: topUp.method,
           transactionId: topUp.transactionId,
+          hasScreenshot: topUp.screenshot !== null,
           createdAt: topUp.createdAt.toISOString(),
         }))}
         settings={settings}

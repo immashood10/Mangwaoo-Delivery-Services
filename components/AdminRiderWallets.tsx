@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ChevronDown,
   History as HistoryIcon,
+  Image as ImageIcon,
   Phone,
   Settings2,
   ShieldCheck,
@@ -50,6 +51,8 @@ export type PendingTopUp = {
   amount: number;
   method: string;
   transactionId: string;
+  /** The rider attached a screenshot of the payment. */
+  hasScreenshot: boolean;
   createdAt: string;
 };
 
@@ -82,7 +85,7 @@ function formatWhen(iso: string) {
   return new Date(iso).toLocaleString('en-PK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Karachi' });
 }
 
-function Modal({ titleId, onClose, children }: { titleId: string; onClose: () => void; children: ReactNode }) {
+function Modal({ titleId, onClose, children, wide = false }: { titleId: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
@@ -102,7 +105,7 @@ function Modal({ titleId, onClose, children }: { titleId: string; onClose: () =>
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-surface p-6 shadow-2xl sm:rounded-2xl"
+        className={`max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-surface p-6 shadow-2xl sm:rounded-2xl ${wide ? 'max-w-2xl' : 'max-w-md'}`}
       >
         {children}
       </div>
@@ -217,6 +220,33 @@ function FormDialog({
           </button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+/** The screenshot of a payment, as the rider attached it. */
+function ScreenshotDialog({ topUp, onClose }: { topUp: PendingTopUp; onClose: () => void }) {
+  return (
+    <Modal titleId="wallet-screenshot-title" onClose={onClose} wide>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 id="wallet-screenshot-title" className="text-lg font-bold text-ink">
+            Payment screenshot · {topUp.riderName}
+          </h2>
+          <p className="mt-1 text-sm text-brand-gray">
+            {formatPkr(topUp.amount)} by {topUp.method} · ID <span className="font-mono font-semibold text-ink">{topUp.transactionId}</span>
+          </p>
+        </div>
+        <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-brand-gray hover:bg-gray-100 hover:text-ink" aria-label="Close">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={`/api/admin/rider-top-ups/${topUp.id}/screenshot`}
+        alt={`Payment screenshot from ${topUp.riderName}`}
+        className="max-h-[70vh] w-full rounded-xl border border-gray-200 bg-brand-light object-contain"
+      />
     </Modal>
   );
 }
@@ -419,6 +449,7 @@ export default function AdminRiderWallets({ riders, pending, settings }: { rider
   const [credit, setCredit] = useState(String(settings.ordersOnCredit));
   const [isSavingRule, setIsSavingRule] = useState(false);
   const [approveAmounts, setApproveAmounts] = useState<Record<string, string>>({});
+  const [viewing, setViewing] = useState<PendingTopUp | null>(null);
 
   const owing = riders.filter((rider) => rider.balance < 0);
   const totalOwed = owing.reduce((sum, rider) => sum - rider.balance, 0);
@@ -543,6 +574,18 @@ export default function AdminRiderWallets({ riders, pending, settings }: { rider
                       {topUp.riderPhone ? ` · ${topUp.riderPhone}` : ''}
                     </p>
                     <p className="mt-1 text-xs text-brand-gray">Check that this payment reached Mangwaoo&apos;s account, then approve.</p>
+                    {topUp.hasScreenshot ? (
+                      <button
+                        type="button"
+                        onClick={() => setViewing(topUp)}
+                        className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-ink hover:border-accent hover:text-accent"
+                      >
+                        <ImageIcon className="h-3.5 w-3.5" />
+                        View screenshot
+                      </button>
+                    ) : (
+                      <p className="mt-2 text-xs text-brand-gray">No screenshot attached.</p>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-end gap-2">
                     <div>
@@ -645,6 +688,8 @@ export default function AdminRiderWallets({ riders, pending, settings }: { rider
           </ul>
         )}
       </section>
+
+      {viewing ? <ScreenshotDialog topUp={viewing} onClose={() => setViewing(null)} /> : null}
 
       {dialog?.kind === 'payment' ? (
         <FormDialog

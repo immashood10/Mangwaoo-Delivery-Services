@@ -1,8 +1,6 @@
 // Paid product ads: where they run, what they cost, and how long. Client-safe: shared by the
 // seller's "Run an ad" page, the admin review page, the API and the site pages that show the ads.
 
-import { BRAND } from '@/lib/data';
-
 export type AdPlacementKey = 'SIDEBAR' | 'MAIN_PAGE' | 'STORY';
 export type AdStatusKey = 'PENDING' | 'ACTIVE' | 'REJECTED';
 /** What an ad is doing right now: waiting for an admin, running, over, or turned down. */
@@ -52,14 +50,14 @@ export function nextAdPeriod(days: number) {
 }
 
 /**
- * Where sellers send the ad fee. There is no online payment yet, so an admin checks the
- * transaction id the seller enters before the ad goes live. Put the real EasyPaisa / JazzCash
- * account here (it currently uses the business phone number from lib/data.ts).
+ * Where money is sent to Mangwaoo: the sellers' ad fee and the riders' commission (Rider Wallet). There is no
+ * online payment yet, so an admin checks the transaction id the person enters before the ad goes live / the
+ * recharge is added. This is the owner's EasyPaisa account.
  */
 export const AD_PAYMENT = {
-  method: 'EasyPaisa / JazzCash',
-  accountNumber: BRAND.phone,
-  accountName: BRAND.name,
+  method: 'EasyPaisa',
+  accountNumber: '03122855881',
+  accountName: 'Muhammad Mashood Khan',
 };
 
 const MIN_PAYMENT_REF_LENGTH = 6;
