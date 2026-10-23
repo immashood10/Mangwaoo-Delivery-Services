@@ -7,13 +7,14 @@ const EMPTY = { items: [], counts: {} };
 const POLL_MS = 30000;
 
 /**
- * The notification bell in the public navbar for customers and riders (for example a message an admin sent from
- * Mangwaoo). It is the seller's bell pointed at `/api/notifications`; the provider also pops a toast for each new one.
+ * The notification bell for customers and riders (the public navbar and the rider dashboard; for example a message an
+ * admin sent from Mangwaoo). It is the seller's bell pointed at `/api/notifications`; the provider also pops a toast
+ * for each new one.
  */
-export default function UserNotificationBell() {
+export default function UserNotificationBell({ onDark = false }: { onDark?: boolean }) {
   return (
     <SellerNotificationsProvider initial={EMPTY} endpoint="/api/notifications" pollMs={POLL_MS} fetchOnMount>
-      <NotificationBell />
+      <NotificationBell onDark={onDark} />
     </SellerNotificationsProvider>
   );
 }

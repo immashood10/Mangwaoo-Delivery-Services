@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Headset, Send } from 'lucide-react';
 import { MAX_SUPPORT_MESSAGE_LENGTH, SUPPORT_NAME, type SupportMessageView } from '@/lib/support-types';
 
@@ -10,8 +10,9 @@ const POLL_INTERVAL_MS = 5000;
  * A seller's or rider's chat with Mangwaoo Support. It only appears once the admin has written to them, and it
  * keeps itself up to date (opening it marks the admin's messages as read).
  */
-export default function SupportChat() {
+export default function SupportChat({ emptyState }: { /** Shown once it is known there is no thread yet (the rider's Messages page); otherwise nothing is rendered. */ emptyState?: ReactNode }) {
   const [hasThread, setHasThread] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [messages, setMessages] = useState<SupportMessageView[]>([]);
   const [draft, setDraft] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -31,6 +32,7 @@ export default function SupportChat() {
         if (!isMounted) return;
 
         setHasThread(Boolean(data.thread));
+        setIsLoaded(true);
 
         if (data.messages.length > 0) {
           lastCreatedAt.current = data.messages[data.messages.length - 1].createdAt;
@@ -57,7 +59,7 @@ export default function SupportChat() {
     bottomRef.current?.scrollIntoView({ block: 'nearest' });
   }, [messages]);
 
-  if (!hasThread) return null;
+  if (!hasThread) return isLoaded && emptyState ? <>{emptyState}</> : null;
 
   const handleSend = async (event: FormEvent) => {
     event.preventDefault();
