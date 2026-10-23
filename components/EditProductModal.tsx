@@ -42,6 +42,7 @@ export default function EditProductModal({
   apiBasePath,
   enableVehicleDetails = false,
   enableSizes = false,
+  hideStock = false,
   categories,
   product,
   onClose,
@@ -52,6 +53,8 @@ export default function EditProductModal({
   enableVehicleDetails?: boolean;
   /** Ask for sizes when a clothes/shoes category (Men, Women, Kids) is selected (MangwaooMart only). */
   enableSizes?: boolean;
+  /** Food dishes have no stock count (`lib/food-stock.ts`). */
+  hideStock?: boolean;
   categories: Category[];
   product: EditableProduct;
   onClose: () => void;
@@ -150,7 +153,7 @@ export default function EditProductModal({
           description: form.description,
           categoryId: form.categoryId,
           price: parseFloat(form.price),
-          stock: parseInt(form.stock, 10),
+          ...(hideStock ? {} : { stock: parseInt(form.stock, 10) }),
           ...(isVehicleAd ? { attributes: vehicle } : {}),
           ...(isSizedAd ? { attributes: sizes } : {}),
           images,
@@ -283,6 +286,7 @@ export default function EditProductModal({
                 required
               />
             </div>
+            {hideStock ? null : (
             <div>
               <label className="block text-sm font-semibold text-ink mb-2">Stock</label>
               <input
@@ -296,6 +300,7 @@ export default function EditProductModal({
                 required
               />
             </div>
+            )}
           </div>
 
           {formError ? <p className="text-sm text-danger">{formError}</p> : null}

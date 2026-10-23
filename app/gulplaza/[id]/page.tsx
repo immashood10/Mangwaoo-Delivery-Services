@@ -80,7 +80,7 @@ export default async function GulplazaProductDetail({
             <p className="text-3xl font-bold text-accent">{product.price}</p>
 
             <p className={`text-sm font-semibold ${product.stock > 0 ? 'text-success' : 'text-danger'}`}>
-              {product.stock > 0 ? `In stock (${product.stock} available)` : 'Out of stock'}
+              {product.stock > 0 ? 'Available' : 'Currently unavailable'}
             </p>
 
             <div>

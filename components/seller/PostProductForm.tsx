@@ -132,8 +132,8 @@ export default function PostProductForm({
           description: form.description,
           categoryId: form.categoryId,
           price: parseFloat(form.price),
-          // A vehicle ad is a single item, so it has no stock count to enter.
-          stock: isVehicleAd ? 1 : parseInt(form.stock, 10),
+          // A vehicle ad is a single item, so it has no stock count to enter; food has none at all.
+          ...(isMart ? { stock: isVehicleAd ? 1 : parseInt(form.stock, 10) } : {}),
           images: imagePreviews,
           ...(isVehicleAd ? { attributes: vehicle } : {}),
           ...(isSizedAd ? { attributes: sizes } : {}),
@@ -290,7 +290,7 @@ export default function PostProductForm({
             required
           />
         </div>
-        {isVehicleAd ? null : (
+        {isVehicleAd || !isMart ? null : (
           <div>
             <label htmlFor="post-stock" className="block text-sm font-semibold text-ink mb-2">
               Stock

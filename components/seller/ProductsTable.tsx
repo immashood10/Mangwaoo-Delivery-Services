@@ -93,7 +93,7 @@ export default function ProductsTable({
                 <th className="py-2 pr-4 font-semibold">Product</th>
                 <th className="py-2 pr-4 font-semibold">Category</th>
                 <th className="py-2 pr-4 font-semibold">Price</th>
-                <th className="py-2 pr-4 font-semibold">Stock</th>
+                {isMart ? <th className="py-2 pr-4 font-semibold">Stock</th> : null}
                 <th className="py-2 pr-4 font-semibold">Actions</th>
               </tr>
             </thead>
@@ -115,7 +115,7 @@ export default function ProductsTable({
                   <td className="py-3 pr-4 font-semibold text-ink">{product.name}</td>
                   <td className="py-3 pr-4 text-brand-gray">{product.category}</td>
                   <td className="py-3 pr-4 font-semibold text-accent">PKR {product.price.toLocaleString()}</td>
-                  <td className="py-3 pr-4 text-brand-gray">{product.stock}</td>
+                  {isMart ? <td className="py-3 pr-4 text-brand-gray">{product.stock}</td> : null}
                   <td className="py-3 pr-4">
                     <div className="flex items-center gap-2">
                       <Link
@@ -156,6 +156,7 @@ export default function ProductsTable({
           apiBasePath={apiBasePath}
           enableVehicleDetails={isMart}
           enableSizes={isMart}
+          hideStock={!isMart}
           categories={categories}
           product={editingProduct}
           onClose={() => setEditingProduct(null)}

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { FOOD_UNLIMITED_STOCK } from '@/lib/food-stock';
 import { prisma } from '@/lib/prisma';
 import { isRasterImageDataUrl } from '@/lib/data-url-image';
 import { getSession } from '@/lib/auth';
@@ -29,10 +30,9 @@ export async function POST(request: NextRequest) {
   const description = typeof body?.description === 'string' ? body.description.trim() : '';
   const categoryId = typeof body?.categoryId === 'string' ? body.categoryId : '';
   const price = typeof body?.price === 'number' ? body.price : parseFloat(body?.price);
-  const stock = typeof body?.stock === 'number' ? body.stock : parseInt(body?.stock, 10);
   const images = Array.isArray(body?.images) ? body.images.filter((url: unknown) => typeof url === 'string') : [];
 
-  if (!name || !categoryId || !Number.isFinite(price) || price <= 0 || !Number.isFinite(stock) || stock < 0) {
+  if (!name || !categoryId || !Number.isFinite(price) || price <= 0) {
     return NextResponse.json({ error: 'Please fill in all fields with valid values.' }, { status: 400 });
   }
 
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       name,
       description: description || null,
       price,
-      stock,
+      stock: FOOD_UNLIMITED_STOCK,
       images,
       categoryId,
       sellerId: seller.id,

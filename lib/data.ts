@@ -286,6 +286,18 @@ export const GULPLAZA_CATEGORIES = [
     description: 'Bulk food orders for events and gatherings.',
     icon: '🍛',
   },
+  {
+    id: 7,
+    name: 'Biryani & Pulao',
+    description: 'Fragrant biryani, pulao and rice dishes, served hot.',
+    icon: '🍚',
+  },
+  {
+    id: 8,
+    name: 'Dumplings & Momos',
+    description: 'Steamed and fried momos, dumplings and dim sum.',
+    icon: '🥟',
+  },
 ];
 
 export const PROFESSIONAL_SERVICES = [

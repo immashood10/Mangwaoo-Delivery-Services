@@ -43,10 +43,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const description = typeof body?.description === 'string' ? body.description.trim() : '';
   const categoryId = typeof body?.categoryId === 'string' ? body.categoryId : '';
   const price = typeof body?.price === 'number' ? body.price : parseFloat(body?.price);
-  const stock = typeof body?.stock === 'number' ? body.stock : parseInt(body?.stock, 10);
   const images = Array.isArray(body?.images) ? body.images.filter((url: unknown) => typeof url === 'string') : [];
 
-  if (!name || !categoryId || !Number.isFinite(price) || price <= 0 || !Number.isFinite(stock) || stock < 0) {
+  if (!name || !categoryId || !Number.isFinite(price) || price <= 0) {
     return NextResponse.json({ error: 'Please fill in all fields with valid values.' }, { status: 400 });
   }
 
@@ -65,7 +64,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const product = await prisma.gulplazaProduct.update({
     where: { id },
-    data: { name, description: description || null, categoryId, price, stock, images },
+    data: { name, description: description || null, categoryId, price, images },
   });
   refreshFoodCatalog();
 
