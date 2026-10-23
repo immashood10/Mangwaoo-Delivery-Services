@@ -103,7 +103,11 @@ export default function SellOnMangwaoo() {
         return;
       }
 
-      setVerification(data.verification);
+      if (data.verification) {
+        setVerification(data.verification);
+      } else {
+        await handleVerified(data.user);
+      }
     } catch {
       setFormError('Could not reach the server. Please try again.');
     } finally {

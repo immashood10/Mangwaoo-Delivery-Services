@@ -2,17 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSession, getSession } from '@/lib/auth';
 import { banMessage, banNotice } from '@/lib/ban-duration';
 import { findActiveBan } from '@/lib/bans';
-import { ADMIN_PAGES } from '@/lib/notification-types';
-import { notifyAdminsAfterResponse } from '@/lib/notify';
-import { verifyCode, verifyFirebaseToken } from '@/lib/phone-verification';
+import { announceJoined, verifyCode, verifyFirebaseToken } from '@/lib/phone-verification';
 import { usesFirebasePhone } from '@/lib/firebase-phone';
 import { CODE_LENGTH } from '@/lib/phone-verification-types';
-
-const JOINED_NOTICES: Partial<Record<string, { title: string; href: string }>> = {
-  CUSTOMER: { title: 'New customer', href: ADMIN_PAGES.users },
-  SELLER: { title: 'New seller waiting for approval', href: ADMIN_PAGES.sellers },
-  RIDER: { title: 'New rider waiting for approval', href: ADMIN_PAGES.riders },
-};
 
 /**
  * The code screen's "Verify": a right code confirms the WhatsApp number. For a new or unconfirmed account that
@@ -44,18 +36,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (result.purpose === 'ACCOUNT') {
-    // A finished signup is news for the admins (an unverified signup never shows up in their lists).
-    const joined = JOINED_NOTICES[result.user.role];
-
-    if (joined) {
-      notifyAdminsAfterResponse(async () => ({
-        type: 'ACCOUNT' as const,
-        title: joined.title,
-        message: `${result.user.name} (${result.user.email}).`,
-        href: joined.href,
-        refId: `joined:${result.user.id}`,
-      }));
-    }
+    announceJoined(result.user);
 
     // The number is confirmed, but an account that was banned in the meantime still gets no session.
     const ban = await findActiveBan(result.user.id);

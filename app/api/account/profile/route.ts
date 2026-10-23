@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
-import { INVALID_PHONE_MESSAGE, isPhoneTakenByAnother, startPhoneChange } from '@/lib/phone-verification';
+import { INVALID_PHONE_MESSAGE, isPhoneTakenByAnother, phoneVerificationRequired, startPhoneChange } from '@/lib/phone-verification';
 import { normalizePakistaniMobile, toLocalPhone } from '@/lib/phone';
 
 const MAX_NAME_LENGTH = 80;
@@ -58,6 +58,17 @@ export async function PATCH(request: NextRequest) {
 
   if (await isPhoneTakenByAnother(whatsappNumber, session.userId)) {
     return NextResponse.json({ error: 'Another account already uses this phone number.' }, { status: 409 });
+  }
+
+  // Verification is off: the new number is saved at once, no code.
+  if (!phoneVerificationRequired()) {
+    const user = await prisma.user.update({
+      where: { id: session.userId },
+      data: { name, phone: toLocalPhone(whatsappNumber), phoneVerifiedAt: new Date() },
+      select: { name: true, phone: true },
+    });
+
+    return NextResponse.json({ user });
   }
 
   const change = await startPhoneChange(request, session.userId, whatsappNumber, [

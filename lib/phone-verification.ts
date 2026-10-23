@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { isWhatsAppConfigured, sendWhatsAppCode } from '@/lib/whatsapp';
 import { maskPhone, normalizePakistaniMobile, toLocalPhone } from '@/lib/phone';
 import { usesFirebasePhone, verifyFirebasePhoneToken } from '@/lib/firebase-phone';
+import { createSession } from '@/lib/auth';
+import { ADMIN_PAGES } from '@/lib/notification-types';
+import { notifyAdminsAfterResponse } from '@/lib/notify';
 import { CODE_LENGTH, type PhoneVerificationInfo, type VerifiedUser } from '@/lib/phone-verification-types';
 
 // WhatsApp verification. A new account only exists as "unverified" until its owner types the code sent to the
@@ -26,9 +29,39 @@ export const INVALID_PHONE_MESSAGE = 'Please enter a valid Pakistani mobile numb
 const ACCOUNT_EXISTS_MESSAGE = 'An account with this email or phone already exists.';
 const EXPIRED_VERIFICATION_MESSAGE = 'This verification has expired. Please start again.';
 
+/**
+ * Whether a new number must be confirmed with a code before its account can log in. Off unless
+ * `PHONE_VERIFICATION_REQUIRED=true` is set on the host (the owner turned it off until WhatsApp is connected).
+ * While it is off, signups are confirmed on the spot and no code is sent.
+ */
+export function phoneVerificationRequired() {
+  return process.env.PHONE_VERIFICATION_REQUIRED === 'true';
+}
+
 /** Whether this account may log in: its number was confirmed, or it is the admin (who has no phone). */
 export function canLogIn(user: { role: string; phoneVerifiedAt: Date | null }) {
-  return user.role === 'ADMIN' || user.phoneVerifiedAt !== null;
+  return !phoneVerificationRequired() || user.role === 'ADMIN' || user.phoneVerifiedAt !== null;
+}
+
+const JOINED_NOTICES: Partial<Record<string, { title: string; href: string }>> = {
+  CUSTOMER: { title: 'New customer', href: ADMIN_PAGES.users },
+  SELLER: { title: 'New seller waiting for approval', href: ADMIN_PAGES.sellers },
+  RIDER: { title: 'New rider waiting for approval', href: ADMIN_PAGES.riders },
+};
+
+/** A finished signup is news for the admins (an unverified signup never shows up in their lists). */
+export function announceJoined(user: { id: string; name: string; email: string; role: string }) {
+  const joined = JOINED_NOTICES[user.role];
+
+  if (!joined) return;
+
+  notifyAdminsAfterResponse(async () => ({
+    type: 'ACCOUNT' as const,
+    title: joined.title,
+    message: `${user.name} (${user.email}).`,
+    href: joined.href,
+    refId: `joined:${user.id}`,
+  }));
 }
 
 // ── Secrets and hashes ──────────────────────────────────────
@@ -280,13 +313,38 @@ export type PreparedSignup =
       ok: true;
       /** The number as stored on the account, e.g. 03001234567. */
       phone: string;
-      /** Put this on the new user as `phoneVerification: { create: record }`. */
-      record: VerificationRecord;
+      /** Put this on the new user as `phoneVerification: record ? { create: record } : undefined`. */
+      record: VerificationRecord | undefined;
+      /** Set on the new user as `phoneVerifiedAt`: the signup time while verification is off, otherwise null. */
+      verifiedAt: Date | null;
       /** Everything to run, in order, in one transaction, with the user's create in the middle. */
       writes: (createUser: Prisma.PrismaPromise<unknown>) => Prisma.PrismaPromise<unknown>[];
-      info: PhoneVerificationInfo;
+      /** Where the user's create sits in `writes` (its result is the new user). */
+      userIndex: number;
+      /** The code screen's data; undefined while verification is off (the account is logged in at once). */
+      info: PhoneVerificationInfo | undefined;
     }
   | { ok: false; response: NextResponse };
+
+/**
+ * Last half of every signup, after the account was created: with verification on the browser gets the code
+ * screen; with it off the account is already confirmed, so it is logged in right away.
+ */
+export async function finishSignup(signup: Extract<PreparedSignup, { ok: true }>, results: unknown[]) {
+  if (signup.info) {
+    return NextResponse.json({ verification: signup.info }, { status: 201 });
+  }
+
+  const user = results[signup.userIndex] as VerifiedUser;
+
+  await createSession({ userId: user.id, role: user.role }, true);
+  announceJoined(user);
+
+  return NextResponse.json(
+    { user: { id: user.id, name: user.name, email: user.email, role: user.role, phone: user.phone } },
+    { status: 201 }
+  );
+}
 
 /**
  * First half of every signup: checks the number, makes sure nothing live uses these details, and sends the
@@ -311,17 +369,36 @@ export async function prepareSignup(
     };
   }
 
+  // Verification is off: nothing is sent, the account counts as confirmed from the start.
+  if (!phoneVerificationRequired()) {
+    const stale = deleteUnverifiedUsers(conflicts.staleUserIds);
+
+    return {
+      ok: true,
+      phone: toLocalPhone(whatsappNumber),
+      record: undefined,
+      verifiedAt: new Date(),
+      writes: (createUser) => [...stale, createUser],
+      userIndex: stale.length,
+      info: undefined,
+    };
+  }
+
   const sent = await sendVerificationCode(request, whatsappNumber, 'ACCOUNT');
 
   if (!sent.ok) {
     return sent;
   }
 
+  const stale = deleteUnverifiedUsers(conflicts.staleUserIds);
+
   return {
     ok: true,
     phone: toLocalPhone(whatsappNumber),
     record: sent.record,
-    writes: (createUser) => [...deleteUnverifiedUsers(conflicts.staleUserIds), createUser, sent.logSend],
+    verifiedAt: null,
+    writes: (createUser) => [...stale, createUser, sent.logSend],
+    userIndex: stale.length,
     info: sent.info,
   };
 }

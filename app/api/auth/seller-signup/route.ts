@@ -5,7 +5,7 @@ import { enforceRateLimits } from '@/lib/rate-limit';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
 import { DEFAULT_COUNTRY, MAX_PLACE_LENGTH, cleanPlace, parseStoreLocation } from '@/lib/locations';
-import { prepareSignup, signupWriteFailed } from '@/lib/phone-verification';
+import { finishSignup, prepareSignup, signupWriteFailed } from '@/lib/phone-verification';
 
 const SELLER_TYPES = ['MART', 'GULPLAZA_OWNER', 'WHOLESALER'] as const;
 
@@ -47,15 +47,18 @@ export async function POST(request: NextRequest) {
 
   const passwordHash = hashPassword(password);
 
-  // Sends the WhatsApp code too; the account below is created unverified and can't log in until it is entered.
+  // With verification on this sends the WhatsApp code too, and the account below is created unverified (it can't log
+  // in until the code is entered); with it off the account is confirmed and logged in at once.
   const signup = await prepareSignup(request, { email, phone });
 
   if (!signup.ok) {
     return signup.response;
   }
 
+  let results: unknown[];
+
   try {
-    await prisma.$transaction(
+    results = await prisma.$transaction(
       signup.writes(
         prisma.user.create({
           data: {
@@ -73,7 +76,8 @@ export async function POST(request: NextRequest) {
                 ...(location ? { latitude: location.lat, longitude: location.lng, locationLabel: location.label } : {}),
               },
             },
-            phoneVerification: { create: signup.record },
+            phoneVerifiedAt: signup.verifiedAt,
+            phoneVerification: signup.record ? { create: signup.record } : undefined,
           },
         })
       )
@@ -82,5 +86,5 @@ export async function POST(request: NextRequest) {
     return signupWriteFailed(error);
   }
 
-  return NextResponse.json({ verification: signup.info }, { status: 201 });
+  return finishSignup(signup, results);
 }

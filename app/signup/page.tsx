@@ -65,7 +65,11 @@ export default function Signup() {
         return;
       }
 
-      setVerification(data.verification);
+      if (data.verification) {
+        setVerification(data.verification);
+      } else {
+        await handleVerified();
+      }
     } catch {
       setFormError('Could not reach the server. Please try again.');
     } finally {
