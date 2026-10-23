@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Menu, X, MapPin, LocateFixed, Search, ShoppingCart, ChevronDown, Store, LogOut, ShieldCheck, PackageSearch, House, Briefcase, Heart, Trash2, Bike, MessagesSquare, LayoutDashboard, Settings, type LucideIcon } from 'lucide-react';
+import { Menu, X, MapPin, LocateFixed, Search, ShoppingCart, ChevronDown, Store, LogOut, ShieldCheck, PackageSearch, House, Briefcase, Heart, Trash2, Bike, MessagesSquare, LayoutDashboard, Settings, History, type LucideIcon } from 'lucide-react';
 import { PROFESSIONAL_SERVICES } from '@/lib/data';
 import {
   ADDRESS_TAGS,
@@ -545,6 +545,14 @@ export default function Navbar() {
                         >
                           <PackageSearch className="w-4 h-4" />
                           My Orders
+                        </Link>
+                        <Link
+                          href="/account?tab=history"
+                          onClick={() => setIsUserMenuOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-brand-light"
+                        >
+                          <History className="w-4 h-4" />
+                          Order History
                         </Link>
                         <Link
                           href="/favourites"

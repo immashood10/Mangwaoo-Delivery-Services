@@ -3,11 +3,13 @@ import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import BuyerDashboard from '@/components/BuyerDashboard';
 
-export default async function AccountPage() {
+export default async function AccountPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const { tab } = await searchParams;
+  const initialTab = tab === 'history' || tab === 'messages' ? tab : 'orders';
   const session = await getSession();
 
   if (!session || session.role !== 'CUSTOMER') {
-    redirect('/login?next=/account');
+    redirect(`/login?next=${encodeURIComponent(initialTab === 'orders' ? '/account' : `/account?tab=${initialTab}`)}`);
   }
 
   const customer = await prisma.customer.findUnique({
@@ -87,5 +89,5 @@ export default async function AccountPage() {
     })),
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  return <BuyerDashboard customerName={customer.user.name} orders={orders} />;
+  return <BuyerDashboard key={initialTab} customerName={customer.user.name} orders={orders} initialTab={initialTab} />;
 }

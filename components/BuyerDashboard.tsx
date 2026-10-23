@@ -161,9 +161,17 @@ function OrderCard({ order, onCancelled }: { order: Order; onCancelled: () => vo
   );
 }
 
-export default function BuyerDashboard({ customerName, orders }: { customerName: string; orders: Order[] }) {
+export default function BuyerDashboard({
+  customerName,
+  orders,
+  initialTab = 'orders',
+}: {
+  customerName: string;
+  orders: Order[];
+  initialTab?: TabId;
+}) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<TabId>('orders');
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
 
   const activeOrders = orders.filter((order) => !HISTORY_STATUSES.includes(order.status));
   const historyOrders = orders.filter((order) => HISTORY_STATUSES.includes(order.status));
