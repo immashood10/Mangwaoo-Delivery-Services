@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Bike, ChevronRight, Clock, Headset, Inbox, MapPin, MessagesSquare, Power } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Bike, CheckCircle2, ChevronRight, Clock, Headset, Inbox, MapPin, MessagesSquare, Power, Wallet } from 'lucide-react';
 import RiderChatThread from '@/components/RiderChatThread';
 import SupportChat from '@/components/SupportChat';
-import { useRider } from '@/components/rider/RiderShell';
+import { holdMessage, useRider } from '@/components/rider/RiderShell';
 import type { RiderChatSummary } from '@/lib/rider-chat-types';
+import { MAX_DECLARED_FEE_PKR, commissionFor, formatPkr, minimumFeeForChat, rechargeMessage } from '@/lib/rider-wallet-config';
 
 function PendingApproval() {
   return (
@@ -16,6 +17,32 @@ function PendingApproval() {
       <p className="mt-2 text-sm text-brand-gray">
         Our team will review your rider account shortly. Once approved, you can go online and receive nearby order requests.
       </p>
+    </div>
+  );
+}
+
+/** Shown while the rider can't receive the next order: unpaid commission (they can fix it) or an admin's block. */
+function HoldBanner({ compact = false }: { compact?: boolean }) {
+  const { wallet } = useRider();
+
+  if (!wallet.hold) return null;
+
+  return (
+    <div role="alert" className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-danger" />
+        <div>
+          <p className="font-bold text-ink">{wallet.hold === 'PAYMENT' ? 'Please recharge your account' : 'Your account is on hold'}</p>
+          <p className="mt-0.5 text-sm text-brand-gray">
+            {wallet.hold === 'PAYMENT' ? rechargeMessage(wallet) : holdMessage('ADMIN')}
+          </p>
+        </div>
+      </div>
+      {wallet.hold === 'PAYMENT' && !compact ? (
+        <Link href="/rider/wallet" className="shrink-0 rounded-full bg-brand-red-primary px-5 py-2.5 text-center text-sm font-semibold text-white hover:bg-brand-red-secondary">
+          Recharge now
+        </Link>
+      ) : null}
     </div>
   );
 }
@@ -42,7 +69,8 @@ function ChatCard({ chat, active, onClick, request = false }: { chat: RiderChatS
 
 /** Dashboard: the online switch and where to go next. */
 export function RiderHome() {
-  const { rider, isOnline, hasLocation, error, toggleOnline, requests, chats } = useRider();
+  const { rider, wallet, isOnline, hasLocation, error, toggleOnline, requests, chats } = useRider();
+  const owes = wallet.balance < 0;
 
   return (
     <div className="space-y-6">
@@ -57,6 +85,8 @@ export function RiderHome() {
         <PendingApproval />
       ) : (
         <>
+          <HoldBanner />
+
           <section className="flex flex-col gap-4 rounded-2xl bg-surface p-5 shadow-soft sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm text-brand-gray">Status{rider.vehicleType ? ` · ${rider.vehicleType}` : ''}</p>
@@ -76,7 +106,7 @@ export function RiderHome() {
             </button>
           </section>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
             <Link href="/rider/requests" className="group flex items-center gap-4 rounded-2xl bg-surface p-5 shadow-soft transition hover:ring-2 hover:ring-accent">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-red-primary/10 text-accent">
                 <Inbox className="h-5 w-5" />
@@ -97,6 +127,16 @@ export function RiderHome() {
               </span>
               <ChevronRight className="h-5 w-5 text-brand-gray group-hover:text-accent" />
             </Link>
+            <Link href="/rider/wallet" className="group flex items-center gap-4 rounded-2xl bg-surface p-5 shadow-soft transition hover:ring-2 hover:ring-accent">
+              <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${owes ? 'bg-red-50 text-danger' : 'bg-green-50 text-success'}`}>
+                <Wallet className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className={`block text-2xl font-bold ${owes ? 'text-danger' : 'text-ink'}`}>{formatPkr(Math.abs(wallet.balance))}</span>
+                <span className="text-sm text-brand-gray">{owes ? 'You owe Mangwaoo' : wallet.balance > 0 ? 'Credit in your account' : 'Your account is clear'}</span>
+              </span>
+              <ChevronRight className="h-5 w-5 text-brand-gray group-hover:text-accent" />
+            </Link>
           </div>
         </>
       )}
@@ -104,52 +144,202 @@ export function RiderHome() {
   );
 }
 
+/**
+ * The rider finishes an order here: they say what delivery charge they got, Mangwaoo's commission on it is shown, and
+ * on confirming the order ends and the commission goes on their wallet (the server never works from less than the
+ * petrol for the ride, so the number can't be gamed).
+ */
+function CompleteOrder({ chat, onCompleted }: { chat: RiderChatSummary; onCompleted: (text: string, onHold: boolean) => void }) {
+  const { rules } = useRider();
+  const minimum = minimumFeeForChat(chat);
+  const [isOpen, setIsOpen] = useState(false);
+  const [fee, setFee] = useState(minimum > 0 ? String(minimum) : '');
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const entered = Number(fee);
+  const hasFee = fee.trim() !== '' && Number.isInteger(entered) && entered >= 1;
+  const base = Math.max(hasFee ? entered : 0, minimum);
+  const commission = base > 0 ? commissionFor(base, rules.commissionPercent) : 0;
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+
+    if (fee.trim() !== '' && (!hasFee || entered > MAX_DECLARED_FEE_PKR)) {
+      setError('Enter the delivery charge in whole rupees, e.g. 150.');
+      return;
+    }
+
+    if (minimum > 0 && hasFee && entered < minimum) {
+      setError(`The charge can't be less than ${formatPkr(minimum)}, the petrol for this ride.`);
+      return;
+    }
+
+    setIsSaving(true);
+    setError('');
+
+    try {
+      const response = await fetch(`/api/rider-chats/${chat.id}/close`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(hasFee ? { fee: entered } : {}),
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setError(data?.error ?? 'Could not complete the order. Please try again.');
+        return;
+      }
+
+      onCompleted(
+        data?.commission
+          ? `Order completed. ${formatPkr(data.commission.amount)} (${data.commission.percent}% of ${formatPkr(data.commission.baseFee)}) was added to what you owe Mangwaoo.`
+          : 'Order completed.',
+        Boolean(data?.commission?.onHold)
+      );
+    } catch {
+      setError('Could not reach the server. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!isOpen) {
+    return (
+      <div className="mb-3 flex justify-end">
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className="inline-flex items-center gap-2 rounded-full bg-success px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+        >
+          <CheckCircle2 className="h-4 w-4" />
+          Complete order
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} noValidate className="mb-3 rounded-xl border border-green-200 bg-green-50 p-4">
+      <p className="font-bold text-ink">Complete this order</p>
+      <p className="mt-0.5 text-sm text-brand-gray">Delivered? Tell us the delivery charge you received for it.</p>
+
+      <label htmlFor="complete-fee" className="mt-3 block text-sm font-semibold text-ink">
+        Delivery charge (PKR)
+      </label>
+      <input
+        id="complete-fee"
+        type="number"
+        inputMode="numeric"
+        min={minimum > 0 ? minimum : 1}
+        max={MAX_DECLARED_FEE_PKR}
+        step="1"
+        value={fee}
+        onChange={(event) => {
+          setFee(event.target.value);
+          setError('');
+        }}
+        className="mt-1 w-full rounded-xl border border-gray-300 bg-surface px-4 py-2.5 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-red-100"
+        placeholder={minimum > 0 ? String(minimum) : 'e.g. 150'}
+      />
+      <p className="mt-1.5 text-xs text-brand-gray">
+        {minimum > 0 ? `Not less than ${formatPkr(minimum)} (the petrol for this ride). ` : ''}
+        Mangwaoo keeps {rules.commissionPercent}%{commission > 0 ? `: ${formatPkr(commission)} on this order` : ''}, which is added to your account.
+      </p>
+
+      {error ? (
+        <p role="alert" className="mt-2 text-sm text-danger">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="submit"
+          disabled={isSaving}
+          className="rounded-full bg-success px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+        >
+          {isSaving ? 'Completing…' : 'Yes, order delivered'}
+        </button>
+        <button type="button" onClick={() => setIsOpen(false)} disabled={isSaving} className="rounded-full border border-gray-300 px-5 py-2 text-sm font-semibold text-ink hover:bg-surface">
+          Not yet
+        </button>
+      </div>
+    </form>
+  );
+}
+
 /** New requests, or the rider's accepted chats: the list on the left and the order chat on the right. */
 export function RiderOrders({ mode }: { mode: 'requests' | 'chats' }) {
-  const { rider, requests, chats } = useRider();
+  const { rider, wallet, requests, chats } = useRider();
   const [selectedChat, setSelectedChat] = useState<RiderChatSummary | null>(null);
+  const [receipt, setReceipt] = useState<{ chatId: string; text: string; onHold: boolean } | null>(null);
   const isRequests = mode === 'requests';
   const items = isRequests ? requests : chats;
+  // Only an order this rider has taken (ACTIVE and theirs) can be completed.
+  const isMine = selectedChat ? chats.some((chat) => chat.id === selectedChat.id) : false;
+  const finished = receipt && selectedChat && receipt.chatId === selectedChat.id ? receipt : null;
 
   if (!rider.isApproved) return <PendingApproval />;
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr]">
-      <section className={`space-y-2 ${selectedChat ? 'hidden lg:block' : ''}`}>
-        <h1 className="text-sm font-bold uppercase tracking-wide text-ink">
-          {isRequests ? 'New requests' : 'Your chats'} ({items.length})
-        </h1>
-        {items.length ? (
-          items.map((chat) => (
-            <ChatCard key={chat.id} chat={chat} active={selectedChat?.id === chat.id} request={isRequests} onClick={() => setSelectedChat(chat)} />
-          ))
-        ) : (
-          <p className="rounded-xl bg-surface p-4 text-sm text-brand-gray">
-            {isRequests ? 'No nearby requests right now.' : 'Accepted orders will appear here.'}
-          </p>
-        )}
-      </section>
+    <div className="space-y-6">
+      {isRequests ? <HoldBanner /> : null}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr]">
+        <section className={`space-y-2 ${selectedChat ? 'hidden lg:block' : ''}`}>
+          <h1 className="text-sm font-bold uppercase tracking-wide text-ink">
+            {isRequests ? 'New requests' : 'Your chats'} ({items.length})
+          </h1>
+          {items.length ? (
+            items.map((chat) => (
+              <ChatCard key={chat.id} chat={chat} active={selectedChat?.id === chat.id} request={isRequests} onClick={() => setSelectedChat(chat)} />
+            ))
+          ) : (
+            <p className="rounded-xl bg-surface p-4 text-sm text-brand-gray">
+              {isRequests ? (wallet.hold ? "You won't get new requests until your account is clear." : 'No nearby requests right now.') : 'Accepted orders will appear here.'}
+            </p>
+          )}
+        </section>
 
-      <section className={`${selectedChat ? '' : 'hidden lg:block'} min-h-[28rem] rounded-2xl bg-surface p-4 shadow-soft`}>
-        {selectedChat ? (
-          <>
-            <button
-              type="button"
-              onClick={() => setSelectedChat(null)}
-              className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-accent lg:hidden"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to {isRequests ? 'requests' : 'chats'}
-            </button>
-            <RiderChatThread key={selectedChat.id} chatId={selectedChat.id} currentRole="RIDER" placeholder="Message the customer…" />
-          </>
-        ) : (
-          <div className="flex h-full min-h-[24rem] flex-col items-center justify-center text-center text-brand-gray">
-            <Bike className="mb-3 h-10 w-10" />
-            <p>Select a request or chat to view the order details.</p>
-          </div>
-        )}
-      </section>
+        <section className={`${selectedChat ? '' : 'hidden lg:block'} min-h-[28rem] rounded-2xl bg-surface p-4 shadow-soft`}>
+          {selectedChat ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setSelectedChat(null)}
+                className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-accent lg:hidden"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to {isRequests ? 'requests' : 'chats'}
+              </button>
+              {finished ? (
+                <div role="status" className="mb-3 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-ink">
+                  <p className="flex items-center gap-2 font-bold">
+                    <CheckCircle2 className="h-4 w-4 text-success" />
+                    {finished.text}
+                  </p>
+                  {finished.onHold ? (
+                    <p className="mt-2 text-danger">
+                      Please recharge your account to receive new orders.{' '}
+                      <Link href="/rider/wallet" className="font-semibold underline">
+                        Open wallet
+                      </Link>
+                    </p>
+                  ) : null}
+                </div>
+              ) : isMine ? (
+                <CompleteOrder key={`complete-${selectedChat.id}`} chat={selectedChat} onCompleted={(text, onHold) => setReceipt({ chatId: selectedChat.id, text, onHold })} />
+              ) : null}
+              <RiderChatThread key={selectedChat.id} chatId={selectedChat.id} currentRole="RIDER" placeholder="Message the customer…" />
+            </>
+          ) : (
+            <div className="flex h-full min-h-[24rem] flex-col items-center justify-center text-center text-brand-gray">
+              <Bike className="mb-3 h-10 w-10" />
+              <p>Select a request or chat to view the order details.</p>
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

@@ -37,6 +37,8 @@ export async function getOnlineRiders(): Promise<OnlineRider[]> {
       lastLatitude: { not: null },
       lastLongitude: { not: null },
       user: { isActive: true },
+      // Not eligible for the next order (unpaid commission, or blocked by an admin): see lib/rider-wallet-config.ts.
+      OR: [{ orderAccess: 'ALLOWED' }, { orderAccess: 'AUTO', paymentHold: false }],
     },
     select: { id: true, lastLatitude: true, lastLongitude: true },
   });

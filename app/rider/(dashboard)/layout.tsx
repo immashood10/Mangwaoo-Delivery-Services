@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import RiderShell from '@/components/rider/RiderShell';
+import { getWalletSettings } from '@/lib/rider-wallet';
+import { riderHold } from '@/lib/rider-wallet-config';
 
 export const metadata: Metadata = {
   title: 'Rider dashboard - Mangwaoo',
@@ -15,16 +17,21 @@ export default async function RiderLayout({ children }: { children: React.ReactN
 
   if (!session || session.role !== 'RIDER') redirect('/login?next=/rider');
 
-  const rider = await prisma.rider.findUnique({
-    where: { userId: session.userId },
-    include: { user: { select: { name: true } } },
-  });
+  const [rider, settings] = await Promise.all([
+    prisma.rider.findUnique({
+      where: { userId: session.userId },
+      include: { user: { select: { name: true } } },
+    }),
+    getWalletSettings(),
+  ]);
 
   if (!rider) redirect('/login');
 
   return (
     <RiderShell
       rider={{ name: rider.user.name, isApproved: rider.isApproved, isAvailable: rider.isAvailable, vehicleType: rider.vehicleType }}
+      wallet={{ balance: rider.walletBalance, unpaidOrders: rider.unpaidOrders, hold: riderHold(rider) }}
+      rules={settings}
     >
       {children}
     </RiderShell>

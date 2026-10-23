@@ -4,13 +4,18 @@ import { prisma } from '@/lib/prisma';
 import { RIDER_CHAT_INCLUDE, serializeRiderChat } from '@/lib/rider-chat';
 import { chatDispatchPoint, getOnlineRiders, ridersForLocation } from '@/lib/rider-dispatch';
 import { riderChatMessagePreview } from '@/lib/rider-chat-types';
+import { riderHold } from '@/lib/rider-wallet-config';
 
 export async function GET() {
   const session = await getSession();
   if (!session || session.role !== 'RIDER') return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
-  const rider = await prisma.rider.findUnique({ where: { userId: session.userId }, select: { id: true, isApproved: true } });
+  const rider = await prisma.rider.findUnique({
+    where: { userId: session.userId },
+    select: { id: true, isApproved: true, walletBalance: true, unpaidOrders: true, orderAccess: true, paymentHold: true },
+  });
   if (!rider) return NextResponse.json({ error: 'Rider account not found.' }, { status: 404 });
-  if (!rider.isApproved) return NextResponse.json({ requests: [], chats: [] });
+  const wallet = { balance: rider.walletBalance, unpaidOrders: rider.unpaidOrders, hold: riderHold(rider) };
+  if (!rider.isApproved) return NextResponse.json({ requests: [], chats: [], wallet });
 
   const [online, open, active] = await Promise.all([
     getOnlineRiders(),
@@ -27,5 +32,5 @@ export async function GET() {
     lastMessage: chat.messages[0] ? riderChatMessagePreview(chat.messages[0]) : null,
     lastMessageFrom: chat.messages[0]?.senderRole ?? null,
   }));
-  return NextResponse.json({ requests, chats });
+  return NextResponse.json({ requests, chats, wallet });
 }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
 import { chatDispatchPoint, isRiderEligibleForChat } from '@/lib/rider-dispatch';
+import { RECHARGE_TITLE, riderHold } from '@/lib/rider-wallet-config';
 import type { RiderChat, RiderChatMessage } from '@/lib/generated/prisma/client';
 import {
   ALLOWED_CHAT_IMAGE_TYPES,
@@ -204,7 +205,7 @@ export async function resolveRiderChatAccess(chatId: string): Promise<ChatAccess
       : session.role === 'RIDER'
         ? prisma.user.findUnique({
             where: { id: session.userId },
-            select: { name: true, rider: { select: { id: true, isApproved: true } } },
+            select: { name: true, rider: { select: { id: true, isApproved: true, orderAccess: true, paymentHold: true } } },
           })
         : Promise.resolve(null);
 
@@ -243,6 +244,17 @@ export async function resolveRiderChatAccess(chatId: string): Promise<ChatAccess
     }
 
     if (chat.status === 'OPEN' && !chat.riderId) {
+      const hold = riderHold(rider);
+
+      if (hold) {
+        return deny(
+          hold === 'PAYMENT'
+            ? `${RECHARGE_TITLE} to take new orders.`
+            : 'Mangwaoo has put your account on hold. Please contact support.',
+          403
+        );
+      }
+
       const isEligible = await isRiderEligibleForChat(rider.id, chatDispatchPoint(chat));
 
       if (isEligible) {

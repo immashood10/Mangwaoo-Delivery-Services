@@ -32,6 +32,7 @@ export const ADMIN_PAGES = {
   messages: '/admin/messages',
   sellers: '/admin/sellers',
   riders: '/admin/riders',
+  riderWallets: '/admin/rider-wallets',
   ads: '/admin/ads',
 } as const;
 

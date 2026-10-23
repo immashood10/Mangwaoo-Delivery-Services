@@ -235,6 +235,86 @@ model Rider {
   deliveryTrackings DeliveryTracking[]
   riderChats        RiderChat[]
   documents         RiderDocument[]
+
+  // ── Wallet: Mangwaoo's commission on every finished order (see lib/rider-wallet.ts) ──
+  /// The sum of the ledger in PKR: negative = the rider owes Mangwaoo. Kept in step with the ledger in the same
+  /// transaction that changes it.
+  walletBalance Int              @default(0)
+  /// Finished orders whose commission is not covered by payments yet (oldest are covered first).
+  unpaidOrders  Int              @default(0)
+  /// Set when unpaid orders reached the limit; cleared once the rider has paid up (balance back to 0 or more).
+  paymentHold   Boolean          @default(false)
+  /// An admin's decision on whether the rider may receive the next order (AUTO = the wallet rule decides).
+  orderAccess   RiderOrderAccess @default(AUTO)
+
+  ledger RiderLedgerEntry[]
+  topUps RiderTopUp[]
+}
+
+enum RiderOrderAccess {
+  AUTO
+  ALLOWED
+  BLOCKED
+}
+
+enum RiderLedgerType {
+  COMMISSION
+  TOP_UP
+  ADJUSTMENT
+}
+
+enum RiderTopUpStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// One line of a rider's wallet. `amount` is in PKR from the rider's side: a top-up is positive, a commission negative.
+model RiderLedgerEntry {
+  id         String          @id @default(cuid())
+  riderId    String
+  rider      Rider           @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  type       RiderLedgerType
+  amount     Int
+  /// COMMISSION: the delivery charge the commission was taken from.
+  baseAmount Int?
+  /// COMMISSION: the order chat it belongs to. A plain id, not a relation, so deleting a chat keeps the money record;
+  /// unique = one commission per order, however many times it is closed.
+  chatId     String?         @unique
+  /// TOP_UP made from a rider's recharge request.
+  topUpId    String?         @unique
+  note       String?
+  createdAt  DateTime        @default(now())
+
+  @@index([riderId, createdAt])
+}
+
+/// A rider's "I sent Mangwaoo this money" request (EasyPaisa / JazzCash transaction id), checked by an admin.
+model RiderTopUp {
+  id              String           @id @default(cuid())
+  riderId         String
+  rider           Rider            @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  amount          Int
+  method          String
+  transactionId   String
+  status          RiderTopUpStatus @default(PENDING)
+  rejectionReason String?
+  reviewedAt      DateTime?
+  createdAt       DateTime         @default(now())
+
+  @@index([status, createdAt])
+  @@index([riderId, createdAt])
+  @@index([transactionId])
+}
+
+/// The commission rule, editable by an admin (Admin > Rider Wallets). A single row with id "default".
+model RiderWalletSettings {
+  id                String   @id @default("default")
+  /// Mangwaoo's share of each finished order's delivery charge, in percent.
+  commissionPercent Int      @default(30)
+  /// How many finished orders may be unpaid before the rider must pay up to get the next one.
+  ordersOnCredit    Int      @default(5)
+  updatedAt         DateTime @updatedAt
 }
 
 enum RiderDocumentKind {

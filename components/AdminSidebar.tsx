@@ -17,6 +17,7 @@ import {
   Bike,
   Store,
   Users,
+  Wallet,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -31,6 +32,7 @@ const ADMIN_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: '/admin/messages', label: 'Messages', icon: MessageCircle },
   { href: '/admin/sellers', label: 'Seller Approvals', icon: Store },
   { href: '/admin/riders', label: 'Rider Approvals', icon: Bike },
+  { href: '/admin/rider-wallets', label: 'Rider Wallets', icon: Wallet },
   { href: '/admin/ads', label: 'Ad Requests', icon: Megaphone },
   { href: '/admin/stories', label: 'Stories', icon: CircleDashed },
   { href: '/admin/discounts', label: 'Discount', icon: BadgePercent },

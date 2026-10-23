@@ -14,17 +14,31 @@ import {
   LogOut,
   Menu,
   MessagesSquare,
+  Wallet,
   X,
   type LucideIcon,
 } from 'lucide-react';
 import UserNotificationBell from '@/components/UserNotificationBell';
 import { useAuth } from '@/lib/auth-context';
 import type { RiderChatSummary } from '@/lib/rider-chat-types';
+import { RECHARGE_TITLE, type RiderHold } from '@/lib/rider-wallet-config';
 
 export type RiderProfile = { name: string; isApproved: boolean; isAvailable: boolean; vehicleType: string | null };
 
+/** The rider's money standing: negative balance = owes Mangwaoo; `hold` = may not receive the next order. */
+export type RiderWalletState = { balance: number; unpaidOrders: number; hold: RiderHold };
+export type RiderRules = { commissionPercent: number; ordersOnCredit: number };
+
+export function holdMessage(hold: Exclude<RiderHold, null>) {
+  return hold === 'PAYMENT'
+    ? `${RECHARGE_TITLE} to go online and receive new orders.`
+    : 'Mangwaoo has put your account on hold. Please contact support.';
+}
+
 type RiderContextValue = {
   rider: RiderProfile;
+  wallet: RiderWalletState;
+  rules: RiderRules;
   isOnline: boolean;
   hasLocation: boolean;
   error: string;
@@ -45,8 +59,21 @@ export function useRider() {
  * The rider's live state, kept above the pages so that moving around the sidebar never drops it: going online
  * (location sharing every 20 s) and polling the nearby requests / accepted chats every 5 s.
  */
-function RiderProvider({ rider, children }: { rider: RiderProfile; children: ReactNode }) {
-  const [isOnline, setIsOnline] = useState(rider.isAvailable);
+function RiderProvider({
+  rider,
+  initialWallet,
+  rules,
+  children,
+}: {
+  rider: RiderProfile;
+  initialWallet: RiderWalletState;
+  rules: RiderRules;
+  children: ReactNode;
+}) {
+  const [wallet, setWallet] = useState(initialWallet);
+  const [wantsOnline, setWantsOnline] = useState(rider.isAvailable);
+  // A rider on hold can't be online, whatever the switch says.
+  const isOnline = wantsOnline && !wallet.hold;
   const [hasLocation, setHasLocation] = useState(false);
   const [error, setError] = useState('');
   const [requests, setRequests] = useState<RiderChatSummary[]>([]);
@@ -55,11 +82,24 @@ function RiderProvider({ rider, children }: { rider: RiderProfile; children: Rea
 
   const sendPresence = useCallback(async (available: boolean) => {
     try {
-      await fetch('/api/rider/presence', {
+      const response = await fetch('/api/rider/presence', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isAvailable: available, ...(coords.current ?? {}) }),
       });
+
+      // Refused because of unpaid commission (or an admin's block): stay offline and say why.
+      if (response.status === 403) {
+        const data = await response.json().catch(() => null);
+
+        if (data?.hold === 'PAYMENT' || data?.hold === 'ADMIN') {
+          coords.current = null;
+          setHasLocation(false);
+          setWantsOnline(false);
+          setError(data.error ?? holdMessage(data.hold));
+          setWallet((current) => ({ ...current, hold: data.hold }));
+        }
+      }
     } catch {
       setError('Could not update your availability. Please try again.');
     }
@@ -99,6 +139,7 @@ function RiderProvider({ rider, children }: { rider: RiderProfile; children: Rea
         if (active) {
           setRequests(data.requests ?? []);
           setChats(data.chats ?? []);
+          if (data.wallet) setWallet(data.wallet);
         }
       } catch {
         /* retry on the next poll */
@@ -114,17 +155,24 @@ function RiderProvider({ rider, children }: { rider: RiderProfile; children: Rea
 
   const toggleOnline = useCallback(async () => {
     const next = !isOnline;
-    setIsOnline(next);
+
+    if (next && wallet.hold) {
+      setError(holdMessage(wallet.hold));
+      return;
+    }
+
+    setError('');
+    setWantsOnline(next);
     if (!next) {
       coords.current = null;
       setHasLocation(false);
     }
     await sendPresence(next);
-  }, [isOnline, sendPresence]);
+  }, [isOnline, wallet.hold, sendPresence]);
 
   const value = useMemo(
-    () => ({ rider, isOnline, hasLocation, error, toggleOnline, requests, chats }),
-    [rider, isOnline, hasLocation, error, toggleOnline, requests, chats]
+    () => ({ rider, wallet, rules, isOnline, hasLocation, error, toggleOnline, requests, chats }),
+    [rider, wallet, rules, isOnline, hasLocation, error, toggleOnline, requests, chats]
   );
 
   return <RiderContext.Provider value={value}>{children}</RiderContext.Provider>;
@@ -134,6 +182,7 @@ const RIDER_PAGES = {
   home: '/rider',
   requests: '/rider/requests',
   chats: '/rider/chats',
+  wallet: '/rider/wallet',
   messages: '/rider/messages',
 } as const;
 
@@ -141,6 +190,7 @@ const RIDER_LINKS: { href: string; label: string; icon: LucideIcon; needsApprova
   { href: RIDER_PAGES.home, label: 'Dashboard', icon: LayoutDashboard },
   { href: RIDER_PAGES.requests, label: 'New requests', icon: Inbox, needsApproval: true },
   { href: RIDER_PAGES.chats, label: 'Order chats', icon: MessagesSquare, needsApproval: true },
+  { href: RIDER_PAGES.wallet, label: 'Wallet', icon: Wallet, needsApproval: true },
   { href: RIDER_PAGES.messages, label: 'Messages', icon: Headset },
 ];
 
@@ -152,7 +202,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const { logout } = useAuth();
-  const { rider, isOnline, requests } = useRider();
+  const { rider, wallet, isOnline, requests } = useRider();
 
   const handleLogout = async () => {
     await logout();
@@ -203,7 +253,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       <nav className="flex-1 space-y-1 overflow-y-auto p-4" aria-label="Rider dashboard">
         {RIDER_LINKS.filter((link) => !(link.needsApproval && !rider.isApproved)).map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);
-          const count = href === RIDER_PAGES.requests ? requests.length : 0;
+          const count = href === RIDER_PAGES.requests && !wallet.hold ? requests.length : 0;
+          // The wallet link warns when the rider can't receive orders until they pay (or an admin lets them).
+          const warn = href === RIDER_PAGES.wallet && wallet.hold !== null;
 
           return (
             <Link
@@ -223,6 +275,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                   aria-label={`${count} new`}
                 >
                   {count > 99 ? '99+' : count}
+                </span>
+              ) : null}
+              {warn ? (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-[11px] font-bold text-brand-red-primary" aria-label="Action needed">
+                  !
                 </span>
               ) : null}
             </Link>
@@ -315,9 +372,19 @@ function Frame({ children }: { children: ReactNode }) {
 }
 
 /** The rider dashboard frame: left sidebar, notification bell and the page. Replaces the website's navbar there. */
-export default function RiderShell({ rider, children }: { rider: RiderProfile; children: ReactNode }) {
+export default function RiderShell({
+  rider,
+  wallet,
+  rules,
+  children,
+}: {
+  rider: RiderProfile;
+  wallet: RiderWalletState;
+  rules: RiderRules;
+  children: ReactNode;
+}) {
   return (
-    <RiderProvider rider={rider}>
+    <RiderProvider rider={rider} initialWallet={wallet} rules={rules}>
       <Frame>{children}</Frame>
     </RiderProvider>
   );
