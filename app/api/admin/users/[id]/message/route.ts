@@ -20,6 +20,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { id } = await params;
   const body = await request.json().catch(() => null);
   const message = typeof body?.message === 'string' ? body.message.trim() : '';
+  // The only page a message may open is the customer's cart (the "Still in Cart" reminder).
+  const href = body?.href === '/cart' ? '/cart' : null;
 
   if (!message) {
     return NextResponse.json({ error: 'Please write a message.' }, { status: 400 });
@@ -44,11 +46,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   await prisma.notification.create({
-    data: { userId: target.id, type: 'MESSAGE', title: ADMIN_MESSAGE_TITLE, message },
+    data: { userId: target.id, type: 'MESSAGE', title: ADMIN_MESSAGE_TITLE, message, href },
   });
 
   // The phone is told after the answer; a failure there never undoes the saved message.
-  after(() => sendPushToUsers([target.id], { title: ADMIN_MESSAGE_TITLE, body: message, url: '/' }));
+  after(() => sendPushToUsers([target.id], { title: ADMIN_MESSAGE_TITLE, body: message, url: href ?? '/' }));
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }

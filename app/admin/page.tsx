@@ -12,6 +12,7 @@ import {
   MessagesSquare,
   PackageCheck,
   ShieldCheck,
+  ShoppingCart,
   Store,
   Users,
   type LucideIcon,
@@ -53,6 +54,7 @@ async function getDashboardData() {
     foodOrdersToday,
     recentWaitingChats,
     pendingAds,
+    cartCustomers,
   ] = await Promise.all([
     // Pending riders / sellers who haven't confirmed their WhatsApp number are unfinished signups, not counted.
     prisma.rider.count({ where: { isApproved: false, user: LIVE_ACCOUNT } }),
@@ -80,10 +82,13 @@ async function getDashboardData() {
       },
     }),
     prisma.productAd.count({ where: { status: 'PENDING' } }),
+    // Customers with items in their cart that they haven't ordered (the Still in Cart page).
+    prisma.customer.count({ where: { user: LIVE_ACCOUNT, cartItems: { some: {} } } }),
   ]);
 
   return {
     pendingAds,
+    cartCustomers,
     pendingRiders,
     approvedRiders,
     onlineRiders,
@@ -274,6 +279,13 @@ export default async function AdminDashboardPage({
             description="Check the EasyPaisa / JazzCash payment for each seller ad (including one-day story ads), then approve it to start it."
             icon={Megaphone}
             badge={data.pendingAds > 0 ? `${data.pendingAds} pending` : undefined}
+          />
+          <SectionCard
+            href="/admin/carts"
+            title="Still in Cart"
+            description="Customers who put items in their cart but haven't ordered. See what is waiting, from which shop, and remind them."
+            icon={ShoppingCart}
+            badge={data.cartCustomers > 0 ? `${data.cartCustomers} waiting` : undefined}
           />
           <SectionCard
             href="/admin/stories"
