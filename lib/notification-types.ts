@@ -12,6 +12,10 @@ export type SellerNotification = {
   createdAt: string;
 };
 
+/** What a person sees when an admin writes to them from Admin > Users. */
+export const ADMIN_MESSAGE_TITLE = 'Message from Mangwaoo';
+export const MAX_ADMIN_MESSAGE_LENGTH = 500;
+
 /** Unread notifications per dashboard page (keyed by href). */
 export type NotificationCounts = Record<string, number>;
 

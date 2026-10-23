@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import Link from 'next/link';
+import { createPortal } from 'react-dom';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   BadgeCheck,
@@ -77,11 +78,17 @@ function timeAgo(iso: string) {
 export function SellerNotificationsProvider({
   initial,
   endpoint = '/api/seller/notifications',
+  pollMs = POLL_INTERVAL_MS,
+  fetchOnMount = false,
   children,
 }: {
   initial: NotificationSnapshot;
   /** The API the bell polls; `<endpoint>/read` marks things seen. The admin panel uses `/api/admin/notifications`. */
   endpoint?: string;
+  /** How often to poll; customers and riders use a slower rhythm than the dashboards. */
+  pollMs?: number;
+  /** Fetch once right away instead of starting from `initial` (used where the page has no server-made snapshot). */
+  fetchOnMount?: boolean;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -162,14 +169,15 @@ export function SellerNotificationsProvider({
       }
     };
 
-    const intervalId = window.setInterval(fetchLatest, POLL_INTERVAL_MS);
+    const intervalId = window.setInterval(fetchLatest, pollMs);
     document.addEventListener('visibilitychange', fetchLatest);
+    if (fetchOnMount) void fetchLatest();
 
     return () => {
       window.clearInterval(intervalId);
       document.removeEventListener('visibilitychange', fetchLatest);
     };
-  }, [apply, endpoint]);
+  }, [apply, endpoint, pollMs, fetchOnMount]);
 
   // Opening a page marks its notifications as seen. If more arrive while the seller is already
   // looking at that page, refresh it so the new entries show up too.
@@ -192,10 +200,13 @@ export function SellerNotificationsProvider({
     const counts = { ...snapshot.counts };
     delete counts[pathname];
 
+    // Notices that belong to no page (a message from Mangwaoo) have no per-page count, so they are added on top.
+    const withoutPage = snapshot.items.filter((item) => !item.href).length;
+
     return {
       items: snapshot.items.filter((item) => item.href !== pathname),
       counts,
-      total: Object.values(counts).reduce((sum, count) => sum + count, 0),
+      total: Object.values(counts).reduce((sum, count) => sum + count, 0) + withoutPage,
       markSeen,
     };
   }, [snapshot, pathname, markSeen]);
@@ -235,7 +246,7 @@ function Toast({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold text-ink">{toast.title}</span>
-        <span className="mt-0.5 line-clamp-2 text-xs text-brand-gray">{toast.message}</span>
+        <span className={`mt-0.5 text-xs text-brand-gray ${toast.href ? 'line-clamp-2' : 'line-clamp-4 whitespace-pre-wrap break-words'}`}>{toast.message}</span>
       </span>
     </>
   );
@@ -272,12 +283,14 @@ function NotificationToasts({
 }) {
   if (toasts.length === 0) return null;
 
-  return (
+  // On the document itself: inside the navbar a `fixed` box would be placed relative to the navbar, not the screen.
+  return createPortal(
     <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2">
       {toasts.map((toast) => (
         <Toast key={keyOf(toast)} toast={toast} onDismiss={onDismiss} onOpen={onOpen} />
       ))}
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -361,7 +374,7 @@ export function NotificationBell({ onDark = false }: { onDark?: boolean }) {
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-semibold text-ink">{item.title}</span>
-                      <span className="mt-0.5 line-clamp-2 block text-xs text-brand-gray">{item.message}</span>
+                      <span className={`mt-0.5 block text-xs text-brand-gray ${item.href ? 'line-clamp-2' : 'whitespace-pre-wrap break-words'}`}>{item.message}</span>
                       <time dateTime={item.createdAt} suppressHydrationWarning className="mt-1 block text-[11px] text-brand-gray">
                         {timeAgo(item.createdAt)}
                       </time>

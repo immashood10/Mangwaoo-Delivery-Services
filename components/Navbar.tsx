@@ -23,6 +23,7 @@ import SignInModal from './SignInModal';
 import LocationPrompt from './LocationPrompt';
 import OrderChat from './OrderChat';
 import StoryLogo from './StoryLogo';
+import UserNotificationBell from './UserNotificationBell';
 import type { PickedLocation } from './LocationPicker';
 import { useCart } from '@/lib/cart-context';
 import { useAuth } from '@/lib/auth-context';
@@ -506,6 +507,8 @@ export default function Navbar() {
             {isAuthLoading ? (
               <div className="h-9 w-24 animate-pulse rounded-full bg-gray-100" />
             ) : user ? (
+              <>
+              {user.role === 'CUSTOMER' || user.role === 'RIDER' ? <UserNotificationBell /> : null}
               <div className="relative" ref={userMenuRef}>
                 <button
                   type="button"
@@ -625,6 +628,7 @@ export default function Navbar() {
                   </div>
                 )}
               </div>
+              </>
             ) : (
               <>
                 <button

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Ban, Bike, CheckCircle2, Mail, MapPin, MessageSquare, Phone, ShieldOff, Store, Trash2, User as UserIcon, X } from 'lucide-react';
+import { Ban, Bell, Bike, CheckCircle2, Mail, MapPin, MessageSquare, Phone, ShieldOff, Store, Trash2, User as UserIcon, X } from 'lucide-react';
 import {
   BAN_PRESETS,
   BAN_UNITS,
@@ -17,6 +17,7 @@ import {
   type BanUnit,
 } from '@/lib/ban-duration';
 import type { AdminUserRow } from '@/lib/admin-user-types';
+import { ADMIN_MESSAGE_TITLE, MAX_ADMIN_MESSAGE_LENGTH } from '@/lib/notification-types';
 
 const FIELD_CLASS =
   'rounded-xl border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-red-100 disabled:opacity-50';
@@ -271,6 +272,100 @@ const DELETE_EFFECTS: Record<AdminUserRow['role'], string[]> = {
   RIDER: ['Chats they are handling go back to waiting for another rider.'],
 };
 
+/** The admin's note to one person: it reaches them as a notification from Mangwaoo. */
+function NotifyDialog({ user, onClose, onDone }: { user: AdminUserRow; onClose: () => void; onDone: (message: string) => void }) {
+  const [text, setText] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [error, setError] = useState('');
+  const textRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    textRef.current?.focus();
+  }, []);
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!text.trim()) {
+      setError('Please write a message.');
+      return;
+    }
+
+    setIsSending(true);
+    setError('');
+
+    const result = await send(`/api/admin/users/${user.id}/message`, 'POST', { message: text });
+
+    setIsSending(false);
+
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+
+    onDone(`Notification sent to ${user.name}.`);
+  };
+
+  return (
+    <Modal titleId="notify-dialog-title" onClose={onClose}>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 id="notify-dialog-title" className="flex items-center gap-2 text-lg font-bold text-ink">
+            <Bell className="h-5 w-5 text-accent" />
+            Send notification · {user.name}
+          </h2>
+          <p className="mt-1 text-sm text-brand-gray">
+            {user.name.split(' ')[0]} sees it in their notification bell as &quot;{ADMIN_MESSAGE_TITLE}&quot; (and on their phone if they turned notifications on).
+          </p>
+        </div>
+        <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-brand-gray hover:bg-gray-100 hover:text-ink" aria-label="Close">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label htmlFor="notify-text" className={LABEL_CLASS}>
+            Message
+          </label>
+          <textarea
+            id="notify-text"
+            ref={textRef}
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            maxLength={MAX_ADMIN_MESSAGE_LENGTH}
+            rows={5}
+            placeholder="Write what you want them to know…"
+            className={`${INPUT_CLASS} resize-y`}
+          />
+          <p className="mt-1 text-right text-xs text-brand-gray">
+            {text.length}/{MAX_ADMIN_MESSAGE_LENGTH}
+          </p>
+        </div>
+
+        {error ? (
+          <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm text-danger">
+            {error}
+          </p>
+        ) : null}
+
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-ink hover:bg-gray-50">
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isSending || !text.trim()}
+            className="rounded-xl bg-brand-red-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-red-secondary disabled:opacity-60"
+          >
+            {isSending ? 'Sending…' : 'Send notification'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function DeleteDialog({ user, onClose, onDone }: { user: AdminUserRow; onClose: () => void; onDone: (message: string) => void }) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState('');
@@ -352,11 +447,13 @@ function UserCard({
   user,
   isBusy,
   onBan,
+  onNotify,
   onUnban,
   onDelete,
 }: {
   user: AdminUserRow;
   isBusy: boolean;
+  onNotify: () => void;
   onBan: () => void;
   onUnban: () => void;
   onDelete: () => void;
@@ -449,6 +546,14 @@ function UserCard({
           ) : null}
           <button
             type="button"
+            onClick={onNotify}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-ink hover:border-accent hover:text-accent"
+          >
+            <Bell className="h-3.5 w-3.5" />
+            Send notification
+          </button>
+          <button
+            type="button"
             onClick={onBan}
             disabled={isBusy}
             className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-ink hover:border-red-600 hover:text-danger disabled:opacity-60"
@@ -487,6 +592,7 @@ export default function AdminUsers({ rows, emptyMessage }: { rows: AdminUserRow[
   const router = useRouter();
   const [banTarget, setBanTarget] = useState<AdminUserRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminUserRow | null>(null);
+  const [notifyTarget, setNotifyTarget] = useState<AdminUserRow | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -494,6 +600,7 @@ export default function AdminUsers({ rows, emptyMessage }: { rows: AdminUserRow[
   const finish = (message: string) => {
     setBanTarget(null);
     setDeleteTarget(null);
+    setNotifyTarget(null);
     setError('');
     setNotice(message);
     router.refresh();
@@ -539,6 +646,10 @@ export default function AdminUsers({ rows, emptyMessage }: { rows: AdminUserRow[
               key={user.id}
               user={user}
               isBusy={busyId === user.id}
+              onNotify={() => {
+                setNotice('');
+                setNotifyTarget(user);
+              }}
               onBan={() => {
                 setNotice('');
                 setBanTarget(user);
@@ -554,6 +665,7 @@ export default function AdminUsers({ rows, emptyMessage }: { rows: AdminUserRow[
       )}
 
       {banTarget ? <BanDialog key={banTarget.id} user={banTarget} onClose={() => setBanTarget(null)} onDone={finish} /> : null}
+      {notifyTarget ? <NotifyDialog key={notifyTarget.id} user={notifyTarget} onClose={() => setNotifyTarget(null)} onDone={finish} /> : null}
       {deleteTarget ? <DeleteDialog key={deleteTarget.id} user={deleteTarget} onClose={() => setDeleteTarget(null)} onDone={finish} /> : null}
     </div>
   );
