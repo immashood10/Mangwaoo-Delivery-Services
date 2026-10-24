@@ -40,6 +40,8 @@ export default async function SellerSettingsPage() {
         activeAds={activeAds}
         hasStorePage={!isFood}
         askMapLocation={isFood}
+        askCover={isFood}
+        coverSrc={isFood && seller.coverUpdatedAt ? `/api/seller/cover?v=${seller.coverUpdatedAt.getTime()}` : null}
         mapLocation={
           seller.latitude !== null && seller.longitude !== null && seller.locationLabel
             ? { label: seller.locationLabel, lat: seller.latitude, lng: seller.longitude }

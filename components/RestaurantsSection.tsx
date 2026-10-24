@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ArrowRight, Bike, MapPin, Store } from 'lucide-react';
+import { ArrowRight, Bike, LocateFixed, MapPin, Store } from 'lucide-react';
 import FavouriteButton from '@/components/FavouriteButton';
 import { useDeliveryAddress } from '@/lib/delivery-address-context';
-import { deliveryFeeForDistance } from '@/lib/delivery';
-import { formatDistance } from '@/lib/geo';
+import { FOOD_DELIVERY_RADIUS_KM, deliveryFeeForDistance } from '@/lib/delivery';
+import { formatDistance, isRealLocation } from '@/lib/geo';
 import type { PriceTier, RestaurantCardData } from '@/lib/restaurant-cards';
+import { coverPath } from '@/lib/seller-cover-config';
 
 const MAX_CUISINES = 2;
 
@@ -28,7 +29,7 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
 };
 
-function RestaurantCard({ restaurant }: { restaurant: RestaurantCardData }) {
+function RestaurantCard({ restaurant, locationQuery }: { restaurant: RestaurantCardData; locationQuery: string }) {
   // The tile behind the photo is the same red gradient, so a photo that can't load just looks like no photo.
   const [photoFailed, setPhotoFailed] = useState(false);
   const cuisines = restaurant.cuisines.slice(0, MAX_CUISINES);
@@ -38,14 +39,14 @@ function RestaurantCard({ restaurant }: { restaurant: RestaurantCardData }) {
   return (
     <motion.li variants={itemVariants} className="relative">
       <Link
-        href={`/restaurant/${restaurant.id}`}
+        href={`/restaurant/${restaurant.id}${locationQuery}`}
         className="group flex h-full flex-col overflow-hidden rounded-2xl bg-brand-light shadow-soft transition-shadow duration-300 hover:shadow-md"
       >
         <div className="relative aspect-[16/10] w-full overflow-hidden bg-gradient-to-br from-brand-red-primary to-brand-red-secondary">
           {restaurant.hasImage && !photoFailed ? (
-            // eslint-disable-next-line @next/next/no-img-element -- served by /api/restaurants/[id]/image
+            // eslint-disable-next-line @next/next/no-img-element -- served by /api/restaurants/[id]/cover or /image
             <img
-              src={`/api/restaurants/${restaurant.id}/image`}
+              src={restaurant.coverVersion !== null ? coverPath(restaurant.id, restaurant.coverVersion) : `/api/restaurants/${restaurant.id}/image`}
               alt=""
               loading="lazy"
               decoding="async"
@@ -99,34 +100,51 @@ function RestaurantCard({ restaurant }: { restaurant: RestaurantCardData }) {
   );
 }
 
+function CardSkeleton() {
+  return (
+    <li aria-hidden="true" className="overflow-hidden rounded-2xl bg-brand-light shadow-soft">
+      <div className="aspect-[16/10] w-full animate-pulse bg-gray-200" />
+      <div className="space-y-2 p-4">
+        <div className="h-4 w-2/3 animate-pulse rounded bg-gray-200" />
+        <div className="h-3 w-1/2 animate-pulse rounded bg-gray-200" />
+        <div className="h-3 w-3/4 animate-pulse rounded bg-gray-200" />
+      </div>
+    </li>
+  );
+}
+
 /**
- * The restaurants on the home page, below the products. The page itself is the same for everyone; once the
- * customer's delivery address is known the server sends the list again, nearest first, with distances.
+ * The restaurants on the home page, below the products. Only restaurants within `FOOD_DELIVERY_RADIUS_KM` (5 km) of
+ * the customer are listed, so the page can't say which until the delivery address is known: the page itself is the same
+ * for everyone, and once the address is known the server sends the restaurants around it, nearest first.
  */
-export default function RestaurantsSection({ restaurants }: { restaurants: RestaurantCardData[] }) {
-  const { address } = useDeliveryAddress();
-  const lat = address?.lat ?? null;
-  const lng = address?.lng ?? null;
-  const [nearby, setNearby] = useState<RestaurantCardData[] | null>(null);
+export default function RestaurantsSection() {
+  const { address, requestAddressPicker } = useDeliveryAddress();
+  const location = isRealLocation(address) ? address : null;
+  const lat = location?.lat ?? null;
+  const lng = location?.lng ?? null;
+  const key = lat !== null && lng !== null ? `${lat},${lng}` : null;
+  // What the server answered for one location (the key says which), so an old answer is never shown for a new address.
+  const [answer, setAnswer] = useState<{ key: string; restaurants: RestaurantCardData[] | null } | null>(null);
 
   useEffect(() => {
     if (lat === null || lng === null) return;
 
     const controller = new AbortController();
+    const requestKey = `${lat},${lng}`;
 
     fetch(`/api/restaurants?lat=${lat}&lng=${lng}`, { signal: controller.signal })
       .then((response) => (response.ok ? response.json() : null))
-      .then((data: { restaurants: RestaurantCardData[] } | null) => {
-        if (data) setNearby(data.restaurants);
-      })
-      // Offline or the address changed again: the list on the page stays as it is.
+      .then((data: { restaurants: RestaurantCardData[] } | null) => setAnswer({ key: requestKey, restaurants: data?.restaurants ?? null }))
+      // The address changed again (or the page was left): nothing to show for this one.
       .catch(() => {});
 
     return () => controller.abort();
   }, [lat, lng]);
 
-  const cards = lat !== null && nearby ? nearby : restaurants;
-  const isNearestFirst = cards.some((card) => card.distanceKm !== null);
+  const current = key !== null && answer?.key === key ? answer : null;
+  const cards = current?.restaurants ?? null;
+  const locationQuery = key !== null ? `?lat=${lat}&lng=${lng}` : '';
 
   return (
     <section id="restaurants" aria-labelledby="restaurants-heading" className="scroll-mt-32 bg-surface pb-16 md:pb-24">
@@ -147,13 +165,13 @@ export default function RestaurantsSection({ restaurants }: { restaurants: Resta
                 Order From Local Restaurants
               </h2>
               <p className="max-w-xl text-lg text-brand-gray">
-                {isNearestFirst
-                  ? 'Nearest to your delivery address first.'
-                  : 'Biryani, burgers, desserts and more from approved food businesses across Karachi.'}
+                {location
+                  ? `Restaurants within ${FOOD_DELIVERY_RADIUS_KM} km of your delivery address, nearest first.`
+                  : `Biryani, burgers, desserts and more from approved food businesses within ${FOOD_DELIVERY_RADIUS_KM} km of you.`}
               </p>
             </div>
             <Link
-              href="/gulplaza"
+              href={`/gulplaza${locationQuery}`}
               className="inline-flex shrink-0 items-center space-x-2 font-semibold text-accent hover:underline"
             >
               <span>Browse all food</span>
@@ -161,30 +179,65 @@ export default function RestaurantsSection({ restaurants }: { restaurants: Resta
             </Link>
           </motion.div>
 
-          {cards.length === 0 ? (
+          {key === null ? (
             <div className="rounded-2xl border border-dashed border-gray-200 p-10 text-center">
-              <Store className="mx-auto mb-3 h-8 w-8 text-accent" aria-hidden="true" />
-              <p className="mb-1 font-semibold text-ink">No restaurants yet</p>
+              <LocateFixed className="mx-auto mb-3 h-8 w-8 text-accent" aria-hidden="true" />
+              <p className="mb-1 font-semibold text-ink">Where should we deliver?</p>
               <p className="mx-auto mb-5 max-w-md text-sm text-brand-gray">
-                Approved restaurants, bakeries and home kitchens will show up here. Own a food business in Karachi?
+                We show the restaurants within {FOOD_DELIVERY_RADIUS_KM} km of you. Choose your delivery address to see them.
               </p>
-              <Link
-                href="/sell"
+              <button
+                type="button"
+                onClick={requestAddressPicker}
                 className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-brand-red-primary to-brand-red-secondary px-6 py-3 text-sm font-semibold text-white transition-all hover:shadow-lg"
               >
-                Sell food on Mangwaoo
-              </Link>
+                Select delivery address
+              </button>
+            </div>
+          ) : current === null ? (
+            <ul role="status" aria-label="Finding restaurants near you" className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {[0, 1, 2, 3].map((index) => (
+                <CardSkeleton key={index} />
+              ))}
+            </ul>
+          ) : cards === null ? (
+            <div className="rounded-2xl border border-dashed border-gray-200 p-10 text-center">
+              <p className="font-semibold text-ink">Could not load the restaurants</p>
+              <p className="mx-auto mt-1 max-w-md text-sm text-brand-gray">Please check your connection and try again in a moment.</p>
+            </div>
+          ) : cards.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-gray-200 p-10 text-center">
+              <Store className="mx-auto mb-3 h-8 w-8 text-accent" aria-hidden="true" />
+              <p className="mb-1 font-semibold text-ink">No restaurants within {FOOD_DELIVERY_RADIUS_KM} km of this address yet</p>
+              <p className="mx-auto mb-5 max-w-md text-sm text-brand-gray">
+                We deliver food from restaurants up to {FOOD_DELIVERY_RADIUS_KM} km away. Try another delivery address, or tell a restaurant near you to join Mangwaoo.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={requestAddressPicker}
+                  className="inline-flex items-center justify-center rounded-xl border-2 border-accent px-6 py-3 text-sm font-semibold text-accent transition-colors hover:bg-brand-red-primary hover:text-white"
+                >
+                  Change address
+                </button>
+                <Link
+                  href="/sell"
+                  className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-brand-red-primary to-brand-red-secondary px-6 py-3 text-sm font-semibold text-white transition-all hover:shadow-lg"
+                >
+                  Sell food on Mangwaoo
+                </Link>
+              </div>
             </div>
           ) : (
             <motion.ul
+              key={key}
               variants={containerVariants}
               initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
+              animate="visible"
               className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4"
             >
               {cards.map((restaurant) => (
-                <RestaurantCard key={restaurant.id} restaurant={restaurant} />
+                <RestaurantCard key={restaurant.id} restaurant={restaurant} locationQuery={locationQuery} />
               ))}
             </motion.ul>
           )}

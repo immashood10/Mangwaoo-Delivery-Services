@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Clock,
   LogOut,
+  MapPin,
   Megaphone,
   Menu,
   MessageSquare,
@@ -47,6 +48,8 @@ type ShellProfile = {
   ownerName: string;
   isApproved: boolean;
   isFood: boolean;
+  /** The kitchen / shop is pinned on the map (food sellers without a pin aren't shown to customers). */
+  hasLocation: boolean;
   /** Shown under the logo, e.g. "Seller dashboard" or "Food seller dashboard". */
   dashboardLabel: string;
 };
@@ -93,6 +96,17 @@ function SidebarContent({ profile, onNavigate }: { profile: ShellProfile; onNavi
           {profile.isApproved ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
           {profile.isApproved ? 'Approved seller' : 'Pending approval'}
         </div>
+
+        {profile.isFood && !profile.hasLocation ? (
+          <Link
+            href={SELLER_PAGES.settings}
+            onClick={onNavigate}
+            className="mx-3 mt-3 flex items-start gap-2 rounded-xl bg-yellow-500/15 px-3 py-2 text-xs font-semibold text-yellow-300 transition hover:bg-yellow-500/25"
+          >
+            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>Pin your restaurant on the map in Settings. Customers only see restaurants within 5 km of them, so yours is hidden until you do.</span>
+          </Link>
+        ) : null}
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-4" aria-label="Seller dashboard">

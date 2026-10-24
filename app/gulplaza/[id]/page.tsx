@@ -1,11 +1,14 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, MapPin } from 'lucide-react';
 import { GULPLAZA_CATEGORIES } from '@/lib/data';
+import { FOOD_DELIVERY_RADIUS_KM, foodReach } from '@/lib/delivery';
+import { formatDistance, isRealLocation, parseCoordinates } from '@/lib/geo';
 import { prisma } from '@/lib/prisma';
 import AddToCartButton from '@/components/AddToCartButton';
 import ChatWidget from '@/components/ChatWidget';
 import FavouriteButton from '@/components/FavouriteButton';
+import NearbyNotice from '@/components/NearbyNotice';
 
 const CATEGORY_ICONS: Record<string, string> = Object.fromEntries(
   GULPLAZA_CATEGORIES.map((category) => [category.name, category.icon])
@@ -13,10 +16,12 @@ const CATEGORY_ICONS: Record<string, string> = Object.fromEntries(
 
 export default async function GulplazaProductDetail({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ lat?: string; lng?: string }>;
 }) {
-  const { id } = await params;
+  const [{ id }, { lat, lng }] = await Promise.all([params, searchParams]);
 
   const dbProduct = await prisma.gulplazaProduct.findFirst({
     where: {
@@ -47,11 +52,25 @@ export default async function GulplazaProductDetail({
     stock: dbProduct.stock,
   };
 
+  // Food is only for customers within 5 km of the restaurant: the dish can be looked at, but not ordered, from farther away
+  // (or when the restaurant hasn't pinned its kitchen, so nobody can tell how far it is).
+  const parsedOrigin = parseCoordinates(lat, lng);
+  const origin = isRealLocation(parsedOrigin) ? parsedOrigin : null;
+  const reach = foodReach(
+    origin,
+    dbProduct.seller.latitude !== null && dbProduct.seller.longitude !== null
+      ? { lat: dbProduct.seller.latitude, lng: dbProduct.seller.longitude }
+      : null
+  );
+  const outOfArea = origin !== null && (reach.status === 'TOO_FAR' || reach.status === 'NO_PIN');
+  const nearbyHref = origin ? `/gulplaza?lat=${origin.lat}&lng=${origin.lng}` : '/gulplaza';
+
   return (
     <div className="w-full py-12 md:py-16">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <NearbyNotice lat={origin?.lat ?? null} lng={origin?.lng ?? null} variant="quiet" />
         <Link
-          href="/gulplaza"
+          href={nearbyHref}
           className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:underline mb-8"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -88,13 +107,30 @@ export default async function GulplazaProductDetail({
               <p className="text-brand-gray leading-relaxed">{product.description}</p>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <AddToCartButton
-                product={product}
-                className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-brand-red-primary to-brand-red-secondary px-8 py-3 text-sm font-semibold text-white hover:shadow-lg transition-all duration-300"
-              />
-              <ChatWidget sellerId={product.sellerId} sellerName={product.vendor} productName={product.name} />
-            </div>
+            {outOfArea ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
+                <p className="flex items-center gap-2 font-semibold text-ink">
+                  <MapPin className="h-4 w-4 text-warning" />
+                  Not available at your address
+                </p>
+                <p className="mt-1 text-brand-gray">
+                  {reach.status === 'TOO_FAR'
+                    ? `${product.vendor} is ${formatDistance(reach.distanceKm)} from your delivery address, and we deliver food only from restaurants within ${FOOD_DELIVERY_RADIUS_KM} km of you.`
+                    : `${product.vendor} hasn't set its location on the map yet, so we can't check that it is within ${FOOD_DELIVERY_RADIUS_KM} km of you.`}
+                </p>
+                <Link href={nearbyHref} className="mt-2 inline-block font-semibold text-accent hover:underline">
+                  See food near you
+                </Link>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-3">
+                <AddToCartButton
+                  product={product}
+                  className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-brand-red-primary to-brand-red-secondary px-8 py-3 text-sm font-semibold text-white hover:shadow-lg transition-all duration-300"
+                />
+                <ChatWidget sellerId={product.sellerId} sellerName={product.vendor} productName={product.name} />
+              </div>
+            )}
           </div>
         </div>
       </div>

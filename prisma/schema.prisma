@@ -202,6 +202,12 @@ model Seller {
   longitude     Float?
   locationLabel String?
 
+  /// When the restaurant's background (cover) picture was last set, null when it has none. The picture itself is in
+  /// `SellerCover` (its bytes never ride along with the catalog queries); this date is the `?v=` of its address, so a
+  /// new picture is fetched instead of the one the browser kept.
+  coverUpdatedAt DateTime?
+  cover          SellerCover?
+
   products         Product[]
   productAds       ProductAd[]
   orders           Order[]
@@ -209,6 +215,18 @@ model Seller {
   gulplazaOrders   GulplazaOrder[]
   conversations    Conversation[]
   cartItems        CartItem[]
+}
+
+/// The background picture of a food seller's restaurant (its page header and its card). The bytes live in their own
+/// table so the catalog queries, which load whole seller rows, never carry them.
+model SellerCover {
+  id        String   @id @default(cuid())
+  sellerId  String   @unique
+  seller    Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  mimeType  String
+  size      Int
+  data      Bytes
+  createdAt DateTime @default(now())
 }
 
 model Rider {

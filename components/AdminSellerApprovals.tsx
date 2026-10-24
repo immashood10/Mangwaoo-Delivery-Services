@@ -11,6 +11,8 @@ type SellerRow = {
   email: string;
   sellerType: string;
   isApproved: boolean;
+  /** The kitchen is pinned on the map. Without it the restaurant isn't shown to customers (food is listed within 5 km). */
+  hasLocation: boolean;
   createdAt: string;
 };
 
@@ -78,7 +80,17 @@ export default function AdminSellerApprovals({ sellers }: { sellers: SellerRow[]
           <tbody>
             {sellers.map((seller) => (
               <tr key={seller.id} className="border-b border-gray-50 last:border-0">
-                <td className="py-3 pr-4 font-semibold text-ink">{seller.businessName}</td>
+                <td className="py-3 pr-4 font-semibold text-ink">
+                  {seller.businessName}
+                  {seller.hasLocation ? null : (
+                    <span
+                      title="Customers only see restaurants within 5 km of them, which needs the kitchen on the map. The seller sets it in Settings."
+                      className="mt-1 block text-xs font-semibold text-warning"
+                    >
+                      No map location · hidden from customers
+                    </span>
+                  )}
+                </td>
                 <td className="py-3 pr-4 text-brand-gray">
                   {seller.ownerName}
                   <br />

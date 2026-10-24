@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
 import { DEFAULT_COUNTRY, MAX_PLACE_LENGTH, cleanPlace, parseStoreLocation } from '@/lib/locations';
 import { finishSignup, prepareSignup, signupWriteFailed } from '@/lib/phone-verification';
+import { parseCoverUpload } from '@/lib/seller-cover';
 
 const SELLER_TYPES = ['MART', 'GULPLAZA_OWNER', 'WHOLESALER'] as const;
 
@@ -45,6 +46,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Please choose your shop location again from the suggestions.' }, { status: 400 });
   }
 
+  // Optional background picture of the restaurant (food sellers only; a MangwaooMart seller has no restaurant page).
+  const cover = sellerType === 'MART' ? undefined : parseCoverUpload(body?.cover);
+
+  if (cover === 'invalid') {
+    return NextResponse.json({ error: 'The background picture must be a JPG, PNG or WebP picture of up to 2 MB.' }, { status: 400 });
+  }
+
   const passwordHash = hashPassword(password);
 
   // With verification on this sends the WhatsApp code too, and the account below is created unverified (it can't log
@@ -74,6 +82,7 @@ export async function POST(request: NextRequest) {
                 city: city || null,
                 country,
                 ...(location ? { latitude: location.lat, longitude: location.lng, locationLabel: location.label } : {}),
+                ...(cover ? { coverUpdatedAt: new Date(), cover: { create: cover } } : {}),
               },
             },
             phoneVerifiedAt: signup.verifiedAt,

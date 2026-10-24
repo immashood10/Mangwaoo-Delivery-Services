@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { Store, User, Mail, Phone, Lock, Eye, EyeOff, MapPin, Globe } from 'lucide-react';
 import AuthBrandPanel from '@/components/AuthBrandPanel';
+import CoverPhotoPicker from '@/components/CoverPhotoPicker';
 import LocationPicker, { type PickedLocation } from '@/components/LocationPicker';
 import WhatsAppCodeForm from '@/components/WhatsAppCodeForm';
 import { useAuth } from '@/lib/auth-context';
@@ -47,6 +48,8 @@ export default function SellOnMangwaoo() {
   });
   // Food businesses pin their kitchen on the map so nearby customers find them first in search.
   const [shopLocation, setShopLocation] = useState<PickedLocation | null>(null);
+  // Food businesses can also add a background picture, shown behind the restaurant's name on its page (a data URL).
+  const [coverPhoto, setCoverPhoto] = useState<string | null>(null);
   const [signinData, setSigninData] = useState({ email: '', password: '' });
 
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -93,6 +96,7 @@ export default function SellOnMangwaoo() {
           password: signupData.password,
           sellerType: signupData.sellerType,
           ...(signupData.sellerType !== 'MART' && shopLocation ? { location: shopLocation } : {}),
+          ...(signupData.sellerType !== 'MART' && coverPhoto ? { cover: coverPhoto } : {}),
         }),
       });
 
@@ -397,6 +401,22 @@ export default function SellOnMangwaoo() {
                       <p className="mt-1.5 text-xs text-brand-gray">
                         Customers near you see your restaurant first when they search for food. You can add or change this
                         later in Settings.
+                      </p>
+                    </div>
+                  )}
+
+                  {signupData.sellerType !== 'MART' && (
+                    <div>
+                      <span className="block text-sm font-semibold text-ink mb-2">Restaurant background picture (optional)</span>
+                      <CoverPhotoPicker
+                        preview={coverPhoto}
+                        onPick={setCoverPhoto}
+                        onRemove={() => setCoverPhoto(null)}
+                        disabled={isSubmitting}
+                      />
+                      <p className="mt-1.5 text-xs text-brand-gray">
+                        A wide, bright photo of your restaurant or your food. It shows behind your restaurant&apos;s name on
+                        your page. You can add or change it later in Settings.
                       </p>
                     </div>
                   )}

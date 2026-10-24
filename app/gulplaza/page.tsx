@@ -2,16 +2,24 @@ import Link from 'next/link';
 import { GULPLAZA_ADS, GULPLAZA_CATEGORIES } from '@/lib/data';
 import { MessageCircle, Store, X, LayoutGrid } from 'lucide-react';
 import AddToCartButton from '@/components/AddToCartButton';
+import NearbyNotice from '@/components/NearbyNotice';
+import { FOOD_DELIVERY_RADIUS_KM, foodReach } from '@/lib/delivery';
+import { isRealLocation, parseCoordinates, type Coordinates } from '@/lib/geo';
 import { getGulplazaProducts } from '@/lib/products';
 
 const CATEGORY_ICONS: Record<string, string> = Object.fromEntries(
   GULPLAZA_CATEGORIES.map((category) => [category.name, category.icon])
 );
 
-function buildCategoryHref(q: string | undefined, categoryName?: string) {
+/** A link to this page with the search words, the category and (so the 5 km list stays) the customer's location. */
+function buildCategoryHref(q: string | undefined, categoryName?: string, origin?: Coordinates | null) {
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (categoryName) params.set('category', categoryName);
+  if (origin) {
+    params.set('lat', String(origin.lat));
+    params.set('lng', String(origin.lng));
+  }
   const qs = params.toString();
   return `/gulplaza${qs ? `?${qs}` : ''}`;
 }
@@ -19,13 +27,28 @@ function buildCategoryHref(q: string | undefined, categoryName?: string) {
 export default async function GulPlaza({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; category?: string }>;
+  searchParams: Promise<{ q?: string; category?: string; lat?: string; lng?: string }>;
 }) {
-  const { q, category } = await searchParams;
+  const { q, category, lat, lng } = await searchParams;
   const query = q?.trim().toLowerCase() ?? '';
   const selectedCategory = category?.trim() || null;
+  const parsedOrigin = parseCoordinates(lat, lng);
+  const origin = isRealLocation(parsedOrigin) ? parsedOrigin : null;
 
-  const sellerProducts = await getGulplazaProducts();
+  // Only dishes from restaurants within 5 km of the customer are listed. The customer's location comes with the
+  // address (`?lat=&lng=`, kept in step by NearbyNotice); without one nothing can be listed, and a restaurant that
+  // hasn't pinned its kitchen on the map can't be listed either (nobody can tell how far it is).
+  const sellerProducts = origin
+    ? (await getGulplazaProducts()).filter(
+        (product) =>
+          foodReach(
+            origin,
+            product.seller.latitude !== null && product.seller.longitude !== null
+              ? { lat: product.seller.latitude, lng: product.seller.longitude }
+              : null
+          ).status === 'OK'
+      )
+    : [];
 
   const allProducts = sellerProducts.map((product) => ({
     id: product.id,
@@ -84,7 +107,7 @@ export default async function GulPlaza({
         </div>
       </section>
 
-      {query && (
+      {query && origin && (
         <section className="py-6 bg-surface border-b border-gray-100">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-brand-gray">
@@ -99,7 +122,7 @@ export default async function GulPlaza({
               )}
             </p>
             <Link
-              href="/gulplaza"
+              href={buildCategoryHref(undefined, undefined, origin)}
               className="inline-flex items-center gap-1 text-sm font-semibold text-accent hover:underline"
             >
               <X className="w-4 h-4" />
@@ -109,11 +132,11 @@ export default async function GulPlaza({
         </section>
       )}
 
-      {query && !hasResults && (
+      {query && origin && !hasResults && (
         <section className="py-16 text-center">
           <p className="text-brand-gray">
             We couldn&apos;t find anything matching your search. Try a different keyword or{' '}
-            <Link href="/gulplaza" className="text-accent font-semibold hover:underline">
+            <Link href={buildCategoryHref(undefined, undefined, origin)} className="text-accent font-semibold hover:underline">
               browse the full catalog
             </Link>
             .
@@ -133,7 +156,7 @@ export default async function GulPlaza({
                 </h3>
                 <nav className="space-y-1">
                   <Link
-                    href={buildCategoryHref(q)}
+                    href={buildCategoryHref(q, undefined, origin)}
                     className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
                       !selectedCategory
                         ? 'bg-brand-red-primary/10 text-accent'
@@ -146,7 +169,7 @@ export default async function GulPlaza({
                   {GULPLAZA_CATEGORIES.map((cat) => (
                     <Link
                       key={cat.id}
-                      href={buildCategoryHref(q, cat.name)}
+                      href={buildCategoryHref(q, cat.name, origin)}
                       className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
                         selectedCategory === cat.name
                           ? 'bg-brand-red-primary/10 text-accent'
@@ -169,19 +192,29 @@ export default async function GulPlaza({
                 </h2>
                 <p className="text-lg text-brand-gray">
                   {selectedCategory
-                    ? `Browsing ${selectedCategory} from approved food sellers.`
-                    : 'Listings from approved food businesses across Karachi.'}
+                    ? `Browsing ${selectedCategory} from approved food sellers within ${FOOD_DELIVERY_RADIUS_KM} km of you.`
+                    : `Listings from approved food businesses within ${FOOD_DELIVERY_RADIUS_KM} km of you.`}
                 </p>
               </div>
 
-              {products.length > 0 ? (
+              <NearbyNotice
+                lat={origin?.lat ?? null}
+                lng={origin?.lng ?? null}
+                params={{ ...(q ? { q } : {}), ...(selectedCategory ? { category: selectedCategory } : {}) }}
+                what="dishes"
+              />
+
+              {!origin ? null : products.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
                   {products.map((product) => (
                     <div
                       key={product.id}
                       className="bg-surface rounded-2xl shadow-soft hover:shadow-md transition-all duration-300"
                     >
-                      <Link href={`/gulplaza/${product.id}`} className="flex h-full flex-col p-5">
+                      <Link
+                        href={`/gulplaza/${product.id}${origin ? `?lat=${origin.lat}&lng=${origin.lng}` : ''}`}
+                        className="flex h-full flex-col p-5"
+                      >
                         {product.imageUrl ? (
                           <div className="mb-3 flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl bg-brand-light">
                             <img
@@ -210,13 +243,19 @@ export default async function GulPlaza({
                 </div>
               ) : (
                 <p className="text-brand-gray text-sm">
-                  {selectedCategory
-                    ? `No listings found in ${selectedCategory} yet. Try `
-                    : 'No food listings yet — approved sellers will appear here. Try '}
-                  <Link href={buildCategoryHref(q)} className="text-accent font-semibold hover:underline">
-                    another category
-                  </Link>
-                  .
+                  {sellerProducts.length === 0
+                    ? `No restaurant within ${FOOD_DELIVERY_RADIUS_KM} km of your address has listed food yet. Try another delivery address.`
+                    : selectedCategory
+                      ? `No listings found in ${selectedCategory} within ${FOOD_DELIVERY_RADIUS_KM} km yet. Try `
+                      : `No matching listings within ${FOOD_DELIVERY_RADIUS_KM} km. Try `}
+                  {sellerProducts.length === 0 ? null : (
+                    <>
+                      <Link href={buildCategoryHref(q, undefined, origin)} className="text-accent font-semibold hover:underline">
+                        another category
+                      </Link>
+                      .
+                    </>
+                  )}
                 </p>
               )}
             </div>

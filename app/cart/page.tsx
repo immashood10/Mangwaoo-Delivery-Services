@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Minus, Plus, Trash2, ShoppingCart, MessageCircle, Banknote, Smartphone, BadgePercent, X } from 'lucide-react';
 import { useCart } from '@/lib/cart-context';
 import { useDeliveryAddress } from '@/lib/delivery-address-context';
-import { DELIVERY_RATE_PER_KM } from '@/lib/delivery';
+import { DELIVERY_RATE_PER_KM, FOOD_DELIVERY_RADIUS_KM } from '@/lib/delivery';
 import type { Quote } from '@/lib/checkout-types';
 import LocationPicker, { type PickedLocation } from '@/components/LocationPicker';
 
@@ -94,6 +94,8 @@ export default function CartPage() {
   const isPricing = result?.key !== quoteKey;
   const couponError = result?.key === quoteKey ? result.couponError : null;
   const foodOrders = quote?.orders.filter((order) => order.marketplace === 'gulplaza') ?? [];
+  // Food from a restaurant farther than the delivery radius (or one whose kitchen isn't on the map) can't be ordered.
+  const blockedOrders = foodOrders.filter((order) => order.deliveryNote === 'OUT_OF_RANGE' || order.deliveryNote === 'NO_RESTAURANT_PIN');
   const cartHasFood = items.some((item) => item.marketplace === 'gulplaza');
   const shownSubtotal = quote ? quote.subtotal : subtotal;
   const total = quote ? quote.total : subtotal;
@@ -482,7 +484,9 @@ export default function CartPage() {
                     {order.distanceKm !== null ? <span className="block text-xs">{order.distanceKm.toFixed(1)} km from the restaurant</span> : null}
                   </span>
                   {order.deliveryNote ? (
-                    <span className="shrink-0 text-xs text-brand-gray">{order.deliveryNote === 'NEEDS_DROPOFF' ? 'Pin your location' : 'To be confirmed'}</span>
+                    <span className={`shrink-0 text-xs ${order.deliveryNote === 'NEEDS_DROPOFF' ? 'text-brand-gray' : 'font-semibold text-danger'}`}>
+                      {order.deliveryNote === 'NEEDS_DROPOFF' ? 'Pin your location' : order.deliveryNote === 'OUT_OF_RANGE' ? 'Too far' : "Can't deliver"}
+                    </span>
                   ) : (
                     <span className="shrink-0 font-semibold text-ink">{pkr(order.deliveryFee)}</span>
                   )}
@@ -497,9 +501,13 @@ export default function CartPage() {
               {foodOrders.some((order) => order.deliveryNote === 'NEEDS_DROPOFF') ? (
                 <p className="text-xs text-brand-gray">Pin your delivery location to see the delivery fee.</p>
               ) : null}
-              {foodOrders.some((order) => order.deliveryNote === 'NO_RESTAURANT_PIN') ? (
-                <p className="text-xs text-brand-gray">A restaurant that hasn&apos;t set its location yet has its delivery fee confirmed by the rider.</p>
-              ) : null}
+              {blockedOrders.map((order) => (
+                <p key={order.sellerId} role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-danger">
+                  {order.deliveryNote === 'OUT_OF_RANGE'
+                    ? `${order.sellerName} is ${order.distanceKm?.toFixed(1)} km from your delivery location. We deliver food only within ${FOOD_DELIVERY_RADIUS_KM} km, so remove it from your cart or choose another delivery address.`
+                    : `${order.sellerName} hasn't set its location on the map yet, so we can't check that it is within ${FOOD_DELIVERY_RADIUS_KM} km of you. Please choose another restaurant.`}
+                </p>
+              ))}
               {cartHasFood ? (
                 <p className="text-xs text-gray-400">
                   {`Delivery is charged on food only: PKR ${DELIVERY_RATE_PER_KM} per km, the petrol for the rider's bike.`}
@@ -517,7 +525,7 @@ export default function CartPage() {
 
             <button
               type="submit"
-              disabled={isPlacingOrder}
+              disabled={isPlacingOrder || blockedOrders.length > 0}
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-red-primary to-brand-red-secondary py-3 text-sm font-semibold text-white hover:shadow-lg transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <MessageCircle className="w-4 h-4" />

@@ -15,6 +15,11 @@ export function parseCoordinates(lat: string | string[] | undefined, lng: string
   return { lat: latValue, lng: lngValue };
 }
 
+/** A real position: present, finite, and not the 0,0 placeholder that an address without a pin carries. */
+export function isRealLocation(location: Coordinates | null | undefined): location is Coordinates {
+  return !!location && Number.isFinite(location.lat) && Number.isFinite(location.lng) && (location.lat !== 0 || location.lng !== 0);
+}
+
 /** "650 m" under a kilometre, "3.4 km" up to ten, then whole kilometres. */
 export function formatDistance(km: number) {
   const metres = Math.max(50, Math.round((km * 1000) / 50) * 50);

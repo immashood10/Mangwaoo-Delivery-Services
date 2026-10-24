@@ -38,6 +38,7 @@ export default async function AdminSellersPage() {
             email: seller.user.email,
             sellerType: seller.sellerType,
             isApproved: seller.isApproved,
+            hasLocation: seller.latitude !== null && seller.longitude !== null,
             createdAt: seller.createdAt.toISOString(),
           }))}
         />

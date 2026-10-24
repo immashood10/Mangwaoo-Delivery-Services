@@ -113,7 +113,8 @@ export async function removeAccount(userId: string, adminId: string): Promise<Re
       const sellerId = user.seller.id;
 
       cancelled += await cancelOpenOrders(tx, { sellerId }, false);
-      await tx.seller.update({ where: { id: sellerId }, data: { isApproved: false } });
+      await tx.seller.update({ where: { id: sellerId }, data: { isApproved: false, coverUpdatedAt: null } });
+      await tx.sellerCover.deleteMany({ where: { sellerId } });
       // The store disappears: listings are hidden, requests for ads are declined and running ads (and their stories) end.
       await tx.product.updateMany({ where: { sellerId }, data: { isActive: false } });
       await tx.gulplazaProduct.updateMany({ where: { sellerId }, data: { isActive: false } });

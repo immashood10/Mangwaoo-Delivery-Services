@@ -65,7 +65,7 @@ export default function Navbar() {
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [isLocatingAddress, setIsLocatingAddress] = useState(false);
   const [addressError, setAddressError] = useState('');
-  const { address: selectedAddress, setAddress: setSelectedAddress } = useDeliveryAddress();
+  const { address: selectedAddress, setAddress: setSelectedAddress, pickerRequests } = useDeliveryAddress();
 
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [addressStep, setAddressStep] = useState<'pick' | 'save'>('pick');
@@ -272,6 +272,19 @@ export default function Navbar() {
     setSaveAddressError('');
     setIsAddressModalOpen(true);
   };
+
+  // A page's "Select address" button (restaurants, food, search…) asks for this window through the address context.
+  const handledPickerRequests = useRef(pickerRequests);
+
+  useEffect(() => {
+    if (pickerRequests === handledPickerRequests.current) return;
+
+    handledPickerRequests.current = pickerRequests;
+
+    const timer = window.setTimeout(openAddressModal, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [pickerRequests]);
 
   const closeAddressModal = (addressConfirmed = false) => {
     setIsAddressModalOpen(false);

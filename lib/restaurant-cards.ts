@@ -1,11 +1,12 @@
 import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { FOOD_CATALOG_TAG } from '@/lib/catalog-cache';
-import { distanceInKm, type Coordinates } from '@/lib/geo';
+import { foodReach } from '@/lib/delivery';
+import { type Coordinates } from '@/lib/geo';
 
 // Compact restaurant rows for the cards on the home page. Written as raw SQL so one query returns
 // just what a card shows, and so the dish photos (data URLs) stay out of the page: a card loads its
-// picture from /api/restaurants/[id]/image.
+// picture from /api/restaurants/[id]/image (or /cover, the owner's own background picture, when they uploaded one).
 
 /** How many of the three "$" are lit. */
 export type PriceTier = 1 | 2 | 3;
@@ -17,9 +18,11 @@ export type RestaurantCardData = {
   /** The food categories its dishes are listed under, the one with most dishes first. */
   cuisines: string[];
   priceTier: PriceTier;
-  /** At least one listed dish has a photo, so /api/restaurants/[id]/image has a picture to serve. */
+  /** There is a picture to show: a listed dish has a photo (/api/restaurants/[id]/image) or the owner added a cover. */
   hasImage: boolean;
-  /** Straight-line distance from the customer's address; null when either location is unknown. */
+  /** When the owner's background picture was set (a version for its address), null when there is none. */
+  coverVersion: number | null;
+  /** Straight-line distance from the customer's address (every card shown is within the delivery radius). */
   distanceKm: number | null;
 };
 
@@ -47,6 +50,7 @@ type RestaurantRow = {
   categories: string[];
   prices: number[];
   hasImage: boolean;
+  coverVersion: number | null;
 };
 
 type Restaurant = Omit<RestaurantCardData, 'distanceKm'> & { location: Coordinates | null };
@@ -65,6 +69,7 @@ function toRestaurant(row: RestaurantRow): Restaurant {
       .map(([category]) => category),
     priceTier: priceTierFor(row.prices),
     hasImage: row.hasImage,
+    coverVersion: row.coverVersion,
     location: row.latitude !== null && row.longitude !== null ? { lat: row.latitude, lng: row.longitude } : null,
   };
 }
@@ -77,7 +82,8 @@ const getRestaurants = unstable_cache(
       SELECT s."id", s."businessName" AS "name", s."latitude", s."longitude",
              array_agg(c."name") AS "categories",
              array_agg(p."price"::float8) AS "prices",
-             bool_or(cardinality(p."images") > 0) AS "hasImage"
+             (bool_or(cardinality(p."images") > 0) OR s."coverUpdatedAt" IS NOT NULL) AS "hasImage",
+             (extract(epoch FROM s."coverUpdatedAt") * 1000)::float8 AS "coverVersion"
       FROM "Seller" s
       JOIN "GulplazaProduct" p ON p."sellerId" = s."id" AND p."isActive" = true
       JOIN "GulplazaCategory" c ON c."id" = p."categoryId"
@@ -92,26 +98,21 @@ const getRestaurants = unstable_cache(
 );
 
 /**
- * The restaurants for the home page. Without an address the fullest menus come first; with the
- * customer's address the nearest do, and restaurants that haven't pinned their kitchen on the map go last.
+ * The restaurants to show a customer: only those within the delivery radius (`FOOD_DELIVERY_RADIUS_KM`, 5 km) of
+ * their location, nearest first. A restaurant that hasn't pinned its kitchen on the map can't be shown (nobody can tell
+ * how far it is), and without a location nothing can be shown either, so the answer is empty.
  */
 export async function getRestaurantCards(origin: Coordinates | null = null, limit = HOME_RESTAURANT_LIMIT): Promise<RestaurantCardData[]> {
+  if (!origin) return [];
+
   const restaurants = await getRestaurants();
 
-  const cards = restaurants.map(({ location, ...card }) => ({
-    ...card,
-    distanceKm: origin && location ? distanceInKm(origin, location) : null,
-  }));
+  return restaurants
+    .flatMap(({ location, ...card }) => {
+      const reach = foodReach(origin, location);
 
-  if (origin) {
-    // Ties (including several unpinned restaurants) keep the fullest-menu-first order: the sort is stable.
-    cards.sort((a, b) => {
-      if (a.distanceKm === b.distanceKm) return 0;
-      if (a.distanceKm === null) return 1;
-      if (b.distanceKm === null) return -1;
-      return a.distanceKm - b.distanceKm;
-    });
-  }
-
-  return cards.slice(0, limit);
+      return reach.status === 'OK' ? [{ ...card, distanceKm: reach.distanceKm }] : [];
+    })
+    .sort((a, b) => a.distanceKm - b.distanceKm)
+    .slice(0, limit);
 }

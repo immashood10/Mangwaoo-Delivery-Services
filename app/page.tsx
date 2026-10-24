@@ -5,9 +5,9 @@ import ServicesSection from '@/components/ServicesSection';
 import WhyChooseUs from '@/components/WhyChooseUs';
 import { MART_CATEGORIES, MART_PRODUCTS } from '@/lib/data';
 import FeaturedRow from '@/components/FeaturedRow';
+import CartBar from '@/components/CartBar';
 import { getMartProducts } from '@/lib/products';
 import { getRunningAds } from '@/lib/promotions';
-import { getRestaurantCards } from '@/lib/restaurant-cards';
 
 const CATEGORY_ICONS: Record<string, string> = Object.fromEntries(
   MART_CATEGORIES.map((category) => [category.name, category.icon])
@@ -18,11 +18,7 @@ const CATEGORY_ICONS: Record<string, string> = Object.fromEntries(
 export const revalidate = 300;
 
 export default async function Home() {
-  const [allProducts, featuredAds, restaurants] = await Promise.all([
-    getMartProducts(),
-    getRunningAds('MAIN_PAGE', 4),
-    getRestaurantCards(),
-  ]);
+  const [allProducts, featuredAds] = await Promise.all([getMartProducts(), getRunningAds('MAIN_PAGE', 4)]);
   const sellerProducts = allProducts.slice(0, 12);
 
   const products = [
@@ -50,9 +46,10 @@ export default async function Home() {
         </div>
       ) : null}
       <VendorProducts products={products} />
-      <RestaurantsSection restaurants={restaurants} />
+      <RestaurantsSection />
       <ServicesSection />
       <WhyChooseUs />
+      <CartBar spacer />
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { getLikedAds } from '@/lib/ads';
+import { foodReach } from '@/lib/delivery';
 import { getRestaurants, type FoodItem, type Restaurant } from '@/lib/food-search';
+import type { Coordinates } from '@/lib/geo';
 
 // Restaurants and dishes a user saved with the heart button. Everything is stored in the database
 // (Favourite), so the list follows the account to any browser or device.
@@ -17,8 +19,12 @@ export async function getFavouriteIds(userId: string) {
   };
 }
 
-/** Everything on the Favourites page, newest saved first. Anything no longer listed is left out. */
-export async function getFavouritesPage(userId: string) {
+/**
+ * Everything on the Favourites page, newest saved first. Anything no longer listed is left out, and, once the
+ * customer's location is known (`origin`), so is every restaurant (and its dishes) that is not within 5 km of it;
+ * `hidden` counts those so the page can say so.
+ */
+export async function getFavouritesPage(userId: string, origin: Coordinates | null = null) {
   const [rows, restaurants, likedAds] = await Promise.all([
     prisma.favourite.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, select: { kind: true, targetId: true } }),
     getRestaurants(),
@@ -26,13 +32,21 @@ export async function getFavouritesPage(userId: string) {
   ]);
 
   const restaurantsById = new Map(restaurants.map((restaurant) => [restaurant.id, restaurant]));
-  const dishesById = new Map(restaurants.flatMap((restaurant) => restaurant.items.map((item) => [item.id, item] as const)));
+  const dishesById = new Map(
+    restaurants.flatMap((restaurant) => restaurant.items.map((item) => [item.id, { item, restaurant }] as const))
+  );
+  // Without a location nothing can be judged, so everything saved is shown until it is known.
+  const reaches = (restaurant: Restaurant) => !origin || foodReach(origin, restaurant.location).status === 'OK';
+
+  const savedRestaurants = rows.filter((row) => row.kind === 'RESTAURANT').flatMap((row) => restaurantsById.get(row.targetId) ?? []);
+  const savedDishes = rows.filter((row) => row.kind === 'DISH').flatMap((row) => dishesById.get(row.targetId) ?? []);
+  const nearbyRestaurants = savedRestaurants.filter(reaches) satisfies Restaurant[];
+  const nearbyDishes = savedDishes.filter(({ restaurant }) => reaches(restaurant)).map(({ item }) => item) satisfies FoodItem[];
 
   return {
-    restaurants: rows
-      .filter((row) => row.kind === 'RESTAURANT')
-      .flatMap((row) => restaurantsById.get(row.targetId) ?? []) satisfies Restaurant[],
-    dishes: rows.filter((row) => row.kind === 'DISH').flatMap((row) => dishesById.get(row.targetId) ?? []) satisfies FoodItem[],
+    restaurants: nearbyRestaurants,
+    dishes: nearbyDishes,
     ads: likedAds,
+    hidden: savedRestaurants.length - nearbyRestaurants.length + (savedDishes.length - nearbyDishes.length),
   };
 }

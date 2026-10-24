@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { MART_ADS, MART_CATEGORIES, MART_PRODUCTS } from '@/lib/data';
 import { Store, X, LayoutGrid } from 'lucide-react';
 import AddToCartButton from '@/components/AddToCartButton';
+import CartBar from '@/components/CartBar';
 import FeaturedRow from '@/components/FeaturedRow';
 import SidebarAdCard from '@/components/SidebarAdCard';
 import { getMartProducts } from '@/lib/products';
@@ -266,6 +267,7 @@ export default async function MangwaooMart({
           </div>
         </div>
       </section>
+      <CartBar spacer />
     </div>
   );
 }

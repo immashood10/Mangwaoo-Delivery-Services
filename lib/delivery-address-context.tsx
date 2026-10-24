@@ -1,6 +1,15 @@
 'use client';
 
-import { createContext, useContext, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from 'react';
 
 /** The delivery address the customer has picked in the navbar (shared with checkout). */
 export type DeliveryAddress = {
@@ -16,6 +25,10 @@ export type DeliveryAddress = {
 type DeliveryAddressContextValue = {
   address: DeliveryAddress | null;
   setAddress: Dispatch<SetStateAction<DeliveryAddress | null>>;
+  /** Counts how many times a page asked the navbar to open its "choose your delivery address" window. */
+  pickerRequests: number;
+  /** For a page's "Select your address" button: the navbar owns the window, so the page just asks. */
+  requestAddressPicker: () => void;
 };
 
 const DeliveryAddressContext = createContext<DeliveryAddressContextValue | null>(null);
@@ -24,7 +37,12 @@ const DeliveryAddressContext = createContext<DeliveryAddressContextValue | null>
 // addresses, or the location a visitor last shared (see /api/visitor) — nothing is written to browser storage.
 export function DeliveryAddressProvider({ children }: { children: ReactNode }) {
   const [address, setAddress] = useState<DeliveryAddress | null>(null);
-  const value = useMemo(() => ({ address, setAddress }), [address]);
+  const [pickerRequests, setPickerRequests] = useState(0);
+  const requestAddressPicker = useCallback(() => setPickerRequests((count) => count + 1), []);
+  const value = useMemo(
+    () => ({ address, setAddress, pickerRequests, requestAddressPicker }),
+    [address, pickerRequests, requestAddressPicker]
+  );
 
   return <DeliveryAddressContext.Provider value={value}>{children}</DeliveryAddressContext.Provider>;
 }

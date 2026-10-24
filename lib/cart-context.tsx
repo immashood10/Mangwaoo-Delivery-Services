@@ -113,7 +113,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
       body: `{"items":${lines}}`,
       keepalive,
     }).then((response) => {
-      if (response.ok) lastSavedRef.current = lines;
+      if (!response.ok) return;
+
+      lastSavedRef.current = lines;
+      // Saved: leaving the page must not save this same cart again (it could overwrite a newer one saved elsewhere).
+      if (pendingSaveRef.current === lines) pendingSaveRef.current = null;
     });
 
   useEffect(() => {

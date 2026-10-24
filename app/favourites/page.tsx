@@ -3,26 +3,43 @@ import { ArrowRight, Heart, Store } from 'lucide-react';
 import AdCard from '@/components/AdCard';
 import FavouriteButton from '@/components/FavouriteButton';
 import FavouritesLoginPrompt from '@/components/FavouritesLoginPrompt';
+import NearbyNotice from '@/components/NearbyNotice';
 import RestaurantMenuItem from '@/components/RestaurantMenuItem';
 import { getSession } from '@/lib/auth';
+import { FOOD_DELIVERY_RADIUS_KM } from '@/lib/delivery';
 import { getFavouritesPage } from '@/lib/favourites';
+import { isRealLocation, parseCoordinates } from '@/lib/geo';
 
 export const metadata = {
   title: 'Favourites - Mangwaoo',
 };
 
-export default async function FavouritesPage() {
-  const session = await getSession();
+export default async function FavouritesPage({ searchParams }: { searchParams: Promise<{ lat?: string; lng?: string }> }) {
+  const [session, { lat, lng }] = await Promise.all([getSession(), searchParams]);
 
   if (!session) {
     return <FavouritesLoginPrompt />;
   }
 
-  const { restaurants, dishes, ads } = await getFavouritesPage(session.userId);
+  // Restaurants (and their dishes) farther than 5 km from the customer are not shown, like everywhere else on the site.
+  // The location comes with the address (`?lat=&lng=`, kept in step by NearbyNotice); until it is known everything shows.
+  const parsedOrigin = parseCoordinates(lat, lng);
+  const origin = isRealLocation(parsedOrigin) ? parsedOrigin : null;
+  const locationQuery = origin ? `?lat=${origin.lat}&lng=${origin.lng}` : '';
+  const { restaurants, dishes, ads, hidden } = await getFavouritesPage(session.userId, origin);
+  const hiddenNote =
+    hidden > 0 ? (
+      <p className="mb-6 rounded-xl bg-brand-light px-4 py-3 text-sm text-brand-gray">
+        {hidden} saved {hidden === 1 ? 'restaurant or dish is' : 'restaurants and dishes are'} more than {FOOD_DELIVERY_RADIUS_KM} km from your delivery address, so
+        {hidden === 1 ? ' it isn' : ' they aren'}&apos;t shown.
+      </p>
+    ) : null;
 
   if (restaurants.length + dishes.length + ads.length === 0) {
     return (
       <div className="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
+        <NearbyNotice lat={origin?.lat ?? null} lng={origin?.lng ?? null} variant="quiet" />
+        {hiddenNote}
         <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-brand-red-primary/10">
           <Heart className="h-8 w-8 text-accent" />
         </div>
@@ -51,6 +68,8 @@ export default async function FavouritesPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8 md:py-16">
+      <NearbyNotice lat={origin?.lat ?? null} lng={origin?.lng ?? null} variant="quiet" />
+      {hiddenNote}
       <div className="mb-10 flex items-center gap-3">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-red-primary/10 text-accent">
           <Heart className="h-6 w-6" />
@@ -71,13 +90,13 @@ export default async function FavouritesPage() {
               {restaurants.map((restaurant) => (
                 <li key={restaurant.id} className="relative">
                   <Link
-                    href={`/restaurant/${restaurant.id}`}
+                    href={`/restaurant/${restaurant.id}${locationQuery}`}
                     className="group flex items-center gap-4 rounded-2xl bg-surface p-4 pr-28 shadow-soft transition hover:shadow-md"
                   >
                     <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-brand-red-primary to-brand-red-secondary text-white">
-                      {restaurant.bannerImage ? (
+                      {restaurant.thumbnailImage ? (
                         // eslint-disable-next-line @next/next/no-img-element -- seller-supplied image URL
-                        <img src={restaurant.bannerImage} alt="" className="h-full w-full object-cover" />
+                        <img src={restaurant.thumbnailImage} alt="" className="h-full w-full object-cover" />
                       ) : (
                         <Store className="h-7 w-7" />
                       )}
@@ -110,7 +129,7 @@ export default async function FavouritesPage() {
                 <div key={dish.id}>
                   <p className="mb-1.5 px-1 text-xs text-brand-gray">
                     from{' '}
-                    <Link href={`/restaurant/${dish.sellerId}`} className="font-semibold text-accent hover:underline">
+                    <Link href={`/restaurant/${dish.sellerId}${locationQuery}`} className="font-semibold text-accent hover:underline">
                       {dish.vendor}
                     </Link>
                   </p>

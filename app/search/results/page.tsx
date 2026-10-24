@@ -1,10 +1,10 @@
 import Link from 'next/link';
 import { ArrowRight, Bike, MapPin, Search, Store } from 'lucide-react';
 import FavouriteButton from '@/components/FavouriteButton';
-import SearchLocationNotice from '@/components/SearchLocationNotice';
+import NearbyNotice from '@/components/NearbyNotice';
 import { normalizeQuery, searchRestaurants } from '@/lib/food-search';
-import { deliveryFeeForDistance } from '@/lib/delivery';
-import { formatDistance, parseCoordinates } from '@/lib/geo';
+import { FOOD_DELIVERY_RADIUS_KM, deliveryFeeForDistance } from '@/lib/delivery';
+import { formatDistance, isRealLocation, parseCoordinates } from '@/lib/geo';
 
 export const metadata = {
   title: 'Search - Mangwaoo',
@@ -19,12 +19,13 @@ export default async function SearchResultsPage({
 }) {
   const { q, lat, lng } = await searchParams;
   const query = normalizeQuery(q);
-  const origin = parseCoordinates(lat, lng);
+  const parsedOrigin = parseCoordinates(lat, lng);
+  const origin = isRealLocation(parsedOrigin) ? parsedOrigin : null;
   const shownQuery = q?.trim() ?? query;
 
-  // /search already redirects the single-restaurant and mart-only cases; this page
-  // lists several matching restaurants (nearest first), or says nothing was found.
-  const results = query ? await searchRestaurants(query, origin) : [];
+  // /search already redirects the single-restaurant and mart-only cases; this page lists the matching restaurants
+  // within 5 km of the customer (nearest first), asks for the address when it isn't known, or says nothing was found.
+  const results = query && origin ? await searchRestaurants(query, origin) : [];
   const locationParams = origin ? `&lat=${origin.lat}&lng=${origin.lng}` : '';
 
   return (
@@ -35,17 +36,19 @@ export default async function SearchResultsPage({
         </div>
         <div>
           <h1 className="text-2xl font-bold text-ink md:text-3xl">
-            {results.length > 0 ? `Restaurants with “${shownQuery}”` : `No results for “${shownQuery}”`}
+            {!origin ? `Search “${shownQuery}”` : results.length > 0 ? `Restaurants with “${shownQuery}”` : `No results for “${shownQuery}”`}
           </h1>
           <p className="text-brand-gray">
-            {results.length > 0
-              ? 'Pick a restaurant to see its menu and order.'
-              : 'We couldn’t find a matching dish or restaurant. Try a different word.'}
+            {!origin
+              ? `We show restaurants within ${FOOD_DELIVERY_RADIUS_KM} km of your delivery address.`
+              : results.length > 0
+                ? 'Pick a restaurant to see its menu and order.'
+                : `No restaurant within ${FOOD_DELIVERY_RADIUS_KM} km of your address has a matching dish. Try a different word or another address.`}
           </p>
         </div>
       </div>
 
-      {results.length > 1 ? <SearchLocationNotice query={shownQuery} lat={origin?.lat ?? null} lng={origin?.lng ?? null} /> : null}
+      <NearbyNotice lat={origin?.lat ?? null} lng={origin?.lng ?? null} params={{ q: shownQuery }} />
 
       {results.length > 0 ? (
         <ol className="space-y-4">
@@ -56,9 +59,9 @@ export default async function SearchResultsPage({
                 className="group flex items-center gap-4 rounded-2xl bg-surface p-4 shadow-soft transition hover:shadow-md"
               >
                 <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-brand-red-primary to-brand-red-secondary text-3xl text-white">
-                  {restaurant.bannerImage ? (
+                  {restaurant.thumbnailImage ? (
                     // eslint-disable-next-line @next/next/no-img-element -- seller-supplied image URL
-                    <img src={restaurant.bannerImage} alt="" className="h-full w-full object-cover" />
+                    <img src={restaurant.thumbnailImage} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <Store className="h-8 w-8" />
                   )}
@@ -112,10 +115,10 @@ export default async function SearchResultsPage({
             </li>
           ))}
         </ol>
-      ) : (
+      ) : origin ? (
         <div className="flex flex-wrap gap-3">
           <Link
-            href="/gulplaza"
+            href={`/gulplaza?lat=${origin.lat}&lng=${origin.lng}`}
             className="inline-flex items-center rounded-xl bg-gradient-to-r from-brand-red-primary to-brand-red-secondary px-6 py-3 text-sm font-semibold text-white hover:shadow-lg"
           >
             Browse all Food
@@ -127,7 +130,7 @@ export default async function SearchResultsPage({
             Browse MangwaooMart
           </Link>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

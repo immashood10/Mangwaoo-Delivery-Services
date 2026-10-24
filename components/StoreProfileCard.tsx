@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ExternalLink, MapPin, Pencil, Store, Tag } from 'lucide-react';
+import CoverPhotoPicker from '@/components/CoverPhotoPicker';
 import LocationPicker, { type PickedLocation } from '@/components/LocationPicker';
 import { DEFAULT_COUNTRY, MAX_PLACE_LENGTH, PAKISTAN_CITIES, formatLocation } from '@/lib/locations';
 
@@ -20,6 +21,8 @@ export default function StoreProfileCard({
   hasStorePage = true,
   askMapLocation = false,
   mapLocation = null,
+  askCover = false,
+  coverSrc = null,
 }: {
   sellerId: string;
   businessName: string;
@@ -31,11 +34,17 @@ export default function StoreProfileCard({
   /** Food sellers pin their kitchen on the map so customers nearby find them first in search. */
   askMapLocation?: boolean;
   mapLocation?: PickedLocation | null;
+  /** Food sellers can add a background picture, shown behind their restaurant's name on its page. */
+  askCover?: boolean;
+  /** Where the saved background picture is served from (null when there is none). */
+  coverSrc?: string | null;
 }) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState({ businessName, city: city ?? '', country });
   const [pin, setPin] = useState<PickedLocation | null>(mapLocation);
+  // undefined = keep the saved picture, null = remove it, a data URL = a new picture to save.
+  const [coverChange, setCoverChange] = useState<string | null | undefined>(undefined);
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -44,6 +53,7 @@ export default function StoreProfileCard({
   const startEditing = () => {
     setForm({ businessName, city: city ?? '', country });
     setPin(mapLocation);
+    setCoverChange(undefined);
     setError('');
     setIsEditing(true);
   };
@@ -62,7 +72,11 @@ export default function StoreProfileCard({
       const response = await fetch('/api/seller/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(askMapLocation ? { ...form, location: pin } : form),
+        body: JSON.stringify({
+          ...form,
+          ...(askMapLocation ? { location: pin } : {}),
+          ...(askCover && coverChange !== undefined ? { cover: coverChange } : {}),
+        }),
       });
       const data = await response.json().catch(() => null);
 
@@ -72,6 +86,7 @@ export default function StoreProfileCard({
       }
 
       setIsEditing(false);
+      setCoverChange(undefined);
       router.refresh();
     } catch {
       setError('Could not reach the server. Please try again.');
@@ -115,6 +130,20 @@ export default function StoreProfileCard({
             ) : (
               <p className="mt-2 text-xs text-warning">
                 Pin your restaurant on the map so customers near you find you first when they search.
+              </p>
+            )
+          ) : null}
+          {askCover ? (
+            coverSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element -- the seller's own picture, served by /api/seller/cover
+              <img
+                src={coverSrc}
+                alt="Your restaurant's background picture"
+                className="mt-3 aspect-[16/5] w-full max-w-md rounded-xl object-cover"
+              />
+            ) : (
+              <p className="mt-2 text-xs text-brand-gray">
+                Add a background picture so your restaurant&apos;s page looks great. Press Edit to choose one.
               </p>
             )
           ) : null}
@@ -214,6 +243,22 @@ export default function StoreProfileCard({
               />
               <p className="mt-1.5 text-xs text-brand-gray">
                 Customers searching for food see the restaurants nearest to their delivery address first.
+              </p>
+            </div>
+          ) : null}
+
+          {askCover ? (
+            <div>
+              <span className="mb-1.5 block text-sm font-semibold text-ink">Restaurant background picture</span>
+              <CoverPhotoPicker
+                preview={coverChange === undefined ? coverSrc : coverChange}
+                onPick={setCoverChange}
+                onRemove={() => setCoverChange(null)}
+                disabled={isSaving}
+              />
+              <p className="mt-1.5 text-xs text-brand-gray">
+                A wide, bright photo of your restaurant or your food. It shows behind your restaurant&apos;s name on your
+                page. Press Save to keep the change.
               </p>
             </div>
           ) : null}

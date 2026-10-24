@@ -1,6 +1,8 @@
 import { GULPLAZA_CATEGORIES } from '@/lib/data';
-import { distanceInKm, type Coordinates } from '@/lib/geo';
+import { foodReach } from '@/lib/delivery';
+import { isRealLocation, type Coordinates } from '@/lib/geo';
 import { getGulplazaProducts } from '@/lib/products';
+import { coverPath } from '@/lib/seller-cover-config';
 
 export const FOOD_CATEGORY_ICONS: Record<string, string> = Object.fromEntries(
   GULPLAZA_CATEGORIES.map((category) => [category.name, category.icon])
@@ -28,7 +30,12 @@ export type Restaurant = {
   name: string;
   items: FoodItem[];
   categories: string[];
+  /** The first dish photo (a data URL), used as a small picture and as the page header when there is no cover. */
   bannerImage: string | null;
+  /** The background picture the owner uploaded (an image address), shown behind the restaurant's name on its page. */
+  coverImage: string | null;
+  /** The small square picture next to the name in lists: a dish photo, or the background picture without one. */
+  thumbnailImage: string | null;
   location: RestaurantLocation | null;
 };
 
@@ -52,12 +59,17 @@ function toFoodItem(product: GulplazaProductRow): FoodItem {
 }
 
 function toRestaurant(seller: GulplazaProductRow['seller'], items: FoodItem[]): Restaurant {
+  const bannerImage = items.find((item) => item.imageUrl)?.imageUrl ?? null;
+  const coverImage = seller.coverUpdatedAt ? coverPath(seller.id, seller.coverUpdatedAt) : null;
+
   return {
     id: seller.id,
     name: seller.businessName,
     items,
     categories: [...new Set(items.map((item) => item.category))],
-    bannerImage: items.find((item) => item.imageUrl)?.imageUrl ?? null,
+    bannerImage,
+    coverImage,
+    thumbnailImage: bannerImage ?? coverImage,
     location:
       seller.latitude !== null && seller.longitude !== null
         ? { lat: seller.latitude, lng: seller.longitude, label: seller.locationLabel }
@@ -149,35 +161,36 @@ function restaurantNameMatches(restaurant: Restaurant, query: string) {
 export type RestaurantMatch = {
   restaurant: Restaurant;
   matches: FoodItem[];
-  /** Straight-line distance from the customer's address; null when either location is unknown. */
+  /** Straight-line distance from the customer's address (every restaurant listed is within the delivery radius). */
   distanceKm: number | null;
 };
 
 /**
- * Restaurants with dishes matching the query. With the customer's location the nearest
- * restaurants come first (restaurants that haven't pinned a location come last);
- * without it, a restaurant whose own name matches comes first, then the one with most matches.
+ * Restaurants with dishes matching the query, for a customer at `origin`: only those within the delivery radius
+ * (`FOOD_DELIVERY_RADIUS_KM`, 5 km) are listed, nearest first. A restaurant that hasn't pinned its kitchen on the map
+ * can't be listed (nobody can tell how far it is), and without a location nothing can be listed either.
  */
 export async function searchRestaurants(query: string, origin: Coordinates | null = null): Promise<RestaurantMatch[]> {
+  if (!isRealLocation(origin)) return [];
+
   const restaurants = await getRestaurants();
 
   return restaurants
-    .map((restaurant) => {
+    .flatMap((restaurant): RestaurantMatch[] => {
+      const reach = foodReach(origin, restaurant.location);
+
+      if (reach.status !== 'OK') return [];
+
       const itemMatches = restaurant.items.filter((item) => itemMatchesQuery(item, query, restaurant.name));
       // Searching a restaurant by name finds the restaurant even if no single dish matches.
       const matches = itemMatches.length > 0 || !restaurantNameMatches(restaurant, query) ? itemMatches : restaurant.items;
-      const distanceKm = origin && restaurant.location ? distanceInKm(origin, restaurant.location) : null;
-      return { restaurant, matches, distanceKm };
-    })
-    .filter((result) => result.matches.length > 0)
-    .sort((a, b) => {
-      if (origin && a.distanceKm !== b.distanceKm) {
-        if (a.distanceKm === null) return 1;
-        if (b.distanceKm === null) return -1;
-        return a.distanceKm - b.distanceKm;
-      }
 
-      // A restaurant whose own name matches is the strongest signal, then how many items match.
+      return matches.length > 0 ? [{ restaurant, matches, distanceKm: reach.distanceKm }] : [];
+    })
+    .sort((a, b) => {
+      if (a.distanceKm !== b.distanceKm) return (a.distanceKm ?? 0) - (b.distanceKm ?? 0);
+
+      // The same distance: a restaurant whose own name matches is the strongest signal, then how many items match.
       const aNamed = restaurantNameMatches(a.restaurant, query) ? 1 : 0;
       const bNamed = restaurantNameMatches(b.restaurant, query) ? 1 : 0;
       return bNamed - aNamed || b.matches.length - a.matches.length || a.restaurant.name.localeCompare(b.restaurant.name);

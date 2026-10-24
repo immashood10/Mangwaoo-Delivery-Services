@@ -10,6 +10,7 @@ import { getSession } from '@/lib/auth';
 import { formatAdDate, formatMonthYear, getRelatedAds } from '@/lib/ads';
 import { formatLocation } from '@/lib/locations';
 import AddToCartButton from '@/components/AddToCartButton';
+import CartBar from '@/components/CartBar';
 import AdCard from '@/components/AdCard';
 import ChatWidget from '@/components/ChatWidget';
 import LikeButton from '@/components/LikeButton';
@@ -249,6 +250,7 @@ export default async function MartProductDetail({
           </section>
         ) : null}
       </div>
+      <CartBar spacer />
     </div>
   );
 }

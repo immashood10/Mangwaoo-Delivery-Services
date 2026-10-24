@@ -30,6 +30,8 @@ export default async function SellerLayout({ children }: { children: React.React
         ownerName: seller.user.name,
         isApproved: seller.isApproved,
         isFood: isFoodSeller(seller),
+        // Customers only see food restaurants within 5 km of them, which needs the kitchen on the map.
+        hasLocation: seller.latitude !== null && seller.longitude !== null,
         dashboardLabel: isFoodSeller(seller) ? 'Food seller dashboard' : 'Seller dashboard',
       }}
       initialNotifications={notifications}
