@@ -191,7 +191,7 @@ export default async function AdminDashboardPage({
   const session = await getSession();
 
   if (!session || session.role !== 'ADMIN') {
-    redirect('/login?next=/admin');
+    redirect('/admin/login');
   }
 
   const rangeDays = parseChartRange((await searchParams).range);

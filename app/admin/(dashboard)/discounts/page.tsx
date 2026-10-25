@@ -13,7 +13,7 @@ export default async function AdminDiscountsPage() {
   const session = await getSession();
 
   if (!session || session.role !== 'ADMIN') {
-    redirect('/');
+    redirect('/admin/login');
   }
 
   const coupons = await prisma.coupon.findMany({ orderBy: { createdAt: 'desc' } });

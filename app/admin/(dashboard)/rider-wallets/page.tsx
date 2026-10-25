@@ -16,7 +16,7 @@ export default async function AdminRiderWalletsPage() {
   const session = await getSession();
 
   if (!session || session.role !== 'ADMIN') {
-    redirect('/');
+    redirect('/admin/login');
   }
 
   const [riders, pending, settings] = await Promise.all([

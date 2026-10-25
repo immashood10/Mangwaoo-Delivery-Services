@@ -53,7 +53,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   const session = await getSession();
 
   if (!session || session.role !== 'ADMIN') {
-    redirect('/');
+    redirect('/admin/login');
   }
 
   const { view: rawView, q } = await searchParams;

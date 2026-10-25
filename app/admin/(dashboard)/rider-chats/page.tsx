@@ -9,7 +9,7 @@ export default async function AdminRiderChatsPage({ searchParams }: { searchPara
   const session = await getSession();
 
   if (!session || session.role !== 'ADMIN') {
-    redirect('/');
+    redirect('/admin/login');
   }
 
   const initialFilter = parseChatFilter((await searchParams).filter);

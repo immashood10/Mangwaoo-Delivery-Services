@@ -519,7 +519,11 @@ export default function CartPage() {
                 </p>
               ) : null}
 
-              <p className="text-xs text-gray-400">No other taxes, no platform fees and no other charges.</p>
+              <ul className="list-disc space-y-0.5 pl-5 text-xs font-bold text-ink">
+                <li>No other taxes</li>
+                <li>No platform fees</li>
+                <li>No other charges</li>
+              </ul>
               <div className="flex items-center justify-between border-t border-gray-100 pt-2 text-base">
                 <span className="font-semibold text-ink">Total</span>
                 <span className={`font-bold text-accent ${isPricing && quote ? 'opacity-60' : ''}`}>{pkr(total)}</span>

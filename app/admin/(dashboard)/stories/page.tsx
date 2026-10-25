@@ -16,7 +16,7 @@ export default async function AdminStoriesPage() {
   const session = await getSession();
 
   if (!session || session.role !== 'ADMIN') {
-    redirect('/');
+    redirect('/admin/login');
   }
 
   const stories = await getAdminStories();

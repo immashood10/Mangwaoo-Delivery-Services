@@ -13,7 +13,7 @@ export default async function AdminAdsPage() {
   const session = await getSession();
 
   if (!session || session.role !== 'ADMIN') {
-    redirect('/');
+    redirect('/admin/login');
   }
 
   const ads = await getAllAdRequests();

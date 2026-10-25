@@ -12,7 +12,7 @@ export default async function AdminMessagesPage({ searchParams }: { searchParams
   const session = await getSession();
 
   if (!session || session.role !== 'ADMIN') {
-    redirect('/');
+    redirect('/admin/login');
   }
 
   const { user, tab } = await searchParams;

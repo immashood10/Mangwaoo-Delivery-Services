@@ -8,7 +8,7 @@ export default async function AdminSellersPage() {
   const session = await getSession();
 
   if (!session || session.role !== 'ADMIN') {
-    redirect('/');
+    redirect('/admin/login');
   }
 
   const sellers = await prisma.seller.findMany({
