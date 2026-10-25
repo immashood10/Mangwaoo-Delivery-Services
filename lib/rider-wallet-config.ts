@@ -54,7 +54,7 @@ export function commissionFor(fee: number, percent: number) {
 }
 
 /**
- * The least an order chat's delivery charge can be: the petrol for the ride from the pickup to the drop-off
+ * The least an order chat's delivery charge can be: the delivery rate for the ride from the pickup to the drop-off
  * (`lib/delivery.ts`), so a rider can't avoid the commission by declaring nothing. 0 when the chat has no pickup point.
  */
 export function minimumFeeForChat(chat: {

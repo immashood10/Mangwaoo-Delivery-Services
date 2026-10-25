@@ -8,7 +8,7 @@ import { MAX_DECLARED_FEE_PKR, RECHARGE_TITLE, formatPkr, rechargeMessage } from
 /**
  * Finishes a delivered order: the rider's "Complete order" or the customer's "Order received". When a rider had taken
  * the order this is the moment Mangwaoo's commission is charged to the rider's wallet. A rider may send `{ fee }`, the
- * delivery charge they got; the commission never works from less than the petrol for the ride. An admin's "Close"
+ * delivery charge they got; the commission never works from less than the delivery rate for the ride's distance. An admin's "Close"
  * only closes the chat (no commission: use Rider Wallets > Adjust if one is due). "End chat" is NOT this: it cancels
  * the order and deletes the chat (`/cancel`).
  */

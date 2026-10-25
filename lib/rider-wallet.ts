@@ -121,7 +121,7 @@ export type CloseResult = {
 /**
  * Finishes an order chat. With `charge`, a chat that a rider had claimed (ACTIVE) also charges the rider Mangwaoo's
  * commission, exactly once: the percentage of the delivery charge, which is what the rider declared but never less than
- * the petrol for the ride (`minimumFeeForChat`). That is what a delivered order is: the rider's "Complete order" or the
+ * the delivery rate for the ride's distance (`minimumFeeForChat`). That is what a delivered order is: the rider's "Complete order" or the
  * customer's "Order received". Without `charge` (an admin closing a chat) it only closes it; so does closing a chat
  * nobody claimed or one that is already closed. A cancelled order never comes through here: `cancelOrderChat` deletes it.
  */

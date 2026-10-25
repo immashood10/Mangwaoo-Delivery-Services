@@ -510,7 +510,7 @@ export default function CartPage() {
               ))}
               {cartHasFood ? (
                 <p className="text-xs text-gray-400">
-                  {`Delivery is charged on food only: PKR ${DELIVERY_RATE_PER_KM} per km, the petrol for the rider's bike.`}
+                  {`Delivery is charged on food only: PKR ${DELIVERY_RATE_PER_KM} per km from the restaurant to you.`}
                 </p>
               ) : null}
 

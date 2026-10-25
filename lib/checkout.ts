@@ -7,6 +7,7 @@ import { refreshFoodCatalog, refreshMartCatalog } from '@/lib/catalog-cache';
 import { getSellerUserIds, notifyAdminsAfterResponse, notifyAfterResponse, shortOrderId } from '@/lib/notify';
 import { ADMIN_PAGES, SELLER_PAGES } from '@/lib/notification-types';
 import { normalizeCouponCode, type CouponScope } from '@/lib/coupons';
+import { MART_PRODUCTS } from '@/lib/data';
 import type { CouponInfo, Marketplace, OrderQuote, Quote } from '@/lib/checkout-types';
 
 export type { CouponInfo, Marketplace, OrderQuote, Quote };
@@ -14,7 +15,7 @@ export type { CouponInfo, Marketplace, OrderQuote, Quote };
 // Prices a cart and turns it into orders. The browser only says WHAT is wanted (products, quantities, where to
 // deliver, which coupon); every amount comes from here, from the database:
 //   - items: the listed price of each product
-//   - food delivery: petrol cost of the ride from each restaurant to the customer (lib/delivery.ts); MangwaooMart has none
+//   - food delivery: distance charge of the ride from each restaurant to the customer (lib/delivery.ts); MangwaooMart has none
 //   - coupon: a % off the items it applies to (never the delivery fee), paid by Mangwaoo, not the seller
 
 export type CheckoutLine = {
@@ -177,6 +178,38 @@ async function resolveGroups(lines: CheckoutLine[]) {
   return [...groups.values()];
 }
 
+const SAMPLE_PRODUCTS = new Map(MART_PRODUCTS.map((product) => [String(product.id), product]));
+
+/**
+ * The built-in sample items (`MART_PRODUCTS` in lib/data.ts) have no row in the database, so they are not placed as
+ * orders (the owner is told by WhatsApp instead, see `placeOrders`). They are still priced, from that catalog and never
+ * from what the browser sent, so the cart shows what they cost. One entry per vendor, no coupon and no delivery fee.
+ */
+function sampleOrders(lines: CheckoutLine[], groups: Group[]): OrderQuote[] {
+  const inDatabase = new Set(groups.filter((group) => group.marketplace === 'mart').flatMap((group) => group.lines.map((line) => line.productId)));
+  const subtotals = new Map<string, number>();
+
+  for (const line of lines) {
+    const sample = line.marketplace === 'mart' && !inDatabase.has(line.productId) ? SAMPLE_PRODUCTS.get(line.productId) : undefined;
+    if (!sample) continue;
+
+    const price = Number(sample.price.replace(/[^0-9.]/g, '')) || 0;
+    subtotals.set(sample.vendor, Math.round(((subtotals.get(sample.vendor) ?? 0) + price * line.qty) * 100) / 100);
+  }
+
+  return [...subtotals].map(([vendor, subtotal]): OrderQuote => ({
+    marketplace: 'mart',
+    sellerId: `sample:${vendor}`,
+    sellerName: vendor,
+    subtotal,
+    deliveryFee: 0,
+    distanceKm: null,
+    deliveryNote: null,
+    discount: 0,
+    total: subtotal,
+  }));
+}
+
 type Priced = { groups: Group[]; quote: Quote; coupon: Coupon | null };
 
 /** Prices the cart. Throws a CheckoutError for a coupon that can't be used. */
@@ -187,6 +220,7 @@ export async function priceCheckout(input: {
   customerId: string;
 }): Promise<Priced> {
   const groups = await resolveGroups(input.lines);
+  const samples = sampleOrders(input.lines, groups);
 
   let coupon: Coupon | null = null;
   let shares = new Map<Group, number>();
@@ -196,11 +230,14 @@ export async function priceCheckout(input: {
     coupon = code ? await prisma.coupon.findUnique({ where: { code } }) : null;
 
     await checkCouponAvailable(prisma, coupon, input.customerId);
-    if (groups.length === 0) throw new CheckoutError(400, 'Add something to your cart to use a coupon.');
+    if (groups.length === 0) {
+      throw new CheckoutError(400, samples.length > 0 ? "Coupons can't be used on sample items." : 'Add something to your cart to use a coupon.');
+    }
 
     shares = allocateDiscount(coupon as Coupon, groups);
   }
 
+  // The sample items come last, so `orders[i]` stays the order of `groups[i]` (placeOrders relies on that).
   const orders: OrderQuote[] = groups.map((group) => {
     const isFood = group.marketplace === 'gulplaza';
     const discount = shares.get(group) ?? 0;
@@ -233,7 +270,7 @@ export async function priceCheckout(input: {
       discount,
       total: group.subtotal - discount + deliveryFee,
     };
-  });
+  }).concat(samples);
 
   const sum = (pick: (order: OrderQuote) => number) => orders.reduce((total, order) => total + pick(order), 0);
 
@@ -358,8 +395,8 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
     )
   );
 
-  // Nothing here resolves to a real seller-backed product (e.g. demo catalog items): the owner was already
-  // notified above, so this is still a normal success for the customer.
+  // Nothing here resolves to a real seller-backed product (e.g. demo catalog items, which `priceCheckout` still
+  // prices): the owner was already notified above, so this is still a normal success for the customer.
   if (groups.length === 0) return { orders: [], quote };
 
   let placed: PlacedOrder[];
@@ -474,7 +511,8 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
 
   // Tell the admins too: one line per checkout, however many seller orders it made.
   notifyAdminsAfterResponse(async () => {
-    const payable = quote.orders.reduce((sum, order) => sum + order.subtotal, 0);
+    // Only the orders that were really placed (sample items come after them in the quote).
+    const payable = quote.orders.slice(0, placed.length).reduce((sum, order) => sum + order.subtotal, 0);
 
     return {
       type: 'ORDER' as const,

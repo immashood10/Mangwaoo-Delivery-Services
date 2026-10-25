@@ -9,14 +9,17 @@ export type CouponInfo = {
   maxDiscountAmount: number | null;
 };
 
-/** What one order of the checkout costs. A cart with items from three sellers makes three orders. */
+/**
+ * What one order of the checkout costs. A cart with items from three sellers makes three orders. Sample items (no
+ * database row, `sellerId` `sample:<vendor>`) are priced the same way but come last and are never placed.
+ */
 export type OrderQuote = {
   marketplace: Marketplace;
   sellerId: string;
   sellerName: string;
   /** The items (what the seller earns). */
   subtotal: number;
-  /** Food only: the petrol cost from the restaurant to the customer. Always 0 for MangwaooMart. */
+  /** Food only: the distance charge from the restaurant to the customer. Always 0 for MangwaooMart. */
   deliveryFee: number;
   /** Food only: the distance the fee is for (billed to 0.1 km). */
   distanceKm: number | null;

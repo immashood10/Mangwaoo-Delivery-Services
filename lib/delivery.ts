@@ -1,16 +1,10 @@
 import { distanceInKm, isRealLocation, type Coordinates } from '@/lib/geo';
 
-// Food delivery is charged by what the rider's motorbike burns: the distance from the restaurant to the
-// customer's location, at the petrol the bike uses. Only food has a delivery fee (MangwaooMart has none).
+// Food delivery is charged by distance: the kilometres from the restaurant to the customer's location, at a flat
+// rate per kilometre. Only food has a delivery fee (MangwaooMart has none).
 
-/** How far an average motorbike goes on one litre of petrol. */
-export const MOTORBIKE_KM_PER_LITRE = 40;
-
-/** Price of one litre of petrol, in PKR. */
-export const PETROL_PRICE_PER_LITRE = 400;
-
-/** What one kilometre costs in petrol: Rs 400 / 40 km = Rs 10. */
-export const DELIVERY_RATE_PER_KM = PETROL_PRICE_PER_LITRE / MOTORBIKE_KM_PER_LITRE;
+/** What one kilometre of delivery costs, in PKR. */
+export const DELIVERY_RATE_PER_KM = 70;
 
 /**
  * Distances are worked in tenths of a kilometre, the same precision the screens show, so the fee always matches

@@ -149,7 +149,7 @@ export function RiderHome() {
  * What a rider can do with an order they have taken, along the top of its chat:
  * - **Complete order**: they say what delivery charge they received, Mangwaoo's commission on it is shown, and on
  *   confirming the order ends and the commission goes on their wallet (the server never works from less than the
- *   petrol for the ride, so the number can't be gamed);
+ *   delivery rate for the ride's distance, so the number can't be gamed);
  * - **End chat**: cancels the order (the chat is deleted for both sides, nothing is charged), after a confirmation.
  */
 function OrderActions({
@@ -182,7 +182,7 @@ function OrderActions({
     }
 
     if (minimum > 0 && hasFee && entered < minimum) {
-      setError(`The charge can't be less than ${formatPkr(minimum)}, the petrol for this ride.`);
+      setError(`The charge can't be less than ${formatPkr(minimum)}, the delivery rate for this ride's distance.`);
       return;
     }
 
@@ -264,7 +264,7 @@ function OrderActions({
             placeholder={minimum > 0 ? String(minimum) : 'e.g. 150'}
           />
           <p className="mt-1.5 text-xs text-brand-gray">
-            {minimum > 0 ? `Not less than ${formatPkr(minimum)} (the petrol for this ride). ` : ''}
+            {minimum > 0 ? `Not less than ${formatPkr(minimum)} (the delivery rate for this ride's distance). ` : ''}
             Mangwaoo keeps {rules.commissionPercent}%{commission > 0 ? `: ${formatPkr(commission)} on this order` : ''}, which is added to your account.
           </p>
 
