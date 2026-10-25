@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, BadgeCheck, Bike, Clock, MapPin, Store } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, Bike, Clock, Info, MapPin, Store } from 'lucide-react';
 import NearbyNotice from '@/components/NearbyNotice';
 import { getRestaurant, itemMatchesQuery, normalizeQuery } from '@/lib/food-search';
-import { FOOD_DELIVERY_RADIUS_KM, deliveryFeeForDistance, foodReach } from '@/lib/delivery';
+import { deliveryFeeForDistance, farAwayNote, foodReach } from '@/lib/delivery';
 import { formatDistance, isRealLocation, parseCoordinates } from '@/lib/geo';
 import FavouriteButton from '@/components/FavouriteButton';
 import RestaurantMenuItem from '@/components/RestaurantMenuItem';
@@ -31,25 +31,24 @@ export default async function RestaurantPage({
   const query = normalizeQuery(q);
   const matches = query ? restaurant.items.filter((item) => itemMatchesQuery(item, query, restaurant.name)) : [];
 
-  // The customer's address comes along from the lists, so show how far this kitchen is, and only serve the menu to
-  // customers it delivers to: within 5 km, and with a kitchen pinned on the map so the distance can be known.
+  // The customer's address comes along from the lists, so show how far this kitchen is and what the delivery costs. The
+  // menu is served to everyone with a kitchen pinned on the map (so the distance, and the delivery charge, can be known);
+  // a kitchen beyond 5 km gets a note that the delivery charge is higher.
   const parsedOrigin = parseCoordinates(lat, lng);
   const origin = isRealLocation(parsedOrigin) ? parsedOrigin : null;
   const reach = foodReach(origin, restaurant.location);
-  const distanceKm = reach.status === 'OK' || reach.status === 'TOO_FAR' ? reach.distanceKm : null;
+  const distanceKm = reach.status === 'OK' || reach.status === 'FAR' ? reach.distanceKm : null;
 
-  if (origin && (reach.status === 'TOO_FAR' || reach.status === 'NO_PIN')) {
+  if (origin && reach.status === 'NO_PIN') {
     return (
       <div className="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
         <NearbyNotice lat={origin.lat} lng={origin.lng} params={q ? { q } : {}} variant="quiet" />
         <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-brand-red-primary/10 text-accent">
           <MapPin className="h-8 w-8" />
         </div>
-        <h1 className="mb-2 text-2xl font-bold text-ink">{restaurant.name} doesn&apos;t deliver to your address</h1>
+        <h1 className="mb-2 text-2xl font-bold text-ink">{restaurant.name} can&apos;t deliver to your address yet</h1>
         <p className="mb-8 text-brand-gray">
-          {reach.status === 'TOO_FAR'
-            ? `It is ${formatDistance(reach.distanceKm)} from your delivery address, and we deliver food only from restaurants within ${FOOD_DELIVERY_RADIUS_KM} km of you.`
-            : `This restaurant hasn't set its location on the map yet, so we can't check that it is within ${FOOD_DELIVERY_RADIUS_KM} km of you.`}
+          This restaurant hasn&apos;t set its location on the map yet, so we can&apos;t work out how far it is or what the delivery would cost.
         </p>
         <Link
           href={`/gulplaza?lat=${origin.lat}&lng=${origin.lng}`}
@@ -153,6 +152,13 @@ export default async function RestaurantPage({
 
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         <NearbyNotice lat={origin?.lat ?? null} lng={origin?.lng ?? null} params={q ? { q } : {}} variant="quiet" />
+
+        {reach.status === 'FAR' ? (
+          <p role="note" className="mb-6 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-ink">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+            <span>{farAwayNote(reach.distanceKm)}</span>
+          </p>
+        ) : null}
 
         {matches.length > 0 && (
           <section className="mb-10">

@@ -24,11 +24,12 @@ export type OrderQuote = {
   /** Food only: the distance the fee is for (billed to 0.1 km). */
   distanceKm: number | null;
   /**
-   * Food only: why this order can't go ahead as it is. The customer hasn't pinned a location, the restaurant hasn't pinned
-   * its kitchen (so nobody can tell how far it is), or it is farther than the delivery radius (5 km) from the drop-off.
-   * Checkout refuses all three.
+   * Food only: why the delivery fee can't be worked out, so the order can't go ahead as it is. The customer hasn't pinned
+   * a location, or the restaurant hasn't pinned its kitchen (so nobody can tell how far it is). Checkout refuses both.
    */
-  deliveryNote: 'NEEDS_DROPOFF' | 'NO_RESTAURANT_PIN' | 'OUT_OF_RANGE' | null;
+  deliveryNote: 'NEEDS_DROPOFF' | 'NO_RESTAURANT_PIN' | null;
+  /** Food only: the restaurant is farther than the nearby radius (5 km). The order goes ahead, at the higher fee for the longer ride. */
+  farAway: boolean;
   discount: number;
   /** What the customer pays for this order: items − discount + delivery. */
   total: number;

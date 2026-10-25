@@ -161,14 +161,15 @@ function restaurantNameMatches(restaurant: Restaurant, query: string) {
 export type RestaurantMatch = {
   restaurant: Restaurant;
   matches: FoodItem[];
-  /** Straight-line distance from the customer's address (every restaurant listed is within the delivery radius). */
+  /** Straight-line distance from the customer's address; beyond `FOOD_DELIVERY_RADIUS_KM` the page adds a "farther away" note. */
   distanceKm: number | null;
 };
 
 /**
- * Restaurants with dishes matching the query, for a customer at `origin`: only those within the delivery radius
- * (`FOOD_DELIVERY_RADIUS_KM`, 5 km) are listed, nearest first. A restaurant that hasn't pinned its kitchen on the map
- * can't be listed (nobody can tell how far it is), and without a location nothing can be listed either.
+ * Restaurants with dishes matching the query, for a customer at `origin`, nearest first. Restaurants beyond
+ * `FOOD_DELIVERY_RADIUS_KM` (5 km) are listed too, after the nearby ones; the page marks them (higher delivery charge). A
+ * restaurant that hasn't pinned its kitchen on the map can't be listed (nobody can tell how far it is, or what the
+ * delivery would cost), and without a location nothing can be listed either.
  */
 export async function searchRestaurants(query: string, origin: Coordinates | null = null): Promise<RestaurantMatch[]> {
   if (!isRealLocation(origin)) return [];
@@ -179,7 +180,7 @@ export async function searchRestaurants(query: string, origin: Coordinates | nul
     .flatMap((restaurant): RestaurantMatch[] => {
       const reach = foodReach(origin, restaurant.location);
 
-      if (reach.status !== 'OK') return [];
+      if (reach.status !== 'OK' && reach.status !== 'FAR') return [];
 
       const itemMatches = restaurant.items.filter((item) => itemMatchesQuery(item, query, restaurant.name));
       // Searching a restaurant by name finds the restaurant even if no single dish matches.

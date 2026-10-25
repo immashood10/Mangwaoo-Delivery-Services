@@ -1,4 +1,4 @@
-import { distanceInKm, isRealLocation, type Coordinates } from '@/lib/geo';
+import { distanceInKm, formatDistance, isRealLocation, type Coordinates } from '@/lib/geo';
 
 // Food delivery is charged by distance: the kilometres from the restaurant to the customer's location, at a flat
 // rate per kilometre. Only food has a delivery fee (MangwaooMart has none).
@@ -25,8 +25,10 @@ export function deliveryFeeForDistance(distanceKm: number) {
 // ── Where a restaurant delivers ─────────────────────────────
 
 /**
- * A restaurant is shown to a customer, and can be ordered from, only when it is within this many kilometres (in a
- * straight line) of the customer's location: the delivery address they picked, or the drop-off pinned in the cart.
+ * The "nearby" distance, in kilometres (in a straight line) from the customer's location: the delivery address they
+ * picked, or the drop-off pinned in the cart. The home page and the Food page list only restaurants inside it. A
+ * restaurant farther away can still be found (search, favourites) and ordered from, with a note that the delivery
+ * charge is higher (it is Rs 70 a kilometre) and that ordering from a nearby restaurant is better.
  */
 export const FOOD_DELIVERY_RADIUS_KM = 5;
 
@@ -39,9 +41,10 @@ export function isWithinFoodRadius(distanceKm: number) {
 export type FoodReach =
   /** The customer's location isn't known, so there is no way to tell. */
   | { status: 'NEEDS_ORIGIN' }
-  /** The restaurant hasn't pinned its kitchen on the map, so its distance can't be known either. */
+  /** The restaurant hasn't pinned its kitchen on the map, so its distance (and the delivery charge) can't be known. */
   | { status: 'NO_PIN' }
-  | { status: 'TOO_FAR'; distanceKm: number }
+  /** Farther than the nearby radius: it can be ordered from, at the higher delivery charge for the longer ride. */
+  | { status: 'FAR'; distanceKm: number }
   | { status: 'OK'; distanceKm: number };
 
 export function foodReach(origin: Coordinates | null | undefined, kitchen: Coordinates | null | undefined): FoodReach {
@@ -50,5 +53,10 @@ export function foodReach(origin: Coordinates | null | undefined, kitchen: Coord
 
   const distanceKm = distanceInKm(origin, kitchen);
 
-  return isWithinFoodRadius(distanceKm) ? { status: 'OK', distanceKm } : { status: 'TOO_FAR', distanceKm };
+  return isWithinFoodRadius(distanceKm) ? { status: 'OK', distanceKm } : { status: 'FAR', distanceKm };
+}
+
+/** What a customer is told about a restaurant beyond the nearby radius. */
+export function farAwayNote(distanceKm: number, name = 'This restaurant') {
+  return `${name} is ${formatDistance(distanceKm)} from your delivery address, more than ${FOOD_DELIVERY_RADIUS_KM} km away, so the delivery charge is higher. Ordering from a restaurant closer to you is better.`;
 }

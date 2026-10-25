@@ -21,8 +21,9 @@ export async function getFavouriteIds(userId: string) {
 
 /**
  * Everything on the Favourites page, newest saved first. Anything no longer listed is left out, and, once the
- * customer's location is known (`origin`), so is every restaurant (and its dishes) that is not within 5 km of it;
- * `hidden` counts those so the page can say so.
+ * customer's location is known (`origin`), so is every restaurant (and its dishes) that has no pin on the map, because
+ * its distance and delivery charge can't be worked out; `hidden` counts those so the page can say so. Restaurants
+ * farther than 5 km stay (they can be ordered from, and their page says the delivery charge is higher).
  */
 export async function getFavouritesPage(userId: string, origin: Coordinates | null = null) {
   const [rows, restaurants, likedAds] = await Promise.all([
@@ -36,7 +37,7 @@ export async function getFavouritesPage(userId: string, origin: Coordinates | nu
     restaurants.flatMap((restaurant) => restaurant.items.map((item) => [item.id, { item, restaurant }] as const))
   );
   // Without a location nothing can be judged, so everything saved is shown until it is known.
-  const reaches = (restaurant: Restaurant) => !origin || foodReach(origin, restaurant.location).status === 'OK';
+  const reaches = (restaurant: Restaurant) => !origin || foodReach(origin, restaurant.location).status !== 'NO_PIN';
 
   const savedRestaurants = rows.filter((row) => row.kind === 'RESTAURANT').flatMap((row) => restaurantsById.get(row.targetId) ?? []);
   const savedDishes = rows.filter((row) => row.kind === 'DISH').flatMap((row) => dishesById.get(row.targetId) ?? []);

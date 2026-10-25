@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Minus, Plus, Trash2, ShoppingCart, MessageCircle, Banknote, Smartphone, BadgePercent, X } from 'lucide-react';
 import { useCart } from '@/lib/cart-context';
 import { useDeliveryAddress } from '@/lib/delivery-address-context';
-import { DELIVERY_RATE_PER_KM, FOOD_DELIVERY_RADIUS_KM } from '@/lib/delivery';
+import { DELIVERY_RATE_PER_KM, FOOD_DELIVERY_RADIUS_KM, farAwayNote } from '@/lib/delivery';
 import type { Quote } from '@/lib/checkout-types';
 import LocationPicker, { type PickedLocation } from '@/components/LocationPicker';
 
@@ -94,8 +94,10 @@ export default function CartPage() {
   const isPricing = result?.key !== quoteKey;
   const couponError = result?.key === quoteKey ? result.couponError : null;
   const foodOrders = quote?.orders.filter((order) => order.marketplace === 'gulplaza') ?? [];
-  // Food from a restaurant farther than the delivery radius (or one whose kitchen isn't on the map) can't be ordered.
-  const blockedOrders = foodOrders.filter((order) => order.deliveryNote === 'OUT_OF_RANGE' || order.deliveryNote === 'NO_RESTAURANT_PIN');
+  // Food from a restaurant whose kitchen isn't on the map has no distance, so no delivery fee, and can't be ordered.
+  const blockedOrders = foodOrders.filter((order) => order.deliveryNote === 'NO_RESTAURANT_PIN');
+  // Restaurants beyond the nearby radius can be ordered from; the customer is told the delivery fee is higher.
+  const farOrders = foodOrders.filter((order) => order.farAway);
   const cartHasFood = items.some((item) => item.marketplace === 'gulplaza');
   const shownSubtotal = quote ? quote.subtotal : subtotal;
   const total = quote ? quote.total : subtotal;
@@ -485,7 +487,7 @@ export default function CartPage() {
                   </span>
                   {order.deliveryNote ? (
                     <span className={`shrink-0 text-xs ${order.deliveryNote === 'NEEDS_DROPOFF' ? 'text-brand-gray' : 'font-semibold text-danger'}`}>
-                      {order.deliveryNote === 'NEEDS_DROPOFF' ? 'Pin your location' : order.deliveryNote === 'OUT_OF_RANGE' ? 'Too far' : "Can't deliver"}
+                      {order.deliveryNote === 'NEEDS_DROPOFF' ? 'Pin your location' : "Can't deliver"}
                     </span>
                   ) : (
                     <span className="shrink-0 font-semibold text-ink">{pkr(order.deliveryFee)}</span>
@@ -501,11 +503,14 @@ export default function CartPage() {
               {foodOrders.some((order) => order.deliveryNote === 'NEEDS_DROPOFF') ? (
                 <p className="text-xs text-brand-gray">Pin your delivery location to see the delivery fee.</p>
               ) : null}
+              {farOrders.map((order) => (
+                <p key={order.sellerId} role="note" className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-ink">
+                  {farAwayNote(order.distanceKm ?? FOOD_DELIVERY_RADIUS_KM, order.sellerName)}
+                </p>
+              ))}
               {blockedOrders.map((order) => (
                 <p key={order.sellerId} role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-danger">
-                  {order.deliveryNote === 'OUT_OF_RANGE'
-                    ? `${order.sellerName} is ${order.distanceKm?.toFixed(1)} km from your delivery location. We deliver food only within ${FOOD_DELIVERY_RADIUS_KM} km, so remove it from your cart or choose another delivery address.`
-                    : `${order.sellerName} hasn't set its location on the map yet, so we can't check that it is within ${FOOD_DELIVERY_RADIUS_KM} km of you. Please choose another restaurant.`}
+                  {`${order.sellerName} hasn't set its location on the map yet, so we can't work out the delivery fee. Please choose another restaurant.`}
                 </p>
               ))}
               {cartHasFood ? (

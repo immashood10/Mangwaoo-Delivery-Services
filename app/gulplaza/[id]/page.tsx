@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, MapPin } from 'lucide-react';
+import { ArrowLeft, Info, MapPin } from 'lucide-react';
 import { GULPLAZA_CATEGORIES } from '@/lib/data';
-import { FOOD_DELIVERY_RADIUS_KM, foodReach } from '@/lib/delivery';
-import { formatDistance, isRealLocation, parseCoordinates } from '@/lib/geo';
+import { farAwayNote, foodReach } from '@/lib/delivery';
+import { isRealLocation, parseCoordinates } from '@/lib/geo';
 import { prisma } from '@/lib/prisma';
 import AddToCartButton from '@/components/AddToCartButton';
 import ChatWidget from '@/components/ChatWidget';
@@ -52,8 +52,8 @@ export default async function GulplazaProductDetail({
     stock: dbProduct.stock,
   };
 
-  // Food is only for customers within 5 km of the restaurant: the dish can be looked at, but not ordered, from farther away
-  // (or when the restaurant hasn't pinned its kitchen, so nobody can tell how far it is).
+  // The dish can be looked at from anywhere. It can be ordered whenever the restaurant has pinned its kitchen on the map (so
+  // the distance, and the delivery charge, can be worked out); beyond 5 km the page adds a note that the charge is higher.
   const parsedOrigin = parseCoordinates(lat, lng);
   const origin = isRealLocation(parsedOrigin) ? parsedOrigin : null;
   const reach = foodReach(
@@ -62,7 +62,7 @@ export default async function GulplazaProductDetail({
       ? { lat: dbProduct.seller.latitude, lng: dbProduct.seller.longitude }
       : null
   );
-  const outOfArea = origin !== null && (reach.status === 'TOO_FAR' || reach.status === 'NO_PIN');
+  const outOfArea = origin !== null && reach.status === 'NO_PIN';
   const nearbyHref = origin ? `/gulplaza?lat=${origin.lat}&lng=${origin.lng}` : '/gulplaza';
 
   return (
@@ -114,22 +114,28 @@ export default async function GulplazaProductDetail({
                   Not available at your address
                 </p>
                 <p className="mt-1 text-brand-gray">
-                  {reach.status === 'TOO_FAR'
-                    ? `${product.vendor} is ${formatDistance(reach.distanceKm)} from your delivery address, and we deliver food only from restaurants within ${FOOD_DELIVERY_RADIUS_KM} km of you.`
-                    : `${product.vendor} hasn't set its location on the map yet, so we can't check that it is within ${FOOD_DELIVERY_RADIUS_KM} km of you.`}
+                  {product.vendor} hasn&apos;t set its location on the map yet, so we can&apos;t work out how far it is or what the delivery would cost.
                 </p>
                 <Link href={nearbyHref} className="mt-2 inline-block font-semibold text-accent hover:underline">
                   See food near you
                 </Link>
               </div>
             ) : (
-              <div className="flex flex-wrap gap-3">
-                <AddToCartButton
-                  product={product}
-                  className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-brand-red-primary to-brand-red-secondary px-8 py-3 text-sm font-semibold text-white hover:shadow-lg transition-all duration-300"
-                />
-                <ChatWidget sellerId={product.sellerId} sellerName={product.vendor} productName={product.name} />
-              </div>
+              <>
+                {reach.status === 'FAR' ? (
+                  <p role="note" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-ink">
+                    <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+                    <span>{farAwayNote(reach.distanceKm, product.vendor)}</span>
+                  </p>
+                ) : null}
+                <div className="flex flex-wrap gap-3">
+                  <AddToCartButton
+                    product={product}
+                    className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-brand-red-primary to-brand-red-secondary px-8 py-3 text-sm font-semibold text-white hover:shadow-lg transition-all duration-300"
+                  />
+                  <ChatWidget sellerId={product.sellerId} sellerName={product.vendor} productName={product.name} />
+                </div>
+              </>
             )}
           </div>
         </div>

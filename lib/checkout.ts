@@ -1,6 +1,6 @@
 import type { Coupon, Prisma } from '@/lib/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
-import { FOOD_DELIVERY_RADIUS_KM, billedDistanceKm, deliveryFeeForDistance, foodReach } from '@/lib/delivery';
+import { billedDistanceKm, deliveryFeeForDistance, foodReach } from '@/lib/delivery';
 import { type Coordinates } from '@/lib/geo';
 import { sendWhatsAppNotification } from '@/lib/whatsapp';
 import { refreshFoodCatalog, refreshMartCatalog } from '@/lib/catalog-cache';
@@ -205,6 +205,7 @@ function sampleOrders(lines: CheckoutLine[], groups: Group[]): OrderQuote[] {
     deliveryFee: 0,
     distanceKm: null,
     deliveryNote: null,
+    farAway: false,
     discount: 0,
     total: subtotal,
   }));
@@ -244,18 +245,19 @@ export async function priceCheckout(input: {
     let deliveryFee = 0;
     let distanceKm: number | null = null;
     let deliveryNote: OrderQuote['deliveryNote'] = null;
+    let farAway = false;
 
     if (isFood) {
-      // Food comes only from restaurants within FOOD_DELIVERY_RADIUS_KM of the drop-off; a farther one is flagged (placeOrders refuses it).
+      // The fee follows the distance, however far: a restaurant beyond FOOD_DELIVERY_RADIUS_KM is only flagged `farAway`
+      // (the cart tells the customer it costs more). Without both pins there is no distance, so no fee (placeOrders refuses).
       const reach = foodReach(input.dropoff, group.location);
 
       if (reach.status === 'NEEDS_ORIGIN') deliveryNote = 'NEEDS_DROPOFF';
       else if (reach.status === 'NO_PIN') deliveryNote = 'NO_RESTAURANT_PIN';
       else {
         distanceKm = billedDistanceKm(reach.distanceKm);
-
-        if (reach.status === 'TOO_FAR') deliveryNote = 'OUT_OF_RANGE';
-        else deliveryFee = deliveryFeeForDistance(distanceKm);
+        deliveryFee = deliveryFeeForDistance(distanceKm);
+        farAway = reach.status === 'FAR';
       }
     }
 
@@ -267,6 +269,7 @@ export async function priceCheckout(input: {
       deliveryFee,
       distanceKm,
       deliveryNote,
+      farAway,
       discount,
       total: group.subtotal - discount + deliveryFee,
     };
@@ -316,30 +319,24 @@ export type PlaceOrdersResult = { orders: PlacedOrder[]; quote: Quote };
 const TRANSACTION_OPTIONS = { timeout: 30000, maxWait: 10000 };
 
 /**
- * Food can only be ordered from a restaurant within FOOD_DELIVERY_RADIUS_KM (5 km) of the drop-off. The cart page shows
- * the same thing and blocks the button, but this is the real gate: a stale cart, an old tab or a hand-made request can't
- * get past it. A restaurant that hasn't pinned its kitchen can't be checked, so it is refused too.
+ * Food can be ordered from a restaurant at any distance, but the delivery fee follows the distance, so both ends must be
+ * on the map: the cart page shows the same thing and blocks the button, but this is the real gate (a stale cart, an old
+ * tab or a hand-made request can't get past it). A restaurant that hasn't pinned its kitchen, or an order with no
+ * drop-off, has no distance and so no fee: it is refused.
  */
 function assertFoodDeliverable(orders: OrderQuote[]) {
   for (const order of orders) {
     if (order.marketplace !== 'gulplaza') continue;
 
-    if (order.deliveryNote === 'OUT_OF_RANGE') {
-      throw new CheckoutError(
-        400,
-        `${order.sellerName} is ${order.distanceKm?.toFixed(1)} km from your delivery location, but we deliver food only within ${FOOD_DELIVERY_RADIUS_KM} km. Please remove it from your cart or choose a closer restaurant.`
-      );
-    }
-
     if (order.deliveryNote === 'NO_RESTAURANT_PIN') {
       throw new CheckoutError(
         400,
-        `${order.sellerName} hasn't set its location on the map yet, so we can't check that it is within ${FOOD_DELIVERY_RADIUS_KM} km of you. Please choose another restaurant.`
+        `${order.sellerName} hasn't set its location on the map yet, so we can't work out the delivery fee. Please choose another restaurant.`
       );
     }
 
     if (order.deliveryNote === 'NEEDS_DROPOFF') {
-      throw new CheckoutError(400, `Please pin your delivery location, so we can check that the restaurant is within ${FOOD_DELIVERY_RADIUS_KM} km of you.`);
+      throw new CheckoutError(400, 'Please pin your delivery location, so we can work out the delivery fee.');
     }
   }
 }
@@ -376,7 +373,7 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
     customerId: input.customer.id,
   });
 
-  // Nothing is placed (or announced to the owner) for a restaurant that is out of reach.
+  // Nothing is placed (or announced to the owner) for a food order that has no delivery fee (a missing pin).
   assertFoodDeliverable(quote.orders);
 
   // Tell the owner's own WhatsApp about every well-formed order attempt — independent of whether the items resolve

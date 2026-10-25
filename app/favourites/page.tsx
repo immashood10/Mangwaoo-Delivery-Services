@@ -6,7 +6,6 @@ import FavouritesLoginPrompt from '@/components/FavouritesLoginPrompt';
 import NearbyNotice from '@/components/NearbyNotice';
 import RestaurantMenuItem from '@/components/RestaurantMenuItem';
 import { getSession } from '@/lib/auth';
-import { FOOD_DELIVERY_RADIUS_KM } from '@/lib/delivery';
 import { getFavouritesPage } from '@/lib/favourites';
 import { isRealLocation, parseCoordinates } from '@/lib/geo';
 
@@ -21,8 +20,9 @@ export default async function FavouritesPage({ searchParams }: { searchParams: P
     return <FavouritesLoginPrompt />;
   }
 
-  // Restaurants (and their dishes) farther than 5 km from the customer are not shown, like everywhere else on the site.
-  // The location comes with the address (`?lat=&lng=`, kept in step by NearbyNotice); until it is known everything shows.
+  // Restaurants (and their dishes) that haven't pinned their kitchen on the map are not shown, as their delivery charge
+  // can't be worked out. The location comes with the address (`?lat=&lng=`, kept in step by NearbyNotice); until it is
+  // known everything shows.
   const parsedOrigin = parseCoordinates(lat, lng);
   const origin = isRealLocation(parsedOrigin) ? parsedOrigin : null;
   const locationQuery = origin ? `?lat=${origin.lat}&lng=${origin.lng}` : '';
@@ -30,7 +30,7 @@ export default async function FavouritesPage({ searchParams }: { searchParams: P
   const hiddenNote =
     hidden > 0 ? (
       <p className="mb-6 rounded-xl bg-brand-light px-4 py-3 text-sm text-brand-gray">
-        {hidden} saved {hidden === 1 ? 'restaurant or dish is' : 'restaurants and dishes are'} more than {FOOD_DELIVERY_RADIUS_KM} km from your delivery address, so
+        {hidden} saved {hidden === 1 ? 'restaurant or dish is' : 'restaurants and dishes are'} from a restaurant that hasn&apos;t set its location on the map yet, so
         {hidden === 1 ? ' it isn' : ' they aren'}&apos;t shown.
       </p>
     ) : null;

@@ -1,9 +1,9 @@
 import Link from 'next/link';
-import { ArrowRight, Bike, MapPin, Search, Store } from 'lucide-react';
+import { ArrowRight, Bike, Info, MapPin, Search, Store } from 'lucide-react';
 import FavouriteButton from '@/components/FavouriteButton';
 import NearbyNotice from '@/components/NearbyNotice';
 import { normalizeQuery, searchRestaurants } from '@/lib/food-search';
-import { FOOD_DELIVERY_RADIUS_KM, deliveryFeeForDistance } from '@/lib/delivery';
+import { FOOD_DELIVERY_RADIUS_KM, deliveryFeeForDistance, isWithinFoodRadius } from '@/lib/delivery';
 import { formatDistance, isRealLocation, parseCoordinates } from '@/lib/geo';
 
 export const metadata = {
@@ -11,6 +11,9 @@ export const metadata = {
 };
 
 const MAX_DISHES_SHOWN = 4;
+
+/** Beyond the nearby radius: still orderable, but the delivery charge is higher. */
+const isFarAway = (distanceKm: number) => !isWithinFoodRadius(distanceKm);
 
 export default async function SearchResultsPage({
   searchParams,
@@ -24,7 +27,8 @@ export default async function SearchResultsPage({
   const shownQuery = q?.trim() ?? query;
 
   // /search already redirects the single-restaurant and mart-only cases; this page lists the matching restaurants
-  // within 5 km of the customer (nearest first), asks for the address when it isn't known, or says nothing was found.
+  // nearest first (the ones beyond 5 km come last, marked with a note that the delivery charge is higher), asks for the
+  // address when it isn't known, or says nothing was found.
   const results = query && origin ? await searchRestaurants(query, origin) : [];
   const locationParams = origin ? `&lat=${origin.lat}&lng=${origin.lng}` : '';
 
@@ -40,15 +44,15 @@ export default async function SearchResultsPage({
           </h1>
           <p className="text-brand-gray">
             {!origin
-              ? `We show restaurants within ${FOOD_DELIVERY_RADIUS_KM} km of your delivery address.`
+              ? `We show restaurants nearest to your delivery address first. Restaurants more than ${FOOD_DELIVERY_RADIUS_KM} km away are shown too, with a note: their delivery charge is higher, so ordering from a nearby restaurant is better.`
               : results.length > 0
-                ? 'Pick a restaurant to see its menu and order.'
-                : `No restaurant within ${FOOD_DELIVERY_RADIUS_KM} km of your address has a matching dish. Try a different word or another address.`}
+                ? `Pick a restaurant to see its menu and order. Restaurants more than ${FOOD_DELIVERY_RADIUS_KM} km away are shown too, after the nearby ones: their delivery charge is higher, so ordering from a nearby restaurant is better.`
+                : 'No restaurant has a matching dish. Try a different word.'}
           </p>
         </div>
       </div>
 
-      <NearbyNotice lat={origin?.lat ?? null} lng={origin?.lng ?? null} params={{ q: shownQuery }} />
+      <NearbyNotice lat={origin?.lat ?? null} lng={origin?.lng ?? null} params={{ q: shownQuery }} includeFar />
 
       {results.length > 0 ? (
         <ol className="space-y-4">
@@ -82,9 +86,14 @@ export default async function SearchResultsPage({
                         Delivery PKR {deliveryFeeForDistance(distanceKm)}
                       </span>
                     ) : null}
-                    {index === 0 && distanceKm !== null ? (
+                    {index === 0 && distanceKm !== null && !isFarAway(distanceKm) ? (
                       <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-semibold text-success">
                         Nearest
+                      </span>
+                    ) : null}
+                    {distanceKm !== null && isFarAway(distanceKm) ? (
+                      <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-warning">
+                        More than {FOOD_DELIVERY_RADIUS_KM} km away
                       </span>
                     ) : null}
                   </div>
@@ -103,6 +112,16 @@ export default async function SearchResultsPage({
                       <li className="font-semibold text-accent">+{matches.length - MAX_DISHES_SHOWN} more</li>
                     ) : null}
                   </ul>
+
+                  {distanceKm !== null && isFarAway(distanceKm) ? (
+                    <p className="mt-2 flex items-start gap-1.5 text-xs text-warning">
+                      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      <span>
+                        This restaurant is more than {FOOD_DELIVERY_RADIUS_KM} km from you, so the delivery charge is higher. Ordering from a restaurant
+                        closer to you is better.
+                      </span>
+                    </p>
+                  ) : null}
                 </div>
                 <ArrowRight className="h-5 w-5 shrink-0 text-brand-gray transition group-hover:translate-x-1 group-hover:text-accent" />
               </Link>

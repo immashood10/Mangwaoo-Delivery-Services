@@ -10,11 +10,12 @@ import { isRealLocation } from '@/lib/geo';
 const SAME_SPOT_DEGREES = 0.00001;
 
 /**
- * Food is only shown within `FOOD_DELIVERY_RADIUS_KM` of the customer. The page itself is built on the server, which
- * only knows the location when the address carries it (`?lat=…&lng=…`), so this keeps the address in the URL in step
- * with the delivery address chosen in the navbar: when it loads or changes, the page is reloaded with it. What it shows:
+ * Food lists are built around the customer's location (the nearby ones within `FOOD_DELIVERY_RADIUS_KM`, or, for search,
+ * all of them nearest first). The page itself is built on the server, which only knows the location when the address
+ * carries it (`?lat=…&lng=…`), so this keeps the address in the URL in step with the delivery address chosen in the
+ * navbar: when it loads or changes, the page is reloaded with it. What it shows:
  * - **banner** (default): no location yet → a card asking for the address, with a button that opens the navbar's
- *   window; a location → a small line saying the list is limited to 5 km around it;
+ *   window; a location → a small line saying what the list is around it;
  * - **quiet**: pages that show a single restaurant or dish need nothing while the location is known, and only a short
  *   hint while it isn't.
  */
@@ -24,6 +25,7 @@ export default function NearbyNotice({
   params = {},
   variant = 'banner',
   what = 'restaurants',
+  includeFar = false,
 }: {
   /** The coordinates the page was built with (from the URL), if any. */
   lat: number | null;
@@ -32,6 +34,8 @@ export default function NearbyNotice({
   params?: Record<string, string>;
   variant?: 'banner' | 'quiet';
   what?: 'restaurants' | 'dishes';
+  /** The list also has restaurants farther than the nearby radius (search): they come last and are marked. */
+  includeFar?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -59,7 +63,7 @@ export default function NearbyNotice({
         <p className="mb-6 flex items-start gap-2 rounded-xl bg-brand-light px-4 py-3 text-sm text-brand-gray">
           <LocateFixed className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
           <span>
-            We deliver food within {FOOD_DELIVERY_RADIUS_KM} km. Choose your delivery address to check this reaches you.{' '}
+            Choose your delivery address to see how far this is and what the delivery costs.{' '}
             <button type="button" onClick={requestAddressPicker} className="font-semibold text-accent hover:underline">
               Select address
             </button>
@@ -73,7 +77,9 @@ export default function NearbyNotice({
         <LocateFixed className="mx-auto mb-3 h-8 w-8 text-accent" aria-hidden="true" />
         <p className="font-semibold text-ink">Where should we deliver?</p>
         <p className="mx-auto mt-1 mb-5 max-w-md text-sm text-brand-gray">
-          We show {what} within {FOOD_DELIVERY_RADIUS_KM} km of you. Choose your delivery address to see them.
+          {includeFar
+            ? `We show ${what} nearest to you first, and mark the ones more than ${FOOD_DELIVERY_RADIUS_KM} km away. Choose your delivery address to see them.`
+            : `We show ${what} within ${FOOD_DELIVERY_RADIUS_KM} km of you. Choose your delivery address to see them.`}
         </p>
         <button
           type="button"
@@ -94,7 +100,8 @@ export default function NearbyNotice({
     <p className="mb-6 flex items-start gap-2 rounded-xl bg-brand-light px-4 py-3 text-sm text-brand-gray">
       <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
       <span className="min-w-0">
-        Showing {what} within {FOOD_DELIVERY_RADIUS_KM} km of <span className="font-semibold text-ink break-words">{placeName}</span>
+        {includeFar ? `Showing ${what} nearest to` : `Showing ${what} within ${FOOD_DELIVERY_RADIUS_KM} km of`}{' '}
+        <span className="font-semibold text-ink break-words">{placeName}</span>
         {location ? (
           <>
             {' · '}
