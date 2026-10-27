@@ -106,7 +106,7 @@ export default function OrdersList({ orders, mode }: { orders: SellerOrder[]; mo
     );
 
   const cancel = (order: SellerOrder) => {
-    if (!window.confirm(`Cancel order #${order.id.slice(-8).toUpperCase()}? The items go back into stock.`)) return;
+    if (!window.confirm(`Cancel order ${order.ref}? The items go back into stock.`)) return;
     void moveTo(order, 'CANCELLED');
   };
 
@@ -164,7 +164,7 @@ export default function OrdersList({ orders, mode }: { orders: SellerOrder[]; mo
           <div key={order.id} className="rounded-2xl bg-surface p-5 shadow-soft">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className="text-sm font-semibold text-ink">Order #{order.id.slice(-8).toUpperCase()}</p>
+                <p className="text-sm font-semibold text-ink">Order {order.ref}</p>
                 <p className="text-xs text-brand-gray">
                   {order.customerName} &middot;{' '}
                   <time dateTime={order.createdAt} suppressHydrationWarning>

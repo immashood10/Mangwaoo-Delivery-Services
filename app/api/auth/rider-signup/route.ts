@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
+import { checkRiderCnicPhotos, cnicProblemMessage } from '@/lib/cnic-check';
 import { clientIp } from '@/lib/client-ip';
+import { notifyAdminsAfterResponse } from '@/lib/notify';
+import { ADMIN_PAGES } from '@/lib/notification-types';
 import { passwordProblem } from '@/lib/password-policy';
 import { finishSignup, prepareSignup, signupWriteFailed } from '@/lib/phone-verification';
 import { enforceRateLimits } from '@/lib/rate-limit';
@@ -17,6 +20,9 @@ import {
   vehicleNeedsNumberPlate,
 } from '@/lib/rider-documents';
 
+// Room for the AI to look at the two CNIC photos (up to ~40 s if Anthropic is slow) on top of the usual work.
+export const maxDuration = 60;
+
 function field(form: FormData, name: string) {
   const value = form.get(name);
   return typeof value === 'string' ? value.trim() : '';
@@ -26,7 +32,8 @@ function field(form: FormData, name: string) {
  * Rider signup with identity details. Expects multipart/form-data with the
  * account fields plus the `cnicFront` / `cnicBack` / `facePhoto` photo files (all
  * three are required); everything is stored in the database (photos in
- * RiderDocument) for admin review.
+ * RiderDocument) for admin review. When the host has an Anthropic key an AI looks at the two CNIC
+ * photos first (`lib/cnic-check.ts`) and a picture that is not a CNIC is refused with 400 `{ error, fields }`.
  * The account can only log in after the WhatsApp code sent here is entered.
  */
 export async function POST(request: NextRequest) {
@@ -82,6 +89,20 @@ export async function POST(request: NextRequest) {
 
   const passwordHash = hashPassword(password);
 
+  // The AI looks at both CNIC photos (only when the host has an Anthropic key). A picture of anything else is refused here,
+  // before any account exists or any code is sent, and the rider is told which photo to add again.
+  const photoCheck = await checkRiderCnicPhotos(documents);
+
+  if (photoCheck.problems.length > 0) {
+    return NextResponse.json(
+      {
+        error: cnicProblemMessage(photoCheck.problems),
+        fields: photoCheck.problems.map((problem) => RIDER_DOCUMENT_FIELDS[problem.kind]),
+      },
+      { status: 400 }
+    );
+  }
+
   // With verification on this sends the WhatsApp code too, and the account below is created unverified (it can't log
   // in until the code is entered); with it off the account is confirmed and logged in at once.
   const signup = await prepareSignup(request, { email, phone });
@@ -122,6 +143,18 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     return signupWriteFailed(error);
+  }
+
+  // The check should have run but couldn't (no credit left, Anthropic down…): the signup is not held up, and the admins
+  // are told to look at this rider's photos with extra care.
+  if (photoCheck.unavailable) {
+    notifyAdminsAfterResponse(async () => ({
+      type: 'ACCOUNT' as const,
+      title: 'Automatic CNIC check is not working',
+      message: `A new rider signed up (${fullName}) but the AI could not check the CNIC photos. Look at them yourself, and test the check on this page.`,
+      href: ADMIN_PAGES.riders,
+      refId: 'cnic-check-unavailable',
+    }));
   }
 
   return finishSignup(signup, results);

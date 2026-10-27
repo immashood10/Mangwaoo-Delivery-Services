@@ -494,6 +494,8 @@ model Favourite {
 
 model Order {
   id           String      @id @default(cuid())
+  /// The number customers and sellers see (MW-M10001); starts at 10001, never reused.
+  orderNumber  Int         @unique @default(autoincrement())
   status       OrderStatus @default(PENDING)
   /// The items only (what the seller earns). The customer pays this minus `discountAmount`; MangwaooMart orders have no delivery fee.
   totalAmount  Decimal
@@ -851,6 +853,8 @@ model GulplazaProduct {
 
 model GulplazaOrder {
   id           String      @id @default(cuid())
+  /// The number customers and sellers see (MW-F10001); starts at 10001, never reused.
+  orderNumber  Int         @unique @default(autoincrement())
   status       OrderStatus @default(PENDING)
   /// The dishes only (what the seller earns). The customer pays this minus `discountAmount` plus `deliveryFee`.
   totalAmount  Decimal

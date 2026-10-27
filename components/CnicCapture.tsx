@@ -125,11 +125,14 @@ export default function CnicCapture({
   hint,
   value,
   onChange,
+  problem,
 }: {
   label: string;
   hint: string;
   value: Blob | null;
   onChange: (blob: Blob | null) => void;
+  /** Why the photo that was here was sent back (for example it was not a CNIC); shown until a new photo is added. */
+  problem?: string;
 }) {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -170,7 +173,7 @@ export default function CnicCapture({
 
   return (
     <div>
-      <p className="mb-2 block text-sm font-semibold text-brand-dark">{label}</p>
+      <p className="mb-2 block text-sm font-semibold text-ink">{label}</p>
 
       {previewUrl ? (
         <div className="relative overflow-hidden rounded-xl border border-gray-200">
@@ -186,7 +189,9 @@ export default function CnicCapture({
           </button>
         </div>
       ) : (
-        <div className="flex aspect-[1.586] w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-4 text-center">
+        <div
+          className={`flex aspect-[1.586] w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed bg-gray-50 p-4 text-center ${problem ? 'border-danger' : 'border-gray-300'}`}
+        >
           <p className="text-xs text-brand-gray">{isProcessing ? 'Preparing photo…' : hint}</p>
           <div className="flex flex-wrap justify-center gap-2">
             <button
@@ -213,6 +218,7 @@ export default function CnicCapture({
 
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
       {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
+      {problem && !value ? <p className="mt-1 text-xs font-semibold text-danger">{problem}</p> : null}
 
       {isScannerOpen && (
         <CnicScanner

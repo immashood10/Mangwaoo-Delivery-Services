@@ -9,6 +9,11 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock,
+  FileText,
+  LayoutDashboard,
+  ListOrdered,
+  TrendingUp,
+  Users,
   LogOut,
   MapPin,
   Megaphone,
@@ -27,6 +32,11 @@ import { SELLER_PAGES, type NotificationSnapshot } from '@/lib/notification-type
 import { NotificationBell, SellerNotificationsProvider, useSellerNotifications } from './SellerNotifications';
 
 const SELLER_LINKS: { href: string; label: string; icon: LucideIcon; martOnly?: boolean }[] = [
+  { href: SELLER_PAGES.dashboard, label: 'Dashboard', icon: LayoutDashboard },
+  { href: SELLER_PAGES.sales, label: 'Sales', icon: TrendingUp },
+  { href: SELLER_PAGES.customers, label: 'Customers', icon: Users },
+  { href: SELLER_PAGES.allOrders, label: 'All orders', icon: ListOrdered },
+  { href: SELLER_PAGES.reports, label: 'Reports', icon: FileText },
   { href: SELLER_PAGES.post, label: 'Post product', icon: PackagePlus },
   { href: SELLER_PAGES.products, label: 'Your products', icon: Package },
   { href: SELLER_PAGES.cart, label: 'Pending — still in cart', icon: ShoppingCart },

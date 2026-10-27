@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { PackageCheck } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { orderRef } from '@/lib/order-number';
 import { formatKarachiDateTime } from '@/lib/ban-duration';
 import { startOfKarachiDay } from '@/lib/admin-stats';
 import AutoRefresh from '@/components/AutoRefresh';
@@ -38,6 +39,7 @@ const PAYMENT_LABELS: Record<string, string> = {
 
 type OrderRow = {
   id: string;
+  ref: string;
   marketplace: 'MangwaooMart' | 'Food';
   createdAt: Date;
   status: string;
@@ -80,6 +82,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
   const all: OrderRow[] = [
     ...martOrders.map((order) => ({
       id: order.id,
+      ref: orderRef('mart', order.orderNumber),
       marketplace: 'MangwaooMart' as const,
       createdAt: order.createdAt,
       status: order.status,
@@ -93,6 +96,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
     })),
     ...foodOrders.map((order) => ({
       id: order.id,
+      ref: orderRef('gulplaza', order.orderNumber),
       marketplace: 'Food' as const,
       createdAt: order.createdAt,
       status: order.status,
@@ -160,7 +164,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-ink">
-                      Order #{order.id.slice(-8).toUpperCase()}
+                      Order {order.ref}
                       <span className="rounded-full bg-brand-light px-2 py-0.5 text-[10px] font-semibold uppercase text-brand-gray">{order.marketplace}</span>
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLES[order.status] ?? 'bg-gray-50 text-brand-gray'}`}>
                         {order.status.replace(/_/g, ' ')}

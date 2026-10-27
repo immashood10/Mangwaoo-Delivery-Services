@@ -16,6 +16,8 @@ type OrderItem = {
 
 type Order = {
   id: string;
+  /** The order number shown to the customer and the seller, e.g. MW-F10001. */
+  ref: string;
   marketplace: 'mart' | 'gulplaza';
   status: string;
   /** The items. What the customer pays is this minus the coupon discount plus the delivery fee (food only). */
@@ -90,7 +92,7 @@ function OrderCard({ order, onCancelled }: { order: Order; onCancelled: () => vo
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div>
           <p className="text-sm font-semibold text-ink">
-            Order #{order.id.slice(-8).toUpperCase()}
+            Order {order.ref}
             <span className="ml-2 rounded-full bg-brand-light px-2 py-0.5 text-[10px] font-semibold uppercase text-brand-gray">
               {order.marketplace === 'mart' ? 'MangwaooMart' : 'Food'}
             </span>

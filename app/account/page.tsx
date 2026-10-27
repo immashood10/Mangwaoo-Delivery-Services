@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
+import { orderRef } from '@/lib/order-number';
 import { prisma } from '@/lib/prisma';
 import BuyerDashboard from '@/components/BuyerDashboard';
 
@@ -62,6 +63,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   const orders = [
     ...martOrders.map((order) => ({
       id: order.id,
+      ref: orderRef('mart', order.orderNumber),
       marketplace: 'mart' as const,
       status: order.status,
       totalAmount: Number(order.totalAmount),
@@ -82,6 +84,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     })),
     ...gulplazaOrders.map((order) => ({
       id: order.id,
+      ref: orderRef('gulplaza', order.orderNumber),
       marketplace: 'gulplaza' as const,
       status: order.status,
       totalAmount: Number(order.totalAmount),

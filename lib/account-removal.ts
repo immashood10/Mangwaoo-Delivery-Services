@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { releaseCouponIfUnused } from '@/lib/coupons';
 import { invalidateBanSnapshot } from '@/lib/bans';
 import { refreshFoodCatalog, refreshMartCatalog, refreshStories } from '@/lib/catalog-cache';
-import { shortOrderId } from '@/lib/notify';
+import { orderRef } from '@/lib/order-number';
 import { SELLER_PAGES } from '@/lib/notification-types';
 import { ORDER_RECORD_CHAT_SELECT, orderSnapshot, recordRiderOrder } from '@/lib/rider-orders';
 
@@ -34,14 +34,14 @@ async function cancelOpenOrders(tx: Prisma.TransactionClient, owner: OrderOwner,
   ]);
 
   const notes: Prisma.NotificationCreateManyInput[] = [];
-  const note = (orderId: string, sellerUserId: string) => {
+  const note = (orderId: string, ref: string, sellerUserId: string) => {
     if (!notifySellers) return;
 
     notes.push({
       userId: sellerUserId,
       type: 'ORDER',
       title: 'Order cancelled',
-      message: `Order #${shortOrderId(orderId)} was cancelled: the customer's account was removed.`,
+      message: `Order ${ref} was cancelled: the customer's account was removed.`,
       href: SELLER_PAGES.completed,
       refId: `cancel:${orderId}`,
     });
@@ -57,7 +57,7 @@ async function cancelOpenOrders(tx: Prisma.TransactionClient, owner: OrderOwner,
     }
 
     await releaseCouponIfUnused(tx, order.redemptionId);
-    note(order.id, order.seller.userId);
+    note(order.id, orderRef('mart', order.orderNumber), order.seller.userId);
     cancelled += 1;
   }
 
@@ -70,7 +70,7 @@ async function cancelOpenOrders(tx: Prisma.TransactionClient, owner: OrderOwner,
     }
 
     await releaseCouponIfUnused(tx, order.redemptionId);
-    note(order.id, order.seller.userId);
+    note(order.id, orderRef('gulplaza', order.orderNumber), order.seller.userId);
     cancelled += 1;
   }
 

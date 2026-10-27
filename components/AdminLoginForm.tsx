@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { isSuperAdminLogin } from '@/lib/super-admin';
 
 /** The admin's log in: a username (or email) and a password, nothing else. Anyone who isn't the admin is logged out again. */
 export default function AdminLoginForm() {
@@ -46,7 +47,8 @@ export default function AdminLoginForm() {
       }
 
       await refresh();
-      router.push('/admin');
+      // The super admin lands on the Super Overview, every other admin on the normal dashboard.
+      router.push(isSuperAdminLogin(data.user?.email) ? '/admin/super' : '/admin');
       router.refresh();
     } catch {
       setFormError('Could not reach the server. Please try again.');

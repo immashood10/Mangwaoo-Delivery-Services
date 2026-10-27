@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   BadgePercent,
   CircleDashed,
+  Crown,
   LayoutDashboard,
   LogOut,
   Megaphone,
@@ -42,15 +43,18 @@ const ADMIN_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: '/admin/discounts', label: 'Discount', icon: BadgePercent },
 ];
 
+// Only the "superadmin" account sees this one (the page itself checks too).
+const SUPER_LINK = { href: '/admin/super', label: 'Super Overview', icon: Crown };
+
 function isActive(pathname: string, href: string) {
   return href === '/admin' ? pathname === '/admin' : pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export function adminPageTitle(pathname: string) {
-  return ADMIN_LINKS.find((link) => isActive(pathname, link.href))?.label ?? 'Admin';
+  return [SUPER_LINK, ...ADMIN_LINKS].find((link) => isActive(pathname, link.href))?.label ?? 'Admin';
 }
 
-function SidebarContent({ adminName, onNavigate }: { adminName: string; onNavigate?: () => void }) {
+function SidebarContent({ adminName, isSuperAdmin, onNavigate }: { adminName: string; isSuperAdmin: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const { logout } = useAuth();
@@ -86,7 +90,7 @@ function SidebarContent({ adminName, onNavigate }: { adminName: string; onNaviga
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-4">
-        {ADMIN_LINKS.map(({ href, label, icon: Icon }) => {
+        {(isSuperAdmin ? [SUPER_LINK, ...ADMIN_LINKS] : ADMIN_LINKS).map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);
           const unseen = counts[href] ?? 0;
           return (
@@ -134,7 +138,7 @@ function SidebarContent({ adminName, onNavigate }: { adminName: string; onNaviga
   );
 }
 
-export default function AdminSidebar({ adminName }: { adminName: string }) {
+export default function AdminSidebar({ adminName, isSuperAdmin = false }: { adminName: string; isSuperAdmin?: boolean }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const pathname = usePathname();
   const currentLabel = adminPageTitle(pathname);
@@ -152,7 +156,7 @@ export default function AdminSidebar({ adminName }: { adminName: string }) {
     <>
       {/* Desktop: fixed-width sidebar that stays in view while the page scrolls */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 lg:block">
-        <SidebarContent adminName={adminName} />
+        <SidebarContent adminName={adminName} isSuperAdmin={isSuperAdmin} />
       </aside>
 
       {/* Mobile: top bar with a menu button that opens the same sidebar as a drawer */}
@@ -182,7 +186,7 @@ export default function AdminSidebar({ adminName }: { adminName: string }) {
             aria-label="Close admin menu"
           />
           <div className="relative h-full w-72 max-w-[85vw]">
-            <SidebarContent adminName={adminName} onNavigate={() => setIsMobileOpen(false)} />
+            <SidebarContent adminName={adminName} isSuperAdmin={isSuperAdmin} onNavigate={() => setIsMobileOpen(false)} />
             <button
               type="button"
               onClick={() => setIsMobileOpen(false)}

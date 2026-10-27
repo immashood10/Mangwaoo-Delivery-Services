@@ -1,11 +1,13 @@
 import { redirect } from 'next/navigation';
 import { Bike } from 'lucide-react';
 import { getSession } from '@/lib/auth';
+import { cnicCheckEnabled, cnicCheckModel } from '@/lib/cnic-check-config';
 import { prisma } from '@/lib/prisma';
 import { RIDER_ONLINE_WINDOW_MS } from '@/lib/rider-dispatch';
 import { RIDER_DOCUMENT_KINDS, getMissingRiderRequirements } from '@/lib/rider-documents';
 import AdminRiderApprovals from '@/components/AdminRiderApprovals';
 import AutoRefresh from '@/components/AutoRefresh';
+import CnicCheckStatus from '@/components/CnicCheckStatus';
 
 export const metadata = {
   title: 'Rider Approvals - Mangwaoo Admin',
@@ -45,6 +47,8 @@ export default async function AdminRidersPage() {
         number plate first; a rider can&apos;t be approved until the CNIC (number and both photos), a face photo and the
         number plate are on file.
       </p>
+
+      <CnicCheckStatus enabled={cnicCheckEnabled()} model={cnicCheckModel()} />
 
       <AdminRiderApprovals
         riders={riders.map((rider) => ({

@@ -4,7 +4,8 @@ import { billedDistanceKm, deliveryFeeForDistance, foodReach } from '@/lib/deliv
 import { type Coordinates } from '@/lib/geo';
 import { sendWhatsAppNotification } from '@/lib/whatsapp';
 import { refreshFoodCatalog, refreshMartCatalog } from '@/lib/catalog-cache';
-import { getSellerUserIds, notifyAdminsAfterResponse, notifyAfterResponse, shortOrderId } from '@/lib/notify';
+import { getSellerUserIds, notifyAdminsAfterResponse, notifyAfterResponse } from '@/lib/notify';
+import { orderRef } from '@/lib/order-number';
 import { ADMIN_PAGES, SELLER_PAGES } from '@/lib/notification-types';
 import { normalizeCouponCode, type CouponScope } from '@/lib/coupons';
 import { MART_PRODUCTS } from '@/lib/data';
@@ -312,7 +313,8 @@ export type PlaceOrdersInput = {
   couponCode: string | null;
 };
 
-export type PlacedOrder = { id: string; sellerId: string; marketplace: Marketplace };
+/** `ref` is the order number both the customer and the seller see, e.g. MW-F10001. */
+export type PlacedOrder = { id: string; ref: string; sellerId: string; marketplace: Marketplace };
 
 export type PlaceOrdersResult = { orders: PlacedOrder[]; quote: Quote };
 
@@ -463,7 +465,7 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
                 data: { ...common, deliveryFee: orderQuote.deliveryFee, items: { create: itemRows }, payment },
               });
 
-        created.push({ id: order.id, sellerId: group.sellerId, marketplace: group.marketplace });
+        created.push({ id: order.id, ref: orderRef(group.marketplace, order.orderNumber), sellerId: group.sellerId, marketplace: group.marketplace });
       }
 
       return created;
@@ -498,13 +500,23 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
           userId,
           type: 'ORDER' as const,
           title: 'New order',
-          message: `Order #${shortOrderId(order.id)} from ${input.fullName} - PKR ${quote.orders[index].subtotal.toLocaleString()}.`,
+          message: `Order ${order.ref} from ${input.fullName} - PKR ${quote.orders[index].subtotal.toLocaleString()}.`,
           href: SELLER_PAGES.orders,
           refId: `order:${order.id}`,
         },
       ];
     });
   });
+
+  // The customer gets the order number(s) at once, to quote to the seller or the rider.
+  notifyAfterResponse(async () => ({
+    userId: input.customer.userId,
+    type: 'ORDER' as const,
+    title: placed.length > 1 ? 'Orders placed' : 'Order placed',
+    message: `Your order number${placed.length > 1 ? 's are' : ' is'} ${placed.map((order) => order.ref).join(', ')}. You can follow it in My Account.`,
+    href: '/account',
+    refId: `placed:${placed[0].id}`,
+  }));
 
   // Tell the admins too: one line per checkout, however many seller orders it made.
   notifyAdminsAfterResponse(async () => {
@@ -514,7 +526,7 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
     return {
       type: 'ORDER' as const,
       title: placed.length > 1 ? `${placed.length} new orders` : 'New order',
-      message: `${input.fullName} placed ${placed.length > 1 ? `${placed.length} orders` : `order #${shortOrderId(placed[0].id)}`} - PKR ${payable.toLocaleString()} in items.`,
+      message: `${input.fullName} placed ${placed.length > 1 ? `${placed.length} orders` : `order ${placed[0].ref}`} - PKR ${payable.toLocaleString()} in items.`,
       href: ADMIN_PAGES.orders,
       refId: `order:${placed[0].id}`,
     };

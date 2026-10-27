@@ -32,6 +32,8 @@ export type SellerOrderItem = {
 
 export type SellerOrder = {
   id: string;
+  /** The order number the customer sees too, e.g. MW-F10001. */
+  ref: string;
   marketplace: Marketplace;
   status: string;
   totalAmount: number;

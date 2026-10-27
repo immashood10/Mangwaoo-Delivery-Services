@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
-import { getSellerUserIds, notifyAfterResponse, shortOrderId } from '@/lib/notify';
+import { getSellerUserIds, notifyAfterResponse } from '@/lib/notify';
+import { orderRef } from '@/lib/order-number';
 import { SELLER_PAGES } from '@/lib/notification-types';
 import { releaseCouponIfUnused } from '@/lib/coupons';
 
@@ -64,7 +65,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       userId,
       type: 'ORDER' as const,
       title: 'Order cancelled',
-      message: `${customer.user.name} cancelled order #${shortOrderId(order.id)}.`,
+      message: `${customer.user.name} cancelled order ${orderRef('gulplaza', order.orderNumber)}.`,
       href: SELLER_PAGES.completed,
       refId: `cancel:${order.id}`,
     };

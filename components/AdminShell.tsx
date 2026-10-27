@@ -14,10 +14,13 @@ const ADMIN_NOTIFICATIONS_API = '/api/admin/notifications';
  */
 export default function AdminShell({
   adminName,
+  isSuperAdmin = false,
   initialNotifications,
   children,
 }: {
   adminName: string;
+  /** The "superadmin" account also gets the Super Overview link. */
+  isSuperAdmin?: boolean;
   initialNotifications: NotificationSnapshot;
   children: ReactNode;
 }) {
@@ -26,7 +29,7 @@ export default function AdminShell({
   return (
     <SellerNotificationsProvider initial={initialNotifications} endpoint={ADMIN_NOTIFICATIONS_API}>
       <div className="flex min-h-screen flex-col bg-gray-50 lg:flex-row">
-        <AdminSidebar adminName={adminName} />
+        <AdminSidebar adminName={adminName} isSuperAdmin={isSuperAdmin} />
         <div className="min-w-0 flex-1">
           {/* Desktop: page title on the left, notifications on the right (on a phone the bell is in the top bar) */}
           <header className="sticky top-0 z-30 hidden items-center justify-between gap-4 border-b border-gray-100 bg-surface px-8 py-3 lg:flex">

@@ -38,6 +38,11 @@ export const ADMIN_PAGES = {
 } as const;
 
 export const SELLER_PAGES = {
+  dashboard: '/seller/dashboard',
+  sales: '/seller/sales',
+  customers: '/seller/customers',
+  allOrders: '/seller/all-orders',
+  reports: '/seller/reports',
   post: '/seller',
   products: '/seller/products',
   cart: '/seller/cart',

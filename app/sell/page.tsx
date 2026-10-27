@@ -129,7 +129,7 @@ export default function SellOnMangwaoo() {
     }
 
     await refresh();
-    router.push('/seller');
+    router.push('/seller/dashboard');
     router.refresh();
   };
 
@@ -164,7 +164,7 @@ export default function SellOnMangwaoo() {
       }
 
       await refresh();
-      router.push('/seller');
+      router.push('/seller/dashboard');
       router.refresh();
     } catch {
       setFormError('Could not reach the server. Please try again.');

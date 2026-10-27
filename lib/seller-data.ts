@@ -1,4 +1,5 @@
 import { GULPLAZA_CATEGORIES } from '@/lib/data';
+import { orderRef } from '@/lib/order-number';
 import { prisma } from '@/lib/prisma';
 import { isFoodSeller, type CurrentSeller } from '@/lib/seller-context';
 import { parseSizeDetails } from '@/lib/size-options';
@@ -94,6 +95,7 @@ export async function getSellerOrders(seller: CurrentSeller, scope: 'incoming' |
 
     return orders.map((order) => ({
       id: order.id,
+      ref: orderRef('gulplaza', order.orderNumber),
       marketplace: 'GULPLAZA' as const,
       status: order.status,
       totalAmount: Number(order.totalAmount),
@@ -126,6 +128,7 @@ export async function getSellerOrders(seller: CurrentSeller, scope: 'incoming' |
 
   return orders.map((order) => ({
     id: order.id,
+    ref: orderRef('mart', order.orderNumber),
     marketplace: 'MART' as const,
     status: order.status,
     totalAmount: Number(order.totalAmount),
