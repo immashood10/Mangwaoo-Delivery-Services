@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { FOOD_UNLIMITED_STOCK } from '@/lib/food-stock';
+import { lowestPortionPrice, parsePortionsInput } from '@/lib/food-portions';
 import { prisma } from '@/lib/prisma';
 import { isRasterImageDataUrl } from '@/lib/data-url-image';
 import { getSession } from '@/lib/auth';
@@ -29,8 +30,17 @@ export async function POST(request: NextRequest) {
   const name = typeof body?.name === 'string' ? body.name.trim() : '';
   const description = typeof body?.description === 'string' ? body.description.trim() : '';
   const categoryId = typeof body?.categoryId === 'string' ? body.categoryId : '';
-  const price = typeof body?.price === 'number' ? body.price : parseFloat(body?.price);
   const images = Array.isArray(body?.images) ? body.images.filter((url: unknown) => typeof url === 'string') : [];
+
+  // A dish sold by weight (250 g, 500 g, 1 kg ...) has a price per size; the dish's own price is then the lowest of them.
+  const sizes = parsePortionsInput(body?.portions);
+
+  if ('error' in sizes) {
+    return NextResponse.json({ error: sizes.error }, { status: 400 });
+  }
+
+  const { portions } = sizes;
+  const price = portions.length > 0 ? lowestPortionPrice(portions) : typeof body?.price === 'number' ? body.price : parseFloat(body?.price);
 
   if (!name || !categoryId || !Number.isFinite(price) || price <= 0) {
     return NextResponse.json({ error: 'Please fill in all fields with valid values.' }, { status: 400 });
@@ -55,6 +65,7 @@ export async function POST(request: NextRequest) {
       name,
       description: description || null,
       price,
+      portions: portions.length > 0 ? portions : undefined,
       stock: FOOD_UNLIMITED_STOCK,
       images,
       categoryId,

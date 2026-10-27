@@ -105,7 +105,7 @@ export default async function SearchResultsPage({
                     {matches.slice(0, MAX_DISHES_SHOWN).map((item) => (
                       <li key={item.id} className="text-ink">
                         <span className="font-semibold">{item.name}</span>{' '}
-                        <span className="text-brand-gray">{item.price}</span>
+                        <span className="text-brand-gray">{item.portions.length > 1 ? `From ${item.price}` : item.price}</span>
                       </li>
                     ))}
                     {matches.length > MAX_DISHES_SHOWN ? (

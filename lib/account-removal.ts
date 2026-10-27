@@ -4,6 +4,7 @@ import { releaseCouponIfUnused } from '@/lib/coupons';
 import { invalidateBanSnapshot } from '@/lib/bans';
 import { refreshFoodCatalog, refreshMartCatalog, refreshStories } from '@/lib/catalog-cache';
 import { orderRef } from '@/lib/order-number';
+import { closeCustomerPoints } from '@/lib/points';
 import { SELLER_PAGES } from '@/lib/notification-types';
 import { ORDER_RECORD_CHAT_SELECT, orderSnapshot, recordRiderOrder } from '@/lib/rider-orders';
 
@@ -119,6 +120,8 @@ export async function removeAccount(userId: string, adminId: string): Promise<Re
       // The riders' order history keeps its lines, but they point at "Deleted account" like the orders and chats do.
       await tx.riderOrderRecord.updateMany({ where: { customerId }, data: { customerName: DELETED_ACCOUNT_NAME } });
       await tx.cartItem.deleteMany({ where: { customerId } });
+      // Nothing is sent to a removed account: waiting withdrawals are turned down and the points and wallet are written off.
+      await closeCustomerPoints(tx, customerId);
     }
 
     if (user.seller) {

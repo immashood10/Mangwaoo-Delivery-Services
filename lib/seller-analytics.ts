@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { KARACHI_UTC_OFFSET_MS, startOfKarachiDay } from '@/lib/admin-stats';
+import { withPortionLabel } from '@/lib/food-portions';
 import { orderRef } from '@/lib/order-number';
 import { isFoodSeller, type CurrentSeller } from '@/lib/seller-context';
 
@@ -51,7 +52,7 @@ export async function loadSellerOrders(seller: CurrentSeller): Promise<Analytics
       customerName: order.customer.user.name,
       payment: order.payment?.method ?? null,
       revenue: order.items.reduce((sum, item) => sum + item.quantity * Number(item.price), 0),
-      items: order.items.map((item) => ({ name: item.product.name, category: item.product.category.name, quantity: item.quantity, price: Number(item.price) })),
+      items: order.items.map((item) => ({ name: withPortionLabel(item.product.name, item.portionGrams), category: item.product.category.name, quantity: item.quantity, price: Number(item.price) })),
     }));
   }
 

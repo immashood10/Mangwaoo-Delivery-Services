@@ -9,6 +9,7 @@ import { orderRef } from '@/lib/order-number';
 import { ADMIN_PAGES, SELLER_PAGES } from '@/lib/notification-types';
 import { normalizeCouponCode, type CouponScope } from '@/lib/coupons';
 import { MART_PRODUCTS } from '@/lib/data';
+import { readPortions } from '@/lib/food-portions';
 import type { CouponInfo, Marketplace, OrderQuote, Quote } from '@/lib/checkout-types';
 
 export type { CouponInfo, Marketplace, OrderQuote, Quote };
@@ -23,6 +24,8 @@ export type CheckoutLine = {
   productId: string;
   marketplace: Marketplace;
   qty: number;
+  /** A food dish sold by weight: the size in grams. It must be one of the dish's own sizes; the price is that size's price. */
+  portion?: number;
   /** What the browser showed; only used in the owner's WhatsApp notification. */
   name?: string;
   price?: string;
@@ -40,7 +43,8 @@ class InsufficientStockError extends Error {
   }
 }
 
-type ResolvedLine = { productId: string; name: string; price: number; quantity: number; stock: number };
+/** `portion` is the size in grams of a dish sold by weight (0 = a dish with one price); `price` is already that size's price. */
+type ResolvedLine = { productId: string; name: string; price: number; quantity: number; stock: number; portion: number };
 
 type Group = {
   marketplace: Marketplace;
@@ -137,6 +141,7 @@ async function resolveGroups(lines: CheckoutLine[]) {
             id: true,
             name: true,
             price: true,
+            portions: true,
             stock: true,
             sellerId: true,
             seller: { select: { businessName: true, latitude: true, longitude: true } },
@@ -148,10 +153,33 @@ async function resolveGroups(lines: CheckoutLine[]) {
   const mart = new Map(martProducts.map((product) => [product.id, product]));
   const food = new Map(foodProducts.map((product) => [product.id, product]));
   const groups = new Map<string, Group>();
+  // Dishes sold by weight whose chosen size is gone (the seller changed the sizes after it went into the cart): they are
+  // left out of the price, and `placeOrders` refuses to go on, so nobody is charged for a size they didn't choose.
+  const staleLines: string[] = [];
 
   for (const line of lines) {
     const product = line.marketplace === 'mart' ? mart.get(line.productId) : food.get(line.productId);
     if (!product) continue;
+
+    let price = Number(product.price);
+    let portion = 0;
+
+    if ('portions' in product) {
+      const portions = readPortions(product.portions);
+
+      // A dish with sizes needs one of them; a dish without sizes can't be ordered "in a size".
+      if (portions.length > 0 || line.portion) {
+        const chosen = portions.find((candidate) => candidate.grams === line.portion);
+
+        if (!chosen) {
+          staleLines.push(product.name);
+          continue;
+        }
+
+        price = chosen.price;
+        portion = chosen.grams;
+      }
+    }
 
     const key = `${line.marketplace}:${product.sellerId}`;
     const seller = product.seller as { businessName: string; latitude?: number | null; longitude?: number | null };
@@ -169,14 +197,13 @@ async function resolveGroups(lines: CheckoutLine[]) {
         subtotal: 0,
       } satisfies Group);
 
-    const price = Number(product.price);
-    group.lines.push({ productId: product.id, name: product.name, price, quantity: line.qty, stock: product.stock });
+    group.lines.push({ productId: product.id, name: product.name, price, quantity: line.qty, stock: product.stock, portion });
     // Rounded to paisa so sums like 0.1 + 0.2 don't leave floating point dust in the stored amounts.
     group.subtotal = Math.round((group.subtotal + price * line.qty) * 100) / 100;
     groups.set(key, group);
   }
 
-  return [...groups.values()];
+  return { groups: [...groups.values()], staleLines };
 }
 
 const SAMPLE_PRODUCTS = new Map(MART_PRODUCTS.map((product) => [String(product.id), product]));
@@ -212,7 +239,8 @@ function sampleOrders(lines: CheckoutLine[], groups: Group[]): OrderQuote[] {
   }));
 }
 
-type Priced = { groups: Group[]; quote: Quote; coupon: Coupon | null };
+/** `staleLines` are the names of dishes sold by weight whose chosen size is no longer on offer (they are not in `groups`). */
+type Priced = { groups: Group[]; quote: Quote; coupon: Coupon | null; staleLines: string[] };
 
 /** Prices the cart. Throws a CheckoutError for a coupon that can't be used. */
 export async function priceCheckout(input: {
@@ -221,7 +249,7 @@ export async function priceCheckout(input: {
   couponCode: string | null;
   customerId: string;
 }): Promise<Priced> {
-  const groups = await resolveGroups(input.lines);
+  const { groups, staleLines } = await resolveGroups(input.lines);
   const samples = sampleOrders(input.lines, groups);
 
   let coupon: Coupon | null = null;
@@ -281,6 +309,7 @@ export async function priceCheckout(input: {
   return {
     groups,
     coupon,
+    staleLines,
     quote: {
       orders,
       subtotal: sum((order) => order.subtotal),
@@ -368,12 +397,18 @@ function ownerNotification(marketplace: Marketplace, input: PlaceOrdersInput, li
  */
 export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersResult> {
   // A coupon that can't be used stops the checkout here, before anyone is told about an order.
-  const { groups, quote, coupon } = await priceCheckout({
+  const { groups, quote, coupon, staleLines } = await priceCheckout({
     lines: input.lines,
     dropoff: input.dropoff,
     couponCode: input.couponCode,
     customerId: input.customer.id,
   });
+
+  // A size that was taken off after the dish went into the cart: the customer chooses again before anything is placed.
+  if (staleLines.length > 0) {
+    const names = [...new Set(staleLines)].map((name) => `"${name}"`).join(', ');
+    throw new CheckoutError(409, `The size you chose for ${names} is no longer available. Please remove it from your cart and choose a size again.`);
+  }
 
   // Nothing is placed (or announced to the owner) for a food order that has no delivery fee (a missing pin).
   assertFoodDeliverable(quote.orders);
@@ -456,13 +491,20 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
           ...(coupon && orderQuote.discount > 0 ? { couponId: coupon.id, redemptionId } : {}),
         };
         const itemRows = group.lines.map((line) => ({ productId: line.productId, quantity: line.quantity, price: line.price }));
+        // A dish sold by weight remembers the size that was ordered (its price is that size's price).
+        const foodItemRows = group.lines.map((line) => ({
+          productId: line.productId,
+          quantity: line.quantity,
+          price: line.price,
+          portionGrams: line.portion > 0 ? line.portion : null,
+        }));
         const payment = { create: { amount: orderQuote.total, method: input.paymentMethod } };
 
         const order =
           group.marketplace === 'mart'
             ? await tx.order.create({ data: { ...common, items: { create: itemRows }, payment } })
             : await tx.gulplazaOrder.create({
-                data: { ...common, deliveryFee: orderQuote.deliveryFee, items: { create: itemRows }, payment },
+                data: { ...common, deliveryFee: orderQuote.deliveryFee, items: { create: foodItemRows }, payment },
               });
 
         created.push({ id: order.id, ref: orderRef(group.marketplace, order.orderNumber), sellerId: group.sellerId, marketplace: group.marketplace });

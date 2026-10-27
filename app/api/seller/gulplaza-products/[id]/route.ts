@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { isRasterImageDataUrl } from '@/lib/data-url-image';
 import { getSession } from '@/lib/auth';
 import { refreshFoodCatalog } from '@/lib/catalog-cache';
+import { Prisma } from '@/lib/generated/prisma/client';
+import { lowestPortionPrice, parsePortionsInput, readPortions } from '@/lib/food-portions';
 
 async function resolveOwnedProduct(id: string) {
   const session = await getSession();
@@ -42,8 +44,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const name = typeof body?.name === 'string' ? body.name.trim() : '';
   const description = typeof body?.description === 'string' ? body.description.trim() : '';
   const categoryId = typeof body?.categoryId === 'string' ? body.categoryId : '';
-  const price = typeof body?.price === 'number' ? body.price : parseFloat(body?.price);
   const images = Array.isArray(body?.images) ? body.images.filter((url: unknown) => typeof url === 'string') : [];
+
+  // Sent with every save from the Edit window: a list of sizes (250 g, 500 g, 1 kg ...), or an empty one for a dish with
+  // a single price. A request that doesn't mention sizes at all (an older open page) leaves them as they are.
+  const sizes = parsePortionsInput(body?.portions);
+
+  if ('error' in sizes) {
+    return NextResponse.json({ error: sizes.error }, { status: 400 });
+  }
+
+  const sendsSizes = body !== null && typeof body === 'object' && Object.hasOwn(body, 'portions');
+  const keptPortions = sendsSizes ? sizes.portions : readPortions(resolved.product.portions);
+  const typedPrice = typeof body?.price === 'number' ? body.price : parseFloat(body?.price);
+  // A dish sold by weight is priced by its sizes: its own price is the lowest of them.
+  const price = keptPortions.length > 0 ? lowestPortionPrice(keptPortions) : typedPrice;
 
   if (!name || !categoryId || !Number.isFinite(price) || price <= 0) {
     return NextResponse.json({ error: 'Please fill in all fields with valid values.' }, { status: 400 });
@@ -64,7 +79,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const product = await prisma.gulplazaProduct.update({
     where: { id },
-    data: { name, description: description || null, categoryId, price, images },
+    data: {
+      name,
+      description: description || null,
+      categoryId,
+      price,
+      images,
+      ...(sendsSizes ? { portions: keptPortions.length > 0 ? keptPortions : Prisma.DbNull } : {}),
+    },
   });
   refreshFoodCatalog();
 

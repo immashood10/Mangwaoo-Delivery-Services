@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import {
   ArrowRight,
+  Banknote,
   Bike,
   CircleDashed,
   Clock,
@@ -55,6 +56,7 @@ async function getDashboardData() {
     recentWaitingChats,
     pendingAds,
     cartCustomers,
+    pendingPayouts,
   ] = await Promise.all([
     // Pending riders / sellers who haven't confirmed their WhatsApp number are unfinished signups, not counted.
     prisma.rider.count({ where: { isApproved: false, user: LIVE_ACCOUNT } }),
@@ -84,11 +86,14 @@ async function getDashboardData() {
     prisma.productAd.count({ where: { status: 'PENDING' } }),
     // Customers with items in their cart that they haven't ordered (the Still in Cart page).
     prisma.customer.count({ where: { user: LIVE_ACCOUNT, cartItems: { some: {} } } }),
+    // Customers waiting for their Mangwaoo Points wallet money (the Wallet Payouts page).
+    prisma.walletWithdrawal.count({ where: { status: 'PENDING' } }),
   ]);
 
   return {
     pendingAds,
     cartCustomers,
+    pendingPayouts,
     pendingRiders,
     approvedRiders,
     onlineRiders,
@@ -286,6 +291,13 @@ export default async function AdminDashboardPage({
             description="Customers who put items in their cart but haven't ordered. See what is waiting, from which shop, and remind them."
             icon={ShoppingCart}
             badge={data.cartCustomers > 0 ? `${data.cartCustomers} waiting` : undefined}
+          />
+          <SectionCard
+            href="/admin/wallet-payouts"
+            title="Wallet Payouts"
+            description="Mangwaoo Points: set the rules, and send customers their cashback to JazzCash or EasyPaisa when they ask."
+            icon={Banknote}
+            badge={data.pendingPayouts > 0 ? `${data.pendingPayouts} waiting` : undefined}
           />
           <SectionCard
             href="/admin/stories"

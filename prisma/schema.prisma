@@ -177,6 +177,16 @@ model Customer {
   riderChats     RiderChat[]
   couponRedemptions CouponRedemption[]
   riderOrderRecords RiderOrderRecord[]
+
+  // ── Mangwaoo Points and the cashback wallet (see lib/points.ts) ──
+  /// Points to spend: the sum of the PointsEntry lines. Kept in step with them in the same transaction that changes them.
+  points        Int @default(0)
+  /// Cashback in whole PKR waiting in the wallet: the sum of the WalletEntry lines (never negative, also checked by the database).
+  walletBalance Int @default(0)
+
+  pointsEntries PointsEntry[]
+  walletEntries WalletEntry[]
+  withdrawals   WalletWithdrawal[]
 }
 
 model Seller {
@@ -840,6 +850,10 @@ model GulplazaProduct {
   price       Decimal
   stock       Int      @default(0)
   images      String[] @default([])
+  /// A dish sold by weight: the sizes on offer with a price each, e.g. [{"grams":250,"price":300},{"grams":1000,"price":1000}]
+  /// (read and checked through lib/food-portions.ts). Null = a dish with one price. `price` then holds the lowest size's
+  /// price, so every list can say "From PKR ...".
+  portions    Json?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
 
@@ -889,7 +903,10 @@ model GulplazaOrder {
 model GulplazaOrderItem {
   id       String  @id @default(cuid())
   quantity Int
+  /// The price of one (of the size ordered, for a dish sold by weight)
   price    Decimal
+  /// A dish sold by weight: the size ordered, in grams. Null = a dish with one price.
+  portionGrams Int?
 
   orderId   String
   order     GulplazaOrder   @relation(fields: [orderId], references: [id])
@@ -1124,4 +1141,124 @@ model PushSubscription {
   lastSentAt DateTime?
 
   @@index([userId])
+}
+
+// ── Mangwaoo Points: random points on every delivered order, cashback into a wallet, payout to JazzCash / EasyPaisa ──
+
+enum PointsEntryType {
+  /// Points won for a delivered order
+  EARNED
+  /// Points spent on a cashback
+  REDEEMED
+  /// A correction made by hand
+  ADJUSTMENT
+}
+
+/// One line of a customer's points. `points` is positive when earned and negative when spent.
+model PointsEntry {
+  id         String          @id @default(cuid())
+  customerId String
+  customer   Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  type       PointsEntryType
+  points     Int
+  /// EARNED: the order the points were won for ('MART' or 'GULPLAZA') and its id. Plain values, not relations, so the line
+  /// outlives the order; unique, so an order can win points only once however many times it is looked at.
+  orderKind  String?
+  orderId    String?
+  /// EARNED: the order number the customer knows it by (MW-F10001).
+  orderRef   String?
+  /// REDEEMED: the cashback in PKR those points turned into.
+  cashback   Int?
+  note       String?
+  createdAt  DateTime        @default(now())
+
+  @@unique([orderKind, orderId])
+  @@index([customerId, createdAt])
+}
+
+enum WalletEntryType {
+  /// Cashback from redeemed points
+  CASHBACK
+  /// Money taken out to the customer's JazzCash / EasyPaisa (a withdrawal request)
+  WITHDRAWAL
+  /// A withdrawal that was turned down: the money is back
+  WITHDRAWAL_REFUND
+  /// A correction made by hand
+  ADJUSTMENT
+}
+
+/// One line of a customer's wallet. `amount` is whole PKR from the customer's side: cashback is positive, a withdrawal negative.
+model WalletEntry {
+  id           String          @id @default(cuid())
+  customerId   String
+  customer     Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  type         WalletEntryType
+  amount       Int
+  /// WITHDRAWAL and WITHDRAWAL_REFUND: the request they belong to.
+  withdrawalId String?
+  note         String?
+  createdAt    DateTime        @default(now())
+
+  @@index([customerId, createdAt])
+  @@index([withdrawalId])
+}
+
+enum WithdrawalStatus {
+  /// Asked for; Mangwaoo has not sent the money yet
+  PENDING
+  /// Mangwaoo sent the money to the customer's account
+  PAID
+  /// Turned down; the money went back to the wallet
+  REJECTED
+}
+
+enum PayoutMethod {
+  EASYPAISA
+  JAZZCASH
+}
+
+/// A customer's request to move wallet money to their own JazzCash / EasyPaisa account. The amount leaves the wallet when
+/// it is asked for; an admin sends the money by hand and marks it paid (with the transaction id), or turns it down and the
+/// amount goes back.
+model WalletWithdrawal {
+  id              String           @id @default(cuid())
+  customerId      String
+  customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  amount          Int
+  method          PayoutMethod
+  /// The customer's mobile account, as 03001234567.
+  accountNumber   String
+  /// The name on that account, so the admin can check it before sending.
+  accountName     String
+  status          WithdrawalStatus @default(PENDING)
+  /// PAID: the transaction id of the money Mangwaoo sent.
+  transactionId   String?
+  rejectionReason String?
+  /// The admin who paid or rejected it (a plain id).
+  reviewedById    String?
+  reviewedAt      DateTime?
+  createdAt       DateTime         @default(now())
+
+  @@index([status, createdAt])
+  @@index([customerId, createdAt])
+}
+
+/// The rules of Mangwaoo Points, editable by an admin (Admin > Wallet Payouts). A single row with id "default".
+model LoyaltySettings {
+  id             String   @id @default("default")
+  /// Off = no new points and no cashing in; balances stay and withdrawals still work.
+  enabled        Boolean  @default(true)
+  /// A delivered order wins a random number of points from pointsMin to pointsMax.
+  pointsMin      Int      @default(1)
+  pointsMax      Int      @default(100)
+  /// Points one cashback costs.
+  redeemPoints   Int      @default(500)
+  /// A cashback is a random number of rupees from cashbackMin to cashbackMax.
+  cashbackMin    Int      @default(1)
+  cashbackMax    Int      @default(10)
+  /// The least a customer can withdraw at once (PKR).
+  minWithdrawal  Int      @default(1)
+  /// Orders with items worth less than this win no points (PKR; 0 = every delivered order wins).
+  minOrderAmount Int      @default(0)
+  updatedAt      DateTime @updatedAt
 }

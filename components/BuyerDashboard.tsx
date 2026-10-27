@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { User, MapPin, Banknote, Smartphone, XCircle, PackageSearch, History as HistoryIcon, MessageSquare, Star, ChevronRight } from 'lucide-react';
+import { User, MapPin, Banknote, Smartphone, XCircle, PackageSearch, History as HistoryIcon, MessageSquare, Star, ChevronRight, Gift } from 'lucide-react';
 import MessagesInbox from './MessagesInbox';
 
 type OrderItem = {
@@ -31,6 +31,8 @@ type Order = {
   paymentMethod: string | null;
   paymentStatus: string | null;
   items: OrderItem[];
+  /** The Mangwaoo Points this delivered order won (null = none). */
+  pointsWon: number | null;
 };
 
 /** A recent delivery whose rider the customer has not rated yet. */
@@ -154,6 +156,13 @@ function OrderCard({ order, onCancelled }: { order: Order; onCancelled: () => vo
         </div>
       ) : null}
 
+      {order.pointsWon ? (
+        <p className="mt-3 flex items-center gap-1.5 border-t border-gray-100 pt-3 text-xs font-semibold text-success">
+          <Gift className="h-3.5 w-3.5" aria-hidden="true" />
+          You won {order.pointsWon.toLocaleString('en-PK')} Mangwaoo Points for this order
+        </p>
+      ) : null}
+
       {CANCELLABLE_STATUSES.includes(order.status) && (
         <div className="mt-3 border-t border-gray-100 pt-3">
           <button
@@ -202,11 +211,14 @@ export default function BuyerDashboard({
   orders,
   ratePrompts = [],
   initialTab = 'orders',
+  points = 0,
 }: {
   customerName: string;
   orders: Order[];
   ratePrompts?: RatePrompt[];
   initialTab?: TabId;
+  /** The customer's Mangwaoo Points, shown next to the link to the points page. */
+  points?: number;
 }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
@@ -226,13 +238,13 @@ export default function BuyerDashboard({
         </div>
       </div>
 
-      <div className="mb-8 flex gap-2 border-b border-gray-100">
+      <div className="mb-8 flex gap-2 overflow-x-auto border-b border-gray-100">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
+            className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
               activeTab === tab.id
                 ? 'border-accent text-accent'
                 : 'border-transparent text-brand-gray hover:text-ink'
@@ -247,6 +259,14 @@ export default function BuyerDashboard({
             )}
           </button>
         ))}
+        <Link
+          href="/account/points"
+          className="ml-auto flex shrink-0 items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-semibold text-brand-gray transition-colors hover:text-accent"
+        >
+          <Gift className="w-4 h-4" />
+          Mangwaoo Points
+          {points > 0 && <span className="rounded-full bg-brand-red-primary/10 px-2 py-0.5 text-xs text-accent">{points.toLocaleString('en-PK')}</span>}
+        </Link>
       </div>
 
       {activeTab === 'orders' && (

@@ -5,6 +5,8 @@ import { createPortal } from 'react-dom';
 import { ImagePlus, X } from 'lucide-react';
 import SizeFields from './SizeFields';
 import VehicleDetailsFields from './VehicleDetailsFields';
+import PortionFields, { portionRowsFrom, portionsFromRows, type PortionRow } from './seller/PortionFields';
+import type { Portion } from '@/lib/food-portions';
 import {
   emptySizeDetails,
   getSizeOptions,
@@ -33,6 +35,8 @@ type EditableProduct = {
   attributes?: unknown;
   /** Clothes and shoes only (Mart): the sizes on offer. */
   sizes?: SizeDetails | null;
+  /** Food dishes sold by weight only: the sizes (250 g, 500 g, 1 kg ...) with a price each. */
+  portions?: Portion[];
 };
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
@@ -42,6 +46,7 @@ export default function EditProductModal({
   apiBasePath,
   enableVehicleDetails = false,
   enableSizes = false,
+  enablePortions = false,
   hideStock = false,
   categories,
   product,
@@ -53,6 +58,8 @@ export default function EditProductModal({
   enableVehicleDetails?: boolean;
   /** Ask for sizes when a clothes/shoes category (Men, Women, Kids) is selected (MangwaooMart only). */
   enableSizes?: boolean;
+  /** Let a food dish be sold by weight: sizes like 250 g, 500 g, 1 kg with a price each (Food only). */
+  enablePortions?: boolean;
   /** Food dishes have no stock count (`lib/food-stock.ts`). */
   hideStock?: boolean;
   categories: Category[];
@@ -71,6 +78,8 @@ export default function EditProductModal({
     () => parseVehicleDetails(product.attributes) ?? emptyVehicleDetails()
   );
   const [sizes, setSizes] = useState<SizeDetails>(() => product.sizes ?? emptySizeDetails());
+  const [byWeight, setByWeight] = useState(() => enablePortions && (product.portions?.length ?? 0) > 0);
+  const [portionRows, setPortionRows] = useState<PortionRow[]>(() => portionRowsFrom(product.portions ?? []));
   const [images, setImages] = useState<string[]>(product.images);
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -152,7 +161,9 @@ export default function EditProductModal({
           name: form.name,
           description: form.description,
           categoryId: form.categoryId,
-          price: parseFloat(form.price),
+          // A dish sold by weight is priced by its sizes (the server takes the lowest as the dish's own price).
+          ...(enablePortions && byWeight ? {} : { price: parseFloat(form.price) }),
+          ...(enablePortions ? { portions: byWeight ? portionsFromRows(portionRows) : [] } : {}),
           ...(hideStock ? {} : { stock: parseInt(form.stock, 10) }),
           ...(isVehicleAd ? { attributes: vehicle } : {}),
           ...(isSizedAd ? { attributes: sizes } : {}),
@@ -272,7 +283,18 @@ export default function EditProductModal({
             <SizeFields categoryName={selectedCategoryName} value={sizes} onChange={setSizes} idPrefix="edit-size" />
           ) : null}
 
+          {enablePortions ? (
+            <PortionFields
+              enabled={byWeight}
+              onEnabledChange={setByWeight}
+              rows={portionRows}
+              onRowsChange={setPortionRows}
+              idPrefix="edit-portion"
+            />
+          ) : null}
+
           <div className="grid grid-cols-2 gap-4">
+            {enablePortions && byWeight ? null : (
             <div>
               <label className="block text-sm font-semibold text-ink mb-2">Price (PKR)</label>
               <input
@@ -286,6 +308,7 @@ export default function EditProductModal({
                 required
               />
             </div>
+            )}
             {hideStock ? null : (
             <div>
               <label className="block text-sm font-semibold text-ink mb-2">Stock</label>

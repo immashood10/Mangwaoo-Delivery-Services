@@ -1,4 +1,5 @@
 import { GULPLAZA_CATEGORIES } from '@/lib/data';
+import { readPortions, withPortionLabel } from '@/lib/food-portions';
 import { orderRef } from '@/lib/order-number';
 import { prisma } from '@/lib/prisma';
 import { isFoodSeller, type CurrentSeller } from '@/lib/seller-context';
@@ -54,6 +55,7 @@ export async function getSellerProducts(seller: CurrentSeller): Promise<SellerPr
       images: product.images,
       attributes: null,
       sizes: null,
+      portions: readPortions(product.portions),
     }));
   }
 
@@ -75,6 +77,7 @@ export async function getSellerProducts(seller: CurrentSeller): Promise<SellerPr
     images: product.images,
     attributes: parseVehicleDetails(product.attributes),
     sizes: parseSizeDetails(product.attributes),
+    portions: [],
   }));
 }
 
@@ -108,7 +111,7 @@ export async function getSellerOrders(seller: CurrentSeller, scope: 'incoming' |
       paymentStatus: order.payment?.status ?? null,
       items: order.items.map((item) => ({
         id: item.id,
-        productName: item.product.name,
+        productName: withPortionLabel(item.product.name, item.portionGrams),
         quantity: item.quantity,
         price: Number(item.price),
       })),

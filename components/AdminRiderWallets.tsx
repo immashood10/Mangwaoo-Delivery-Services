@@ -85,7 +85,7 @@ function formatWhen(iso: string) {
   return new Date(iso).toLocaleString('en-PK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Karachi' });
 }
 
-function Modal({ titleId, onClose, children, wide = false }: { titleId: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+export function Modal({ titleId, onClose, children, wide = false }: { titleId: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
@@ -124,7 +124,7 @@ type DialogField = {
 };
 
 /** A small form in a dialog; `onSubmit` answers with an error message, or null when it worked. */
-function FormDialog({
+export function FormDialog({
   title,
   description,
   fields,

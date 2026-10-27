@@ -1,5 +1,6 @@
 import { GULPLAZA_CATEGORIES } from '@/lib/data';
 import { foodReach } from '@/lib/delivery';
+import { readPortions, type Portion } from '@/lib/food-portions';
 import { isRealLocation, type Coordinates } from '@/lib/geo';
 import { getGulplazaProducts } from '@/lib/products';
 import { coverPath } from '@/lib/seller-cover-config';
@@ -15,8 +16,11 @@ export type FoodItem = {
   category: string;
   vendor: string;
   sellerId: string;
+  /** The dish's own price: the lowest size's price for a dish sold by weight. */
   priceValue: number;
   price: string;
+  /** A dish sold by weight (250 g, 500 g, 1 kg ...): the sizes with a price each, smallest first; empty = one price. */
+  portions: Portion[];
   icon: string;
   imageUrl: string | null;
   stock: number;
@@ -52,6 +56,7 @@ function toFoodItem(product: GulplazaProductRow): FoodItem {
     sellerId: product.sellerId,
     priceValue,
     price: `PKR ${priceValue.toLocaleString()}`,
+    portions: readPortions(product.portions),
     icon: FOOD_CATEGORY_ICONS[product.category.name] ?? '🍽️',
     imageUrl: product.images[0] ?? null,
     stock: product.stock,

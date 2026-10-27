@@ -53,11 +53,14 @@ export function parseLines(rawItems: unknown, fixedMarketplace?: Marketplace): C
     .map((raw: unknown) => {
       const record = (raw ?? {}) as Record<string, unknown>;
       const qty = typeof record.qty === 'number' ? record.qty : parseInt(String(record.qty ?? ''), 10);
+      const marketplace = fixedMarketplace ?? (record.marketplace === 'gulplaza' ? 'gulplaza' : 'mart');
 
       return {
         productId: typeof record.productId === 'string' ? record.productId : '',
-        marketplace: fixedMarketplace ?? (record.marketplace === 'gulplaza' ? 'gulplaza' : 'mart'),
+        marketplace,
         qty: Math.min(Math.floor(qty), MAX_LINE_QUANTITY),
+        // The size (in grams) of a food dish sold by weight; the server checks it is one the dish really has.
+        portion: marketplace === 'gulplaza' && typeof record.portion === 'number' && Number.isInteger(record.portion) && record.portion > 0 ? record.portion : undefined,
         name: typeof record.name === 'string' ? record.name : undefined,
         price: typeof record.price === 'string' ? record.price : undefined,
       } satisfies CheckoutLine;

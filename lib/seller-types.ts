@@ -1,5 +1,6 @@
 // Shapes the seller dashboard pages pass to their client components. Client-safe.
 
+import type { Portion } from '@/lib/food-portions';
 import type { SizeDetails } from '@/lib/size-options';
 import type { VehicleDetails } from '@/lib/vehicle-details';
 
@@ -21,6 +22,8 @@ export type SellerProduct = {
   attributes: VehicleDetails | null;
   /** Clothes and shoes (Men / Women / Kids on MangwaooMart) only. */
   sizes: SizeDetails | null;
+  /** Food dishes sold by weight (250 g, 500 g, 1 kg ...) with a price each; empty = a dish with one price. */
+  portions: Portion[];
 };
 
 export type SellerOrderItem = {

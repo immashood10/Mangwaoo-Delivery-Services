@@ -4,6 +4,7 @@ import { MessageCircle, Store, X, LayoutGrid } from 'lucide-react';
 import AddToCartButton from '@/components/AddToCartButton';
 import NearbyNotice from '@/components/NearbyNotice';
 import { FOOD_DELIVERY_RADIUS_KM, foodReach } from '@/lib/delivery';
+import { dishPriceLabel, readPortions } from '@/lib/food-portions';
 import { isRealLocation, parseCoordinates, type Coordinates } from '@/lib/geo';
 import { getGulplazaProducts } from '@/lib/products';
 
@@ -50,17 +51,25 @@ export default async function GulPlaza({
       )
     : [];
 
-  const allProducts = sellerProducts.map((product) => ({
-    id: product.id,
-    name: product.name,
-    category: product.category.name,
-    vendor: product.seller.businessName,
-    sellerId: product.sellerId,
-    marketplace: 'gulplaza' as const,
-    price: `PKR ${Number(product.price).toLocaleString()}`,
-    icon: CATEGORY_ICONS[product.category.name] ?? '🍽️',
-    imageUrl: product.images[0] ?? null,
-  }));
+  const allProducts = sellerProducts.map((product) => {
+    // A dish sold in several sizes (250 g, 500 g, 1 kg ...) shows "From PKR ..." and is ordered on its own page, after picking
+    // a size; a dish with just one size is ordered from here in that size.
+    const portions = readPortions(product.portions);
+
+    return {
+      id: product.id,
+      name: product.name,
+      category: product.category.name,
+      vendor: product.seller.businessName,
+      sellerId: product.sellerId,
+      marketplace: 'gulplaza' as const,
+      price: dishPriceLabel(Number(product.price), portions),
+      portions,
+      ...(portions.length === 1 ? { portion: portions[0].grams } : {}),
+      icon: CATEGORY_ICONS[product.category.name] ?? '🍽️',
+      imageUrl: product.images[0] ?? null,
+    };
+  });
 
   const products = allProducts
     .filter((product) =>
@@ -232,10 +241,16 @@ export default async function GulPlaza({
                         <p className="text-xs text-brand-gray mb-3">{product.vendor}</p>
                         <div className="mt-auto flex items-center justify-between">
                           <span className="font-bold text-accent">{product.price}</span>
-                          <AddToCartButton
-                            product={product}
-                            className="text-xs font-semibold bg-brand-red-primary text-white px-3 py-2 rounded-full hover:bg-brand-red-secondary transition-colors"
-                          />
+                          {product.portions.length > 1 ? (
+                            <span className="text-xs font-semibold bg-brand-red-primary text-white px-3 py-2 rounded-full">
+                              Choose size
+                            </span>
+                          ) : (
+                            <AddToCartButton
+                              product={product}
+                              className="text-xs font-semibold bg-brand-red-primary text-white px-3 py-2 rounded-full hover:bg-brand-red-secondary transition-colors"
+                            />
+                          )}
                         </div>
                       </Link>
                     </div>

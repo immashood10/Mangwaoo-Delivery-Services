@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
+import { withPortionLabel } from '@/lib/food-portions';
 import { orderRef } from '@/lib/order-number';
 import { prisma } from '@/lib/prisma';
 import BuyerDashboard from '@/components/BuyerDashboard';
@@ -29,7 +30,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   // eslint-disable-next-line react-hooks/purity -- server component, rendered per request
   const ratableSince = new Date(Date.now() - RATE_REMINDER_DAYS * 24 * 60 * 60 * 1000);
 
-  const [martOrders, gulplazaOrders, unratedRides] = await Promise.all([
+  const [martOrders, gulplazaOrders, unratedRides, earnedPoints] = await Promise.all([
     prisma.order.findMany({
       where: { customerId: customer.id },
       orderBy: { createdAt: 'desc' },
@@ -58,7 +59,10 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       take: 3,
       select: { chatId: true, endedAt: true, rider: { select: { user: { select: { name: true } } } } },
     }),
+    // The Mangwaoo Points each delivered order won, shown on the order.
+    prisma.pointsEntry.findMany({ where: { customerId: customer.id, type: 'EARNED' }, select: { orderId: true, points: true } }),
   ]);
+  const pointsByOrder = new Map(earnedPoints.map((entry) => [entry.orderId, entry.points]));
 
   const orders = [
     ...martOrders.map((order) => ({
@@ -75,6 +79,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       address: `${order.address.street}, ${order.address.city}`,
       paymentMethod: order.payment?.method ?? null,
       paymentStatus: order.payment?.status ?? null,
+      pointsWon: pointsByOrder.get(order.id) ?? null,
       items: order.items.map((item) => ({
         id: item.id,
         productName: item.product.name,
@@ -96,9 +101,10 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       address: `${order.address.street}, ${order.address.city}`,
       paymentMethod: order.payment?.method ?? null,
       paymentStatus: order.payment?.status ?? null,
+      pointsWon: pointsByOrder.get(order.id) ?? null,
       items: order.items.map((item) => ({
         id: item.id,
-        productName: item.product.name,
+        productName: withPortionLabel(item.product.name, item.portionGrams),
         quantity: item.quantity,
         price: Number(item.price),
       })),
@@ -111,5 +117,5 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     deliveredAt: ride.endedAt.toISOString(),
   }));
 
-  return <BuyerDashboard key={initialTab} customerName={customer.user.name} orders={orders} ratePrompts={ratePrompts} initialTab={initialTab} />;
+  return <BuyerDashboard key={initialTab} customerName={customer.user.name} orders={orders} ratePrompts={ratePrompts} initialTab={initialTab} points={customer.points} />;
 }

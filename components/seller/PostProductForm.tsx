@@ -7,6 +7,7 @@ import { CheckCircle2, ImagePlus, X } from 'lucide-react';
 import SizeFields from '@/components/SizeFields';
 import VehicleDetailsFields from '@/components/VehicleDetailsFields';
 import { SELLER_PAGES } from '@/lib/notification-types';
+import PortionFields, { portionsFromRows, type PortionRow } from './PortionFields';
 import type { Marketplace, SellerCategory } from '@/lib/seller-types';
 import {
   emptySizeDetails,
@@ -47,6 +48,9 @@ export default function PostProductForm({
   });
   const [vehicle, setVehicle] = useState<VehicleDetails>(emptyVehicleDetails);
   const [sizes, setSizes] = useState<SizeDetails>(emptySizeDetails);
+  // A food dish can be sold by weight (250 g, 500 g, 1 kg ...) with a price per size instead of one price.
+  const [byWeight, setByWeight] = useState(false);
+  const [portionRows, setPortionRows] = useState<PortionRow[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [formError, setFormError] = useState('');
   const [postedName, setPostedName] = useState('');
@@ -131,7 +135,8 @@ export default function PostProductForm({
           name: form.name,
           description: form.description,
           categoryId: form.categoryId,
-          price: parseFloat(form.price),
+          // A dish sold by weight is priced by its sizes; the server takes the lowest as the dish's own price.
+          ...(!isMart && byWeight ? { portions: portionsFromRows(portionRows) } : { price: parseFloat(form.price) }),
           // A vehicle ad is a single item, so it has no stock count to enter; food has none at all.
           ...(isMart ? { stock: isVehicleAd ? 1 : parseInt(form.stock, 10) } : {}),
           images: imagePreviews,
@@ -151,6 +156,8 @@ export default function PostProductForm({
       setForm({ name: '', description: '', categoryId: categories[0]?.id ?? '', price: '', stock: '' });
       setVehicle(emptyVehicleDetails());
       setSizes(emptySizeDetails());
+      setByWeight(false);
+      setPortionRows([]);
       setImagePreviews([]);
       router.refresh();
     } catch {
@@ -273,7 +280,18 @@ export default function PostProductForm({
         <SizeFields categoryName={selectedCategoryName} value={sizes} onChange={setSizes} idPrefix="post-size" />
       ) : null}
 
+      {isMart ? null : (
+        <PortionFields
+          enabled={byWeight}
+          onEnabledChange={setByWeight}
+          rows={portionRows}
+          onRowsChange={setPortionRows}
+          idPrefix="post-portion"
+        />
+      )}
+
       <div className={isVehicleAd ? '' : 'grid grid-cols-1 gap-4 sm:grid-cols-2'}>
+        {!isMart && byWeight ? null : (
         <div>
           <label htmlFor="post-price" className="block text-sm font-semibold text-ink mb-2">
             Price (PKR)
@@ -290,6 +308,7 @@ export default function PostProductForm({
             required
           />
         </div>
+        )}
         {isVehicleAd || !isMart ? null : (
           <div>
             <label htmlFor="post-stock" className="block text-sm font-semibold text-ink mb-2">

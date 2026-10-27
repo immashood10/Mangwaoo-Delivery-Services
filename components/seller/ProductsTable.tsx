@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ExternalLink, PackagePlus, Pencil, Trash2 } from 'lucide-react';
 import EditProductModal from '@/components/EditProductModal';
+import { portionSizesLabel } from '@/lib/food-portions';
 import { SELLER_PAGES } from '@/lib/notification-types';
 import type { Marketplace, SellerCategory, SellerProduct } from '@/lib/seller-types';
 import { useServerRefresh } from './useServerRefresh';
@@ -114,7 +115,14 @@ export default function ProductsTable({
                   </td>
                   <td className="py-3 pr-4 font-semibold text-ink">{product.name}</td>
                   <td className="py-3 pr-4 text-brand-gray">{product.category}</td>
-                  <td className="py-3 pr-4 font-semibold text-accent">PKR {product.price.toLocaleString()}</td>
+                  <td className="py-3 pr-4">
+                    <span className="font-semibold text-accent">
+                      {product.portions.length > 1 ? 'From ' : ''}PKR {product.price.toLocaleString()}
+                    </span>
+                    {product.portions.length > 0 ? (
+                      <span className="block text-xs text-brand-gray">{portionSizesLabel(product.portions)}</span>
+                    ) : null}
+                  </td>
                   {isMart ? <td className="py-3 pr-4 text-brand-gray">{product.stock}</td> : null}
                   <td className="py-3 pr-4">
                     <div className="flex items-center gap-2">
@@ -156,6 +164,7 @@ export default function ProductsTable({
           apiBasePath={apiBasePath}
           enableVehicleDetails={isMart}
           enableSizes={isMart}
+          enablePortions={!isMart}
           hideStock={!isMart}
           categories={categories}
           product={editingProduct}

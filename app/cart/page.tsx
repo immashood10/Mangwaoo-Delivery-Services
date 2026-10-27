@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Minus, Plus, Trash2, ShoppingCart, MessageCircle, Banknote, Smartphone, BadgePercent, X } from 'lucide-react';
+import { Minus, Plus, Trash2, ShoppingCart, MessageCircle, Banknote, Smartphone, BadgePercent, X, Gift } from 'lucide-react';
 import { useCart } from '@/lib/cart-context';
 import { useDeliveryAddress } from '@/lib/delivery-address-context';
 import { DELIVERY_RATE_PER_KM, FOOD_DELIVERY_RADIUS_KM, farAwayNote } from '@/lib/delivery';
+import { formatPortion, withPortionLabel } from '@/lib/food-portions';
 import type { Quote } from '@/lib/checkout-types';
 import LocationPicker, { type PickedLocation } from '@/components/LocationPicker';
 
@@ -56,6 +57,7 @@ export default function CartPage() {
         productId: String(item.id),
         marketplace: item.marketplace === 'gulplaza' ? 'gulplaza' : 'mart',
         qty: item.qty,
+        ...(item.portion ? { portion: item.portion } : {}),
       })),
     [items]
   );
@@ -148,7 +150,7 @@ export default function CartPage() {
     const summary = [
       `🛒 New order from ${vendors.join(' + ')}`,
       '',
-      ...items.map((item) => `• ${item.qty} × ${item.name} — ${item.price}`),
+      ...items.map((item) => `• ${item.qty} × ${withPortionLabel(item.name, item.portion)} — ${item.price}`),
       '',
       priceLine,
       `Payment: ${paymentMethod === 'cod' ? 'Cash on delivery' : 'EasyPaisa / JazzCash'}`,
@@ -168,7 +170,8 @@ export default function CartPage() {
             productId: String(item.id),
             marketplace: item.marketplace === 'gulplaza' ? 'gulplaza' : 'mart',
             qty: item.qty,
-            name: item.name,
+            ...(item.portion ? { portion: item.portion } : {}),
+            name: withPortionLabel(item.name, item.portion),
             price: item.price,
           })),
           fullName: details.fullName,
@@ -358,35 +361,38 @@ export default function CartPage() {
 
             <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
               {items.map((item) => (
-                <div key={item.id} className="flex items-center gap-3 rounded-xl border border-gray-100 p-3">
+                <div key={`${item.id}:${item.portion ?? 0}`} className="flex items-center gap-3 rounded-xl border border-gray-100 p-3">
                   <span className="text-2xl">{item.icon}</span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-ink">{item.name}</p>
-                    <p className="text-xs text-brand-gray">{item.price}</p>
+                    <p className="text-xs text-brand-gray">
+                      {item.portion ? <span className="font-semibold text-ink">{formatPortion(item.portion)} · </span> : null}
+                      {item.price}
+                    </p>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={() => updateQty(item.id, item.qty - 1)}
+                      onClick={() => updateQty(item.id, item.qty - 1, item.portion)}
                       className="rounded-full border border-gray-200 p-1 text-ink hover:bg-gray-100"
-                      aria-label={`Decrease quantity of ${item.name}`}
+                      aria-label={`Decrease quantity of ${withPortionLabel(item.name, item.portion)}`}
                     >
                       <Minus size={14} />
                     </button>
                     <span className="w-5 text-center text-sm font-semibold text-ink">{item.qty}</span>
                     <button
                       type="button"
-                      onClick={() => updateQty(item.id, item.qty + 1)}
+                      onClick={() => updateQty(item.id, item.qty + 1, item.portion)}
                       className="rounded-full border border-gray-200 p-1 text-ink hover:bg-gray-100"
-                      aria-label={`Increase quantity of ${item.name}`}
+                      aria-label={`Increase quantity of ${withPortionLabel(item.name, item.portion)}`}
                     >
                       <Plus size={14} />
                     </button>
                     <button
                       type="button"
-                      onClick={() => removeItem(item.id)}
+                      onClick={() => removeItem(item.id, item.portion)}
                       className="ml-1 rounded-full border border-gray-200 p-1 text-brand-gray hover:border-accent hover:text-accent"
-                      aria-label={`Remove ${item.name}`}
+                      aria-label={`Remove ${withPortionLabel(item.name, item.portion)}`}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -514,6 +520,10 @@ export default function CartPage() {
                 <li>No platform fees</li>
                 <li>No other charges</li>
               </ul>
+              <p className="flex items-center gap-1.5 text-xs text-brand-gray">
+                <Gift className="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden="true" />
+                Win Mangwaoo Points when this order is delivered.
+              </p>
               <div className="flex items-center justify-between border-t border-gray-100 pt-2 text-base">
                 <span className="font-semibold text-ink">Total</span>
                 <span className={`font-bold text-accent ${isPricing && quote ? 'opacity-60' : ''}`}>{pkr(total)}</span>

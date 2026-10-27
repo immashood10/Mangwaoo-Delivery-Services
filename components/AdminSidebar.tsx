@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   BadgePercent,
+  Banknote,
   CircleDashed,
   Crown,
   LayoutDashboard,
@@ -37,6 +38,7 @@ const ADMIN_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: '/admin/sellers', label: 'Seller Approvals', icon: Store },
   { href: '/admin/riders', label: 'Rider Approvals', icon: Bike },
   { href: '/admin/rider-wallets', label: 'Rider Wallets', icon: Wallet },
+  { href: '/admin/wallet-payouts', label: 'Wallet Payouts', icon: Banknote },
   { href: '/admin/rider-reviews', label: 'Rider Reviews', icon: Star },
   { href: '/admin/ads', label: 'Ad Requests', icon: Megaphone },
   { href: '/admin/stories', label: 'Stories', icon: CircleDashed },

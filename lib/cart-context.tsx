@@ -13,6 +13,8 @@ export type CartProduct = {
   sellerId?: string;
   /** Which catalog/order flow this item belongs to. Defaults to 'mart' when unset. */
   marketplace?: 'mart' | 'gulplaza';
+  /** A food dish sold by weight: the size in grams (`price` is that size's price). Unset = a dish with one price. */
+  portion?: number;
 };
 
 export type CartItem = CartProduct & { qty: number };
@@ -25,8 +27,9 @@ type CartContextValue = {
   subtotalLabel: string;
   subtotal: number;
   addItem: (product: CartProduct) => void;
-  removeItem: (id: number | string) => void;
-  updateQty: (id: number | string, qty: number) => void;
+  /** `portion` picks the size line of a dish sold by weight (250 g and 1 kg of one dish are two lines). */
+  removeItem: (id: number | string, portion?: number) => void;
+  updateQty: (id: number | string, qty: number, portion?: number) => void;
   clearCart: () => void;
 };
 
@@ -39,7 +42,11 @@ function parsePrice(price: string) {
   return numeric ? parseFloat(numeric) : 0;
 }
 
-const itemKey = (item: Pick<CartItem, 'id' | 'marketplace'>) => `${item.marketplace === 'gulplaza' ? 'gulplaza' : 'mart'}:${item.id}`;
+/** A cart line is a product, and for a dish sold by weight also its size. */
+const itemKey = (item: Pick<CartItem, 'id' | 'marketplace' | 'portion'>) =>
+  `${item.marketplace === 'gulplaza' ? 'gulplaza' : 'mart'}:${item.id}:${item.portion ?? 0}`;
+
+const isLine = (item: CartItem, id: number | string, portion = 0) => item.id === id && (item.portion ?? 0) === portion;
 
 /** What is saved for a cart: only products that exist in the database (demo products have no seller). */
 function toSavedLines(items: CartItem[]) {
@@ -49,6 +56,7 @@ function toSavedLines(items: CartItem[]) {
       productId: String(item.id),
       marketplace: item.marketplace === 'gulplaza' ? 'GULPLAZA' : 'MART',
       quantity: item.qty,
+      ...(item.portion ? { portion: item.portion } : {}),
     }));
 }
 
@@ -164,26 +172,26 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addItem = (product: CartProduct) => {
     setItems((current) => {
-      const existing = current.find((item) => item.id === product.id);
+      const existing = current.find((item) => isLine(item, product.id, product.portion ?? 0));
       if (existing) {
         return current.map((item) =>
-          item.id === product.id ? { ...item, qty: item.qty + 1 } : item
+          isLine(item, product.id, product.portion ?? 0) ? { ...item, qty: item.qty + 1 } : item
         );
       }
       return [...current, { ...product, qty: 1 }];
     });
   };
 
-  const removeItem = (id: number | string) => {
-    setItems((current) => current.filter((item) => item.id !== id));
+  const removeItem = (id: number | string, portion = 0) => {
+    setItems((current) => current.filter((item) => !isLine(item, id, portion)));
   };
 
-  const updateQty = (id: number | string, qty: number) => {
+  const updateQty = (id: number | string, qty: number, portion = 0) => {
     if (qty <= 0) {
-      removeItem(id);
+      removeItem(id, portion);
       return;
     }
-    setItems((current) => current.map((item) => (item.id === id ? { ...item, qty } : item)));
+    setItems((current) => current.map((item) => (isLine(item, id, portion) ? { ...item, qty } : item)));
   };
 
   const clearCart = () => setItems([]);

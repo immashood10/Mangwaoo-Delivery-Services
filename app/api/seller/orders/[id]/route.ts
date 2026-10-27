@@ -4,6 +4,8 @@ import { resolveSellerApi } from '@/lib/seller-api';
 import { refreshFoodCatalog, refreshMartCatalog } from '@/lib/catalog-cache';
 import { FINISHED_STATUSES } from '@/lib/seller-types';
 import { releaseCouponIfUnused } from '@/lib/coupons';
+import { notifyAfterResponse } from '@/lib/notify';
+import { awardOrderPoints, type OrderKindKey } from '@/lib/points';
 
 // What a seller can do with an order at each step. Cancelling is possible until it is out for delivery.
 const NEXT_STATUSES: Record<string, string[]> = {
@@ -21,6 +23,29 @@ function readMarketplace(value: unknown) {
 
 function describe(status: string) {
   return status.toLowerCase().replace(/_/g, ' ');
+}
+
+/**
+ * A delivered order wins its customer Mangwaoo Points (lib/points.ts: once per order, a random number). A problem here is
+ * logged and never undoes the delivery: the customer's points page catches up on anything that was missed.
+ */
+async function awardPoints(kind: OrderKindKey, orderId: string) {
+  try {
+    const result = await awardOrderPoints(kind, orderId);
+
+    if (!result.awarded) return;
+
+    notifyAfterResponse(async () => ({
+      userId: result.customerUserId,
+      type: 'ACCOUNT' as const,
+      title: 'You won Mangwaoo Points!',
+      message: `${result.points} points for your delivered order ${result.ref}. You have ${result.totalPoints.toLocaleString('en-PK')} points now.`,
+      href: '/account/points',
+      refId: `points:${orderId}`,
+    }));
+  } catch (error) {
+    console.error('Could not award Mangwaoo Points:', error);
+  }
 }
 
 // Moves an order to its next step (accept → prepare → out for delivery → delivered) or cancels it.
@@ -70,6 +95,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (!changed) return conflict();
     if (status === 'CANCELLED') refreshMartCatalog();
+    if (status === 'DELIVERED') await awardPoints('MART', id);
 
     return NextResponse.json({ order: { id, status } });
   }
@@ -98,6 +124,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   if (!changed) return conflict();
   if (status === 'CANCELLED') refreshFoodCatalog();
+  if (status === 'DELIVERED') await awardPoints('GULPLAZA', id);
 
   return NextResponse.json({ order: { id, status } });
 }
