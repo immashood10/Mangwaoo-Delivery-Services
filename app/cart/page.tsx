@@ -127,8 +127,39 @@ export default function CartPage() {
 
     const completeAddress = details.completeAddress.trim() || dropoff.label;
 
+    // The summary the rider reads in the order chat. The amounts are the ones the server priced for the cart on screen;
+    // the delivery charge the rider's commission is worked out from is saved by the server itself, not read from this text.
+    const totals: Pick<Quote, 'subtotal' | 'delivery' | 'discount' | 'total'> = quote ?? {
+      subtotal: shownSubtotal,
+      delivery: 0,
+      discount: 0,
+      total,
+    };
+    const vendors = [...new Set(items.map((item) => item.vendor))];
+    const priceLine =
+      totals.discount > 0 || totals.delivery > 0
+        ? [
+            `Items ${pkr(totals.subtotal)}`,
+            ...(totals.discount > 0 ? [`− coupon ${appliedCoupon?.code ?? ''} ${pkr(totals.discount)}`] : []),
+            ...(totals.delivery > 0 ? [`+ delivery ${pkr(totals.delivery)}`] : []),
+            `= ${pkr(totals.total)}`,
+          ].join(' ')
+        : `Total ${pkr(totals.total)}`;
+    const summary = [
+      `🛒 New order from ${vendors.join(' + ')}`,
+      '',
+      ...items.map((item) => `• ${item.qty} × ${item.name} — ${item.price}`),
+      '',
+      priceLine,
+      `Payment: ${paymentMethod === 'cod' ? 'Cash on delivery' : 'EasyPaisa / JazzCash'}`,
+      `Customer: ${details.fullName} · ${details.contactNumber}`,
+      `Address: ${completeAddress}`,
+      ...(note.trim() ? ['', `📝 Note for the vendor: ${note.trim()}`] : []),
+    ].join('\n');
+
     try {
-      // One request for the whole cart (MangwaooMart and food together). The server works out every amount itself.
+      // One request for the whole cart (MangwaooMart and food together). The server works out every amount itself,
+      // and, once the orders are placed, opens the rider's order chat with the summary above.
       const response = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -147,6 +178,7 @@ export default function CartPage() {
           note: note.trim(),
           dropoff: { lat: dropoff.lat, lng: dropoff.lng },
           couponCode: appliedCoupon ? appliedCode : null,
+          chat: { addressText: dropoff.label, pickupText: vendors.join(' + '), body: summary },
         }),
       });
 
@@ -162,52 +194,10 @@ export default function CartPage() {
         return;
       }
 
-      // Orders are placed — now ask nearby riders to pick them up and send the customer
-      // to the "finding your rider" screen.
-      const totals: Pick<Quote, 'subtotal' | 'delivery' | 'discount' | 'total'> = payload?.totals ?? {
-        subtotal: shownSubtotal,
-        delivery: 0,
-        discount: 0,
-        total,
-      };
-      const vendors = [...new Set(items.map((item) => item.vendor))];
-      const priceLine =
-        totals.discount > 0 || totals.delivery > 0
-          ? [
-              `Items ${pkr(totals.subtotal)}`,
-              ...(totals.discount > 0 ? [`− coupon ${payload?.coupon?.code ?? ''} ${pkr(totals.discount)}`] : []),
-              ...(totals.delivery > 0 ? [`+ delivery ${pkr(totals.delivery)}`] : []),
-              `= ${pkr(totals.total)}`,
-            ].join(' ')
-          : `Total ${pkr(totals.total)}`;
-      const summary = [
-        `🛒 New order from ${vendors.join(' + ')}`,
-        '',
-        ...items.map((item) => `• ${item.qty} × ${item.name} — ${item.price}`),
-        '',
-        priceLine,
-        `Payment: ${paymentMethod === 'cod' ? 'Cash on delivery' : 'EasyPaisa / JazzCash'}`,
-        `Customer: ${details.fullName} · ${details.contactNumber}`,
-        `Address: ${completeAddress}`,
-        ...(note.trim() ? ['', `📝 Note for the vendor: ${note.trim()}`] : []),
-      ].join('\n');
-
-      const chatResponse = await fetch('/api/rider-chats', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fromCheckout: true,
-          lat: dropoff.lat,
-          lng: dropoff.lng,
-          addressText: dropoff.label,
-          pickupText: vendors.join(' + '),
-          body: summary,
-        }),
-      });
-      const chatPayload = await chatResponse.json().catch(() => null);
-
+      // Orders are placed and the rider's order chat is open — send the customer to the "finding your rider" screen
+      // (or to their account when the chat could not be opened).
       clearCart();
-      router.push(chatResponse.ok && chatPayload?.chat?.id ? `/finding-rider/${chatPayload.chat.id}` : '/account');
+      router.push(payload?.chat?.id ? `/finding-rider/${payload.chat.id}` : '/account');
     } catch {
       setFormError('Could not reach the server. Please try again.');
     } finally {

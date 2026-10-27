@@ -16,10 +16,18 @@ export type RiderChatSummary = {
   pickupText: string | null;
   pickupLat: number | null;
   pickupLng: number | null;
+  /** The delivery charge of this order in whole PKR, worked out by the server (0 = none): what the rider's commission is a percentage of. */
+  deliveryCharge: number;
   customerName: string;
   riderName: string | null;
   createdAt: string;
   updatedAt: string;
+  /** How customers rate this order's rider (null: nobody has rated them yet). Set where the customer meets the rider. */
+  riderRating?: { average: number; count: number } | null;
+  /** After the order was delivered: the stars the customer gave for it (null: not rated yet). */
+  myStars?: number | null;
+  /** After the order was delivered: the customer may still rate the rider for it. */
+  canRate?: boolean;
   nearbyRiderCount?: number;
   distanceKm?: number;
   lastMessage?: string | null;

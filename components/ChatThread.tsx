@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
+import { enableNotificationSound, playNotificationSound } from '@/lib/notification-sound';
 import { SUPPORT_NAME } from '@/lib/support-types';
 
 type Message = {
@@ -39,6 +40,10 @@ export default function ChatThread({
 
   useEffect(() => {
     let isMounted = true;
+    // The first load is the history; only a message from the other side that comes in after it gets the chime.
+    let hasLoaded = false;
+
+    enableNotificationSound();
 
     const fetchMessages = async (since?: string) => {
       try {
@@ -48,6 +53,11 @@ export default function ChatThread({
         const data = await response.json();
         const incoming: Message[] = data.messages ?? [];
         if (!isMounted || incoming.length === 0) return;
+
+        const shown = new Set(messagesRef.current.map((message) => message.id));
+        if (hasLoaded && incoming.some((message) => !shown.has(message.id) && message.senderRole !== currentRole)) {
+          playNotificationSound();
+        }
 
         setMessages((prev) => {
           const existingIds = new Set(prev.map((m) => m.id));
@@ -61,6 +71,7 @@ export default function ChatThread({
 
     (async () => {
       await fetchMessages();
+      hasLoaded = true;
       if (isMounted) setIsLoading(false);
     })();
 
@@ -73,7 +84,7 @@ export default function ChatThread({
       isMounted = false;
       window.clearInterval(intervalId);
     };
-  }, [conversationId]);
+  }, [conversationId, currentRole]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });

@@ -258,7 +258,6 @@ export default function RiderWallet() {
         <div className="rounded-2xl bg-surface p-5 shadow-soft">
           <p className="text-sm text-brand-gray">Orders completed</p>
           <p className="mt-1 text-3xl font-bold text-ink">{wallet.completedOrders}</p>
-          <p className="mt-2 text-xs text-brand-gray">Mangwaoo keeps {wallet.commissionPercent}% of each delivery charge.</p>
         </div>
       </section>
 

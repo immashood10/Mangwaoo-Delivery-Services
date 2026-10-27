@@ -176,6 +176,7 @@ model Customer {
   cartItems      CartItem[]
   riderChats     RiderChat[]
   couponRedemptions CouponRedemption[]
+  riderOrderRecords RiderOrderRecord[]
 }
 
 model Seller {
@@ -267,6 +268,8 @@ model Rider {
 
   ledger RiderLedgerEntry[]
   topUps RiderTopUp[]
+
+  orderRecords RiderOrderRecord[]
 }
 
 enum RiderOrderAccess {
@@ -353,6 +356,8 @@ model RiderWalletSettings {
 enum RiderDocumentKind {
   CNIC_FRONT
   CNIC_BACK
+  /// A clear photo of the rider's face, required at signup (only admins can view it).
+  FACE
 }
 
 /// Identity document photos uploaded at rider signup; only admins can view them.
@@ -589,6 +594,10 @@ model RiderChat {
   pickupLatitude  Float?
   pickupLongitude Float?
   pickupText      String?
+  // The delivery charge of the checkout(s) that opened this chat, in whole PKR, worked out by the server (the food
+  // delivery fees). null = the chat did not come from a checkout: its charge is then the delivery rate for the ride
+  // from the pickup to the drop-off (minimumFeeForChat). Mangwaoo's commission is a percentage of this.
+  deliveryCharge  Int?
   status          RiderChatStatus @default(OPEN)
   claimedAt       DateTime?
   createdAt       DateTime        @default(now())
@@ -604,6 +613,57 @@ enum RiderChatStatus {
   OPEN
   ACTIVE
   CLOSED
+}
+
+/// How an order a rider took ended (the ones still going are read live from the order chats).
+enum RiderOrderStatus {
+  DELIVERED
+  CANCELLED
+  /// Closed by Mangwaoo without a delivery being confirmed (an admin closed the chat, the customer's account was removed).
+  CLOSED
+}
+
+enum RiderOrderCancelledBy {
+  RIDER
+  CUSTOMER
+  ADMIN
+}
+
+/// One line of a rider's order history: an order the rider took and how it ended, plus what the customer said about the
+/// ride afterwards (the rating shown to customers, a comment for the rider, a complaint only admins read).
+/// `chatId` is a plain id, not a relation: cancelling an order (or an admin deleting the chat) removes the chat, but the
+/// history line stays. Orders still in progress have no line yet; they are read live from the order chats.
+model RiderOrderRecord {
+  id             String                 @id @default(cuid())
+  riderId        String
+  rider          Rider                  @relation(fields: [riderId], references: [id])
+  customerId     String
+  customer       Customer               @relation(fields: [customerId], references: [id])
+  chatId         String                 @unique
+  /// The customer's name and the route as they were then (the account can change or be removed later).
+  customerName   String
+  pickupText     String?
+  addressText    String
+  status         RiderOrderStatus
+  cancelledBy    RiderOrderCancelledBy?
+  /// Delivered orders: the delivery charge in whole PKR and what Mangwaoo took from it.
+  deliveryCharge Int?
+  commission     Int?
+  takenAt        DateTime
+  endedAt        DateTime               @default(now())
+
+  /// The customer's rating of the ride, 1 to 5 (null = not rated). Only a delivered order can be rated, once.
+  stars               Int?
+  /// What the customer said about the ride (the rider sees it).
+  ratingComment       String?
+  /// A problem the customer reported (only admins see it).
+  complaint           String?
+  ratedAt             DateTime?
+  complaintResolvedAt DateTime?
+
+  @@index([riderId, endedAt])
+  @@index([riderId, status])
+  @@index([ratedAt])
 }
 
 model RiderChatMessage {

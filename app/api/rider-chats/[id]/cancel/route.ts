@@ -23,7 +23,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Only the rider who took this order can cancel it.' }, { status: 403 });
   }
 
-  const result = await cancelOrderChat(id);
+  const result = await cancelOrderChat(id, access.role);
 
   if (result.kind === 'missing') {
     return NextResponse.json({ error: 'This order chat is no longer available.' }, { status: 404 });

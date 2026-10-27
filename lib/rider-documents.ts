@@ -1,15 +1,39 @@
 // Client-safe rules for rider signup identity details, shared by the form and the API.
 
-export const RIDER_DOCUMENT_KINDS = ['CNIC_FRONT', 'CNIC_BACK'] as const;
+// The photos a rider gives at signup: both sides of the CNIC and a clear photo of their face. All three are needed before
+// an admin may approve the rider, and only admins can see them.
+export const RIDER_DOCUMENT_KINDS = ['CNIC_FRONT', 'CNIC_BACK', 'FACE'] as const;
 export type RiderDocumentKind = (typeof RIDER_DOCUMENT_KINDS)[number];
 
+/** The heading over each photo on the admin's Rider Approvals page. */
 export const RIDER_DOCUMENT_LABELS: Record<RiderDocumentKind, string> = {
   CNIC_FRONT: 'CNIC front',
   CNIC_BACK: 'CNIC back',
+  FACE: 'Face photo',
+};
+
+/** How each photo is named inside a sentence ("Missing: face photo", "The face photo must be a JPG…"). */
+export const RIDER_DOCUMENT_PHOTO_NAMES: Record<RiderDocumentKind, string> = {
+  CNIC_FRONT: 'CNIC front photo',
+  CNIC_BACK: 'CNIC back photo',
+  FACE: 'face photo',
+};
+
+/** What a rider is told when a photo is missing from the signup form. */
+export const RIDER_DOCUMENT_MISSING_MESSAGES: Record<RiderDocumentKind, string> = {
+  CNIC_FRONT: 'Please add a photo of the front of your CNIC.',
+  CNIC_BACK: 'Please add a photo of the back of your CNIC.',
+  FACE: 'Please add a clear photo of your face.',
+};
+
+/** The multipart form field each photo is sent in. */
+export const RIDER_DOCUMENT_FIELDS: Record<RiderDocumentKind, string> = {
+  CNIC_FRONT: 'cnicFront',
+  CNIC_BACK: 'cnicBack',
+  FACE: 'facePhoto',
 };
 
 export const MAX_RIDER_DOCUMENT_BYTES = 3 * 1024 * 1024;
-export const ALLOWED_RIDER_DOCUMENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 export const RIDER_VEHICLE_TYPES = ['Motorbike', 'Bicycle', 'Car', 'Rickshaw'] as const;
 const VEHICLES_WITHOUT_PLATE = new Set<string>(['Bicycle']);
@@ -20,7 +44,7 @@ export function vehicleNeedsNumberPlate(vehicleType: string) {
 
 /**
  * What a rider's application still lacks before an admin may approve it: the CNIC number,
- * both CNIC photos and, for anything with an engine, the vehicle's number plate.
+ * both CNIC photos, a photo of the rider's face and, for anything with an engine, the vehicle's number plate.
  * An empty list means the application is complete.
  */
 export function getMissingRiderRequirements(rider: {
@@ -37,7 +61,7 @@ export function getMissingRiderRequirements(rider: {
 
   for (const kind of RIDER_DOCUMENT_KINDS) {
     if (!rider.documentKinds.includes(kind)) {
-      missing.push(`${RIDER_DOCUMENT_LABELS[kind]} photo`);
+      missing.push(RIDER_DOCUMENT_PHOTO_NAMES[kind]);
     }
   }
 

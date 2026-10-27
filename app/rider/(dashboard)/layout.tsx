@@ -20,7 +20,7 @@ export default async function RiderLayout({ children }: { children: React.ReactN
   const [rider, settings] = await Promise.all([
     prisma.rider.findUnique({
       where: { userId: session.userId },
-      include: { user: { select: { name: true } } },
+      include: { user: { select: { name: true } }, documents: { where: { kind: 'FACE' }, select: { id: true } } },
     }),
     getWalletSettings(),
   ]);
@@ -29,7 +29,13 @@ export default async function RiderLayout({ children }: { children: React.ReactN
 
   return (
     <RiderShell
-      rider={{ name: rider.user.name, isApproved: rider.isApproved, isAvailable: rider.isAvailable, vehicleType: rider.vehicleType }}
+      rider={{
+        name: rider.user.name,
+        isApproved: rider.isApproved,
+        isAvailable: rider.isAvailable,
+        vehicleType: rider.vehicleType,
+        hasFacePhoto: rider.documents.length > 0,
+      }}
       wallet={{ balance: rider.walletBalance, unpaidOrders: rider.unpaidOrders, hold: riderHold(rider) }}
       rules={settings}
     >

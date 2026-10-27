@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Bike, CreditCard, Eye, EyeOff, Hash, Lock, Mail, Phone, User } from 'lucide-react';
 import AuthBrandPanel from '@/components/AuthBrandPanel';
 import CnicCapture from '@/components/CnicCapture';
+import FaceCapture from '@/components/FaceCapture';
 import WhatsAppCodeForm from '@/components/WhatsAppCodeForm';
 import { useAuth } from '@/lib/auth-context';
 import type { PhoneVerificationInfo } from '@/lib/phone-verification-types';
@@ -32,9 +33,10 @@ export default function RiderSignup() {
     password: '',
     confirmPassword: '',
   });
-  // The CNIC photos stay in memory only until the form is sent (nothing is stored in the browser).
+  // The CNIC photos and the face photo stay in memory only until the form is sent (nothing is stored in the browser).
   const [cnicFront, setCnicFront] = useState<Blob | null>(null);
   const [cnicBack, setCnicBack] = useState<Blob | null>(null);
+  const [facePhoto, setFacePhoto] = useState<Blob | null>(null);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -59,6 +61,11 @@ export default function RiderSignup() {
       return;
     }
 
+    if (!facePhoto) {
+      setFormError('Please add a clear photo of your face.');
+      return;
+    }
+
     setFormError('');
     setIsSubmitting(true);
 
@@ -73,6 +80,7 @@ export default function RiderSignup() {
       body.set('password', formData.password);
       body.set('cnicFront', cnicFront, 'cnic-front.jpg');
       body.set('cnicBack', cnicBack, 'cnic-back.jpg');
+      body.set('facePhoto', facePhoto, 'face.jpg');
 
       const response = await fetch('/api/auth/rider-signup', { method: 'POST', body });
       const data = await response.json().catch(() => null);
@@ -194,6 +202,13 @@ export default function RiderSignup() {
                   <CnicCapture label="CNIC back" hint="Back side of your ID card" value={cnicBack} onChange={setCnicBack} />
                 </div>
 
+                <FaceCapture
+                  label="Your face photo (required)"
+                  hint="A clear, recent photo of your face: look straight at the camera in good light, with no sunglasses, cap or mask."
+                  value={facePhoto}
+                  onChange={setFacePhoto}
+                />
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className={LABEL_CLASS}>Password</label>
@@ -241,7 +256,7 @@ export default function RiderSignup() {
                 {formError ? <p className="text-sm text-danger">{formError}</p> : null}
 
                 <p className="text-xs text-brand-gray">
-                  Our team checks your CNIC photos and number plate and approves your account before you can start receiving orders.
+                  Our team checks your CNIC photos, your face photo and your number plate, and approves your account before you can start receiving orders.
                 </p>
 
                 <button

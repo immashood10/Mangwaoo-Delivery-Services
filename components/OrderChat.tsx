@@ -6,8 +6,10 @@ import { Bike, CheckCircle2, Flag, MapPin, Send, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import ConfirmDialog from './ConfirmDialog';
 import RiderChatThread from './RiderChatThread';
+import RiderRatingForm from './RiderRatingForm';
 import LocationPicker, { type PickedLocation } from './LocationPicker';
 import RouteSummary from './RouteSummary';
+import { RiderRatingLabel } from './StarRating';
 import type { RiderChatSummary } from '@/lib/rider-chat-types';
 
 type DeliveryAddress = {
@@ -21,7 +23,10 @@ function ChatStatusBanner({ chat, onReceived }: { chat: RiderChatSummary; onRece
     return (
       <div className="flex items-center gap-2 bg-green-50 px-4 py-2 text-xs font-semibold text-success">
         <Bike className="h-4 w-4 shrink-0" />
-        <span className="min-w-0 flex-1 truncate">{chat.riderName ?? 'Your rider'} is chatting with you</span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate">{chat.riderName ?? 'Your rider'} is chatting with you</span>
+          {chat.riderRating !== undefined ? <RiderRatingLabel rating={chat.riderRating} className="!font-normal" /> : null}
+        </span>
         <button
           type="button"
           onClick={onReceived}
@@ -202,6 +207,16 @@ export default function OrderChat({
       <div className="flex flex-1 items-center justify-center">
         <p className="text-sm text-brand-gray">Loading…</p>
       </div>
+    );
+  } else if (chat && chat.status === 'CLOSED' && chat.canRate) {
+    // The order was delivered: the customer is asked how the rider did before the chat goes.
+    content = (
+      <>
+        <ChatStatusBanner chat={chat} onReceived={() => setConfirming('received')} />
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <RiderRatingForm chatId={chat.id} riderName={chat.riderName ?? 'your rider'} />
+        </div>
+      </>
     );
   } else if (chat) {
     content = (

@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
-import { ADMIN_PAGES } from '@/lib/notification-types';
-import { notifyAdminsAfterResponse } from '@/lib/notify';
+import { MAX_ORDER_CHAT_ADDRESS_LENGTH as MAX_ADDRESS_LENGTH, startOrContinueOrderChat } from '@/lib/order-chat';
 import { enforceRateLimits } from '@/lib/rate-limit';
-import {
-  MAX_RIDER_CHAT_MESSAGE_LENGTH,
-  RIDER_CHAT_INCLUDE,
-  getRiderChatSummary,
-  serializeRiderChat,
-} from '@/lib/rider-chat';
-
-const MAX_ADDRESS_LENGTH = 300;
+import { MAX_RIDER_CHAT_MESSAGE_LENGTH, RIDER_CHAT_INCLUDE, summarizeRiderChat } from '@/lib/rider-chat';
 
 async function getCustomer() {
   const session = await getSession();
@@ -43,7 +35,7 @@ export async function GET() {
     include: RIDER_CHAT_INCLUDE,
   });
 
-  return NextResponse.json({ chat: chat ? serializeRiderChat(chat) : null });
+  return NextResponse.json({ chat: chat ? await summarizeRiderChat(chat) : null });
 }
 
 /** Starts a new order chat at the customer's delivery location with their first message. */
@@ -90,48 +82,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Message is too long.' }, { status: 400 });
   }
 
-  const existing = await prisma.riderChat.findFirst({
-    where: { customerId: customer.id, status: { in: ['OPEN', 'ACTIVE'] } },
-    orderBy: { createdAt: 'desc' },
-    select: { id: true },
+  // One live order chat per customer — a second "start" just continues it. A chat started here carries no delivery
+  // charge of its own (that is set by a checkout, see /api/checkout): its charge is the rate for the pickup → drop-off ride.
+  const { chat, created } = await startOrContinueOrderChat({
+    customer: { id: customer.id, name: customer.user.name },
+    lat,
+    lng,
+    addressText,
+    pickup: hasPickupCoordinates ? { lat: pickupLat, lng: pickupLng } : null,
+    pickupText,
+    text,
+    deliveryCharge: null,
   });
 
-  const messageData = { senderRole: 'CUSTOMER' as const, senderName: customer.user.name, body: text };
-
-  // One live order chat per customer — a second "start" just continues it.
-  if (existing) {
-    await Promise.all([
-      prisma.riderChatMessage.create({ data: { chatId: existing.id, ...messageData } }),
-      prisma.riderChat.update({ where: { id: existing.id }, data: { updatedAt: new Date() }, select: { id: true } }),
-    ]);
-    return NextResponse.json({ chat: await getRiderChatSummary(existing.id) });
-  }
-
-  // New chat: two sequential inserts (the DB is remote, so no extra re-read —
-  // the summary is built from what we already know).
-  const chat = await prisma.riderChat.create({
-    data: {
-      customerId: customer.id,
-      latitude: lat,
-      longitude: lng,
-      addressText: addressText.slice(0, MAX_ADDRESS_LENGTH),
-      pickupLatitude: hasPickupCoordinates ? pickupLat : null,
-      pickupLongitude: hasPickupCoordinates ? pickupLng : null,
-      pickupText,
-    },
-  });
-  await prisma.riderChatMessage.create({ data: { chatId: chat.id, ...messageData } });
-
-  notifyAdminsAfterResponse(async () => ({
-    type: 'MESSAGE' as const,
-    title: 'New order chat',
-    message: `${customer.user.name} is waiting for a rider - ${pickupText.slice(0, 60)}.`,
-    href: ADMIN_PAGES.chats,
-    refId: `chat:${chat.id}`,
-  }));
-
-  return NextResponse.json(
-    { chat: serializeRiderChat({ ...chat, customer: { user: { name: customer.user.name, phone: null } }, rider: null }) },
-    { status: 201 }
-  );
+  return NextResponse.json({ chat }, created ? { status: 201 } : undefined);
 }

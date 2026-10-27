@@ -5,6 +5,7 @@ import { invalidateBanSnapshot } from '@/lib/bans';
 import { refreshFoodCatalog, refreshMartCatalog, refreshStories } from '@/lib/catalog-cache';
 import { shortOrderId } from '@/lib/notify';
 import { SELLER_PAGES } from '@/lib/notification-types';
+import { ORDER_RECORD_CHAT_SELECT, orderSnapshot, recordRiderOrder } from '@/lib/rider-orders';
 
 // Deleting an account (Admin > Users). Other people's records depend on an account's rows — a seller's order history
 // lists the customers, a customer's orders list the sellers — so the account is not erased from the database.
@@ -105,7 +106,18 @@ export async function removeAccount(userId: string, adminId: string): Promise<Re
       const customerId = user.customer.id;
 
       cancelled += await cancelOpenOrders(tx, { customerId }, true);
+      // An order a rider had taken ends here: the rider's history says Mangwaoo closed it.
+      const takenChats = await tx.riderChat.findMany({
+        where: { customerId, status: 'ACTIVE', riderId: { not: null } },
+        select: ORDER_RECORD_CHAT_SELECT,
+      });
+      for (const chat of takenChats) {
+        const snapshot = orderSnapshot(chat);
+        if (snapshot) await recordRiderOrder(tx, snapshot, { status: 'CLOSED' });
+      }
       await tx.riderChat.updateMany({ where: { customerId, status: { in: ['OPEN', 'ACTIVE'] } }, data: { status: 'CLOSED' } });
+      // The riders' order history keeps its lines, but they point at "Deleted account" like the orders and chats do.
+      await tx.riderOrderRecord.updateMany({ where: { customerId }, data: { customerName: DELETED_ACCOUNT_NAME } });
       await tx.cartItem.deleteMany({ where: { customerId } });
     }
 

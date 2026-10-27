@@ -1,14 +1,17 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowLeft, Bike, CheckCircle2, ChevronRight, Clock, Headset, Inbox, MapPin, MessagesSquare, Power, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Bike, CheckCircle2, ChevronRight, ClipboardList, Clock, Headset, Inbox, MapPin, MessagesSquare, Power, Wallet } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { RiderRatingLabel } from '@/components/StarRating';
 import RiderChatThread from '@/components/RiderChatThread';
 import SupportChat from '@/components/SupportChat';
+import RiderFacePhotoCard from '@/components/rider/RiderFacePhotoCard';
 import { holdMessage, useRider } from '@/components/rider/RiderShell';
 import type { RiderChatSummary } from '@/lib/rider-chat-types';
-import { MAX_DECLARED_FEE_PKR, commissionFor, formatPkr, minimumFeeForChat, rechargeMessage } from '@/lib/rider-wallet-config';
+import type { RiderHistoryResponse } from '@/lib/rider-history-types';
+import { commissionFor, formatPkr, rechargeMessage } from '@/lib/rider-wallet-config';
 
 function PendingApproval() {
   return (
@@ -68,6 +71,60 @@ function ChatCard({ chat, active, onClick, request = false }: { chat: RiderChatS
   );
 }
 
+/** A glance at the rider's order history on the dashboard (the numbers only; the Order history page has every order). */
+function OrdersGlance() {
+  const { chats } = useRider();
+  const [history, setHistory] = useState<RiderHistoryResponse | null>(null);
+
+  useEffect(() => {
+    let ignore = false;
+
+    fetch('/api/rider/history?summary=1', { cache: 'no-store' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: RiderHistoryResponse | null) => {
+        if (!ignore && body) setHistory(body);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const numbers = [
+    { label: 'Delivered', value: history?.summary.delivered, className: 'text-success' },
+    { label: 'Cancelled', value: history?.summary.cancelled, className: 'text-danger' },
+    // The orders in progress are the order chats the rider has open right now, so this number is always current.
+    { label: 'Pending', value: chats.length, className: 'text-warning' },
+  ];
+
+  return (
+    <Link href="/rider/history" className="group block rounded-2xl bg-surface p-5 shadow-soft transition hover:ring-2 hover:ring-accent">
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-2 font-bold text-ink">
+          <ClipboardList className="h-5 w-5 text-accent" aria-hidden="true" />
+          Your orders
+        </span>
+        <span className="flex items-center gap-1 text-sm font-semibold text-accent">
+          Order history
+          <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+        </span>
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-3">
+        {numbers.map((entry) => (
+          <div key={entry.label}>
+            <p className={`text-2xl font-bold ${entry.className}`}>{entry.value ?? '…'}</p>
+            <p className="text-sm text-brand-gray">{entry.label}</p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 flex items-center gap-2 text-sm text-brand-gray">
+        Your rating: {history ? <RiderRatingLabel rating={history.rating} /> : '…'}
+      </p>
+    </Link>
+  );
+}
+
 /** Dashboard: the online switch and where to go next. */
 export function RiderHome() {
   const { rider, wallet, isOnline, hasLocation, error, toggleOnline, requests, chats } = useRider();
@@ -83,7 +140,10 @@ export function RiderHome() {
       </div>
 
       {!rider.isApproved ? (
-        <PendingApproval />
+        <>
+          <PendingApproval />
+          {!rider.hasFacePhoto ? <RiderFacePhotoCard /> : null}
+        </>
       ) : (
         <>
           <HoldBanner />
@@ -139,6 +199,8 @@ export function RiderHome() {
               <ChevronRight className="h-5 w-5 text-brand-gray group-hover:text-accent" />
             </Link>
           </div>
+
+          <OrdersGlance />
         </>
       )}
     </div>
@@ -147,9 +209,9 @@ export function RiderHome() {
 
 /**
  * What a rider can do with an order they have taken, along the top of its chat:
- * - **Complete order**: they say what delivery charge they received, Mangwaoo's commission on it is shown, and on
- *   confirming the order ends and the commission goes on their wallet (the server never works from less than the
- *   delivery rate for the ride's distance, so the number can't be gamed);
+ * - **Complete order**: the order's delivery charge is already there (the server saved it when the customer checked
+ *   out; the rider types nothing), Mangwaoo's commission on it is shown, and on confirming the order ends and the
+ *   commission goes on their wallet;
  * - **End chat**: cancels the order (the chat is deleted for both sides, nothing is charged), after a confirmation.
  */
 function OrderActions({
@@ -162,39 +224,22 @@ function OrderActions({
   onEndChat: () => void;
 }) {
   const { rules } = useRider();
-  const minimum = minimumFeeForChat(chat);
   const [isOpen, setIsOpen] = useState(false);
-  const [fee, setFee] = useState(minimum > 0 ? String(minimum) : '');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const entered = Number(fee);
-  const hasFee = fee.trim() !== '' && Number.isInteger(entered) && entered >= 1;
-  const base = Math.max(hasFee ? entered : 0, minimum);
-  const commission = base > 0 ? commissionFor(base, rules.commissionPercent) : 0;
+  // The charge comes with the order (the server worked it out); this is only for showing it.
+  const charge = chat.deliveryCharge;
+  const commission = charge > 0 ? commissionFor(charge, rules.commissionPercent) : 0;
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-
-    if (fee.trim() !== '' && (!hasFee || entered > MAX_DECLARED_FEE_PKR)) {
-      setError('Enter the delivery charge in whole rupees, e.g. 150.');
-      return;
-    }
-
-    if (minimum > 0 && hasFee && entered < minimum) {
-      setError(`The charge can't be less than ${formatPkr(minimum)}, the delivery rate for this ride's distance.`);
-      return;
-    }
 
     setIsSaving(true);
     setError('');
 
     try {
-      const response = await fetch(`/api/rider-chats/${chat.id}/close`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(hasFee ? { fee: entered } : {}),
-      });
+      const response = await fetch(`/api/rider-chats/${chat.id}/close`, { method: 'POST' });
       const data = await response.json().catch(() => null);
 
       if (!response.ok) {
@@ -243,29 +288,16 @@ function OrderActions({
       {isOpen ? (
         <form onSubmit={handleSubmit} noValidate className="rounded-xl border border-green-200 bg-green-50 p-4">
           <p className="font-bold text-ink">Complete this order</p>
-          <p className="mt-0.5 text-sm text-brand-gray">Delivered? Tell us the delivery charge you received for it.</p>
+          <p className="mt-0.5 text-sm text-brand-gray">Delivered? The delivery charge is already filled in from the order.</p>
 
-          <label htmlFor="complete-fee" className="mt-3 block text-sm font-semibold text-ink">
-            Delivery charge (PKR)
-          </label>
-          <input
-            id="complete-fee"
-            type="number"
-            inputMode="numeric"
-            min={minimum > 0 ? minimum : 1}
-            max={MAX_DECLARED_FEE_PKR}
-            step="1"
-            value={fee}
-            onChange={(event) => {
-              setFee(event.target.value);
-              setError('');
-            }}
-            className="mt-1 w-full rounded-xl border border-gray-300 bg-surface px-4 py-2.5 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-red-100"
-            placeholder={minimum > 0 ? String(minimum) : 'e.g. 150'}
-          />
+          <div className="mt-3 flex items-baseline justify-between gap-3 rounded-xl border border-gray-200 bg-surface px-4 py-2.5">
+            <span className="text-sm font-semibold text-ink">Delivery charge</span>
+            <span className="text-lg font-bold text-ink">{charge > 0 ? formatPkr(charge) : 'None'}</span>
+          </div>
           <p className="mt-1.5 text-xs text-brand-gray">
-            {minimum > 0 ? `Not less than ${formatPkr(minimum)} (the delivery rate for this ride's distance). ` : ''}
-            Mangwaoo keeps {rules.commissionPercent}%{commission > 0 ? `: ${formatPkr(commission)} on this order` : ''}, which is added to your account.
+            {charge > 0
+              ? `Mangwaoo keeps ${rules.commissionPercent}%${commission > 0 ? `: ${formatPkr(commission)} on this order` : ''}, which is added to your account.`
+              : 'This order has no delivery charge, so nothing is added to your account.'}
           </p>
 
           {error ? (
@@ -303,6 +335,9 @@ export function RiderOrders({ mode }: { mode: 'requests' | 'chats' }) {
   const items = isRequests ? requests : chats;
   // Only an order this rider has taken (ACTIVE and theirs) can be completed.
   const isMine = selectedChat ? chats.some((chat) => chat.id === selectedChat.id) : false;
+  // The lists refresh every few seconds, but `selectedChat` is the copy from the moment it was opened. The panel that
+  // shows the delivery charge uses the newest copy (the charge grows if the customer adds a second order to the chat).
+  const openChat = selectedChat ? (chats.find((chat) => chat.id === selectedChat.id) ?? selectedChat) : null;
   const finished = receipt && selectedChat && receipt.chatId === selectedChat.id ? receipt : null;
 
   // "End chat" cancels the order: the chat is deleted for both sides. Answers with a problem to show, or null.
@@ -385,7 +420,7 @@ export function RiderOrders({ mode }: { mode: 'requests' | 'chats' }) {
               ) : isMine ? (
                 <OrderActions
                   key={`actions-${selectedChat.id}`}
-                  chat={selectedChat}
+                  chat={openChat ?? selectedChat}
                   onCompleted={(text, onHold) => setReceipt({ chatId: selectedChat.id, text, onHold })}
                   onEndChat={() => setConfirmEnd(true)}
                 />

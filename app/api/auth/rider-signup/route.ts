@@ -5,11 +5,10 @@ import { clientIp } from '@/lib/client-ip';
 import { passwordProblem } from '@/lib/password-policy';
 import { finishSignup, prepareSignup, signupWriteFailed } from '@/lib/phone-verification';
 import { enforceRateLimits } from '@/lib/rate-limit';
+import { readRiderPhoto, type RiderPhoto } from '@/lib/rider-photo-upload';
 import {
-  ALLOWED_RIDER_DOCUMENT_TYPES,
-  MAX_RIDER_DOCUMENT_BYTES,
+  RIDER_DOCUMENT_FIELDS,
   RIDER_DOCUMENT_KINDS,
-  RIDER_DOCUMENT_LABELS,
   RIDER_VEHICLE_TYPES,
   formatCnic,
   isValidCnic,
@@ -25,8 +24,9 @@ function field(form: FormData, name: string) {
 
 /**
  * Rider signup with identity details. Expects multipart/form-data with the
- * account fields plus `cnicFront` / `cnicBack` photo files; everything is
- * stored in the database (photos in RiderDocument) for admin review.
+ * account fields plus the `cnicFront` / `cnicBack` / `facePhoto` photo files (all
+ * three are required); everything is stored in the database (photos in
+ * RiderDocument) for admin review.
  * The account can only log in after the WhatsApp code sent here is entered.
  */
 export async function POST(request: NextRequest) {
@@ -68,27 +68,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Please enter a valid 13-digit CNIC number, e.g. 42101-1234567-1.' }, { status: 400 });
   }
 
-  const documents: { kind: (typeof RIDER_DOCUMENT_KINDS)[number]; mimeType: string; size: number; data: Uint8Array<ArrayBuffer> }[] = [];
+  const documents: RiderPhoto[] = [];
 
   for (const kind of RIDER_DOCUMENT_KINDS) {
-    const file = form.get(kind === 'CNIC_FRONT' ? 'cnicFront' : 'cnicBack');
-    const label = RIDER_DOCUMENT_LABELS[kind];
+    const read = await readRiderPhoto(kind, form.get(RIDER_DOCUMENT_FIELDS[kind]));
 
-    if (!(file instanceof File) || file.size === 0) {
-      return NextResponse.json({ error: `Please add a photo of your ${label}.` }, { status: 400 });
+    if (!read.ok) {
+      return NextResponse.json({ error: read.error }, { status: 400 });
     }
 
-    const mimeType = file.type.split(';')[0].trim().toLowerCase();
-
-    if (!ALLOWED_RIDER_DOCUMENT_TYPES.includes(mimeType)) {
-      return NextResponse.json({ error: `The ${label} photo must be a JPG, PNG or WebP image.` }, { status: 400 });
-    }
-
-    if (file.size > MAX_RIDER_DOCUMENT_BYTES) {
-      return NextResponse.json({ error: `The ${label} photo is too large (max 3 MB).` }, { status: 400 });
-    }
-
-    documents.push({ kind, mimeType, size: file.size, data: new Uint8Array(await file.arrayBuffer()) });
+    documents.push(read.photo);
   }
 
   const passwordHash = hashPassword(password);

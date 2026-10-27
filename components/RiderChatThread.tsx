@@ -12,6 +12,7 @@ import {
   type RiderChatSummary,
 } from '@/lib/rider-chat-types';
 import { compressImage } from '@/lib/client-image';
+import { enableNotificationSound, playNotificationSound } from '@/lib/notification-sound';
 
 // Used only if the live stream can't connect (e.g. a proxy that blocks SSE).
 const FALLBACK_POLL_MS = 3000;
@@ -145,6 +146,11 @@ export default function RiderChatThread({
   const [error, setError] = useState('');
 
   const messagesRef = useRef<ThreadMessage[]>([]);
+  // The ids already shown, and whether the first load is done: that is how a message that has just arrived is told from
+  // the history the thread opened with (only the first one gets the chime).
+  const knownMessageIdsRef = useRef(new Set<string>());
+  const hasLoadedRef = useRef(false);
+  const currentRoleRef = useRef(currentRole);
   const onChatUpdateRef = useRef(onChatUpdate);
   const onMissingRef = useRef(onMissing);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -163,10 +169,22 @@ export default function RiderChatThread({
   useEffect(() => {
     onChatUpdateRef.current = onChatUpdate;
     onMissingRef.current = onMissing;
-  }, [onChatUpdate, onMissing]);
+    currentRoleRef.current = currentRole;
+  }, [onChatUpdate, onMissing, currentRole]);
+
+  useEffect(() => {
+    enableNotificationSound();
+  }, []);
 
   const mergeMessages = (incoming: RiderChatMessage[]) => {
     if (incoming.length === 0) return;
+
+    const known = knownMessageIdsRef.current;
+    const arrived = incoming.filter((message) => !known.has(message.id));
+    incoming.forEach((message) => known.add(message.id));
+    // A message from the other side that comes in while the thread is open gets the chime (never your own).
+    if (hasLoadedRef.current && arrived.some((message) => message.senderRole !== currentRoleRef.current)) playNotificationSound();
+
     setMessages((prev) => {
       const byId = new Map(prev.map((message) => [message.id, message]));
       for (const message of incoming) byId.set(message.id, message);
@@ -261,6 +279,7 @@ export default function RiderChatThread({
     (async () => {
       const ok = await fetchMessages();
       if (cancelled) return;
+      hasLoadedRef.current = true;
       setIsLoading(false);
       if (ok) {
         if (typeof EventSource === 'undefined') startPolling();

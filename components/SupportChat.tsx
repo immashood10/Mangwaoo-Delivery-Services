@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Headset, Send } from 'lucide-react';
+import { enableNotificationSound, playNotificationSound } from '@/lib/notification-sound';
 import { MAX_SUPPORT_MESSAGE_LENGTH, SUPPORT_NAME, type SupportMessageView } from '@/lib/support-types';
 
 const POLL_INTERVAL_MS = 5000;
@@ -22,6 +23,10 @@ export default function SupportChat({ emptyState }: { /** Shown once it is known
 
   useEffect(() => {
     let isMounted = true;
+    // The first answer is the history; a message from the admin team that comes in after it gets the chime.
+    let hasLoaded = false;
+
+    enableNotificationSound();
 
     const poll = async () => {
       try {
@@ -33,6 +38,9 @@ export default function SupportChat({ emptyState }: { /** Shown once it is known
 
         setHasThread(Boolean(data.thread));
         setIsLoaded(true);
+
+        if (hasLoaded && data.messages.some((message) => message.fromAdmin)) playNotificationSound();
+        hasLoaded = true;
 
         if (data.messages.length > 0) {
           lastCreatedAt.current = data.messages[data.messages.length - 1].createdAt;

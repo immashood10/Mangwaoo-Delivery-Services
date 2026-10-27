@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Bike,
   CheckCircle2,
+  ClipboardList,
   Clock,
   Headset,
   Inbox,
@@ -20,10 +21,18 @@ import {
 } from 'lucide-react';
 import UserNotificationBell from '@/components/UserNotificationBell';
 import { useAuth } from '@/lib/auth-context';
+import { enableNotificationSound, playNotificationSound } from '@/lib/notification-sound';
 import type { RiderChatSummary } from '@/lib/rider-chat-types';
 import { RECHARGE_TITLE, type RiderHold } from '@/lib/rider-wallet-config';
 
-export type RiderProfile = { name: string; isApproved: boolean; isAvailable: boolean; vehicleType: string | null };
+export type RiderProfile = {
+  name: string;
+  isApproved: boolean;
+  isAvailable: boolean;
+  vehicleType: string | null;
+  /** The face photo asked for at signup is on file (riders who signed up before it was required may lack it). */
+  hasFacePhoto: boolean;
+};
 
 /** The rider's money standing: negative balance = owes Mangwaoo; `hold` = may not receive the next order. */
 export type RiderWalletState = { balance: number; unpaidOrders: number; hold: RiderHold };
@@ -83,6 +92,9 @@ function RiderProvider({
   const coords = useRef<{ lat: number; lng: number } | null>(null);
   // Chats cancelled here: a poll that was already on its way must not bring them back (ids are never reused).
   const droppedChats = useRef(new Set<string>());
+  // What the previous poll saw, to tell what has just arrived (null until the first poll has answered).
+  const knownRequestIds = useRef<Set<string> | null>(null);
+  const knownChatStamps = useRef<Map<string, string> | null>(null);
 
   const sendPresence = useCallback(async (available: boolean) => {
     try {
@@ -133,8 +145,34 @@ function RiderProvider({
   }, [isOnline, rider.isApproved, sendPresence]);
 
   useEffect(() => {
+    enableNotificationSound();
+  }, []);
+
+  useEffect(() => {
     if (!rider.isApproved) return;
     let active = true;
+
+    // A chime for what has just arrived: a new order request nearby, or a new message from a customer on an order the
+    // rider has taken. The first poll only learns what is there already.
+    const announceArrivals = (nextRequests: RiderChatSummary[], nextChats: RiderChatSummary[]) => {
+      const knownRequests = knownRequestIds.current;
+      const knownChats = knownChatStamps.current;
+
+      if (knownRequests && knownChats) {
+        const newRequest = nextRequests.some((chat) => !knownRequests.has(chat.id));
+        const newCustomerMessage = nextChats.some((chat) => {
+          const before = knownChats.get(chat.id);
+
+          return before !== undefined && before !== chat.updatedAt && chat.lastMessageFrom === 'CUSTOMER';
+        });
+
+        if (newRequest || newCustomerMessage) playNotificationSound();
+      }
+
+      knownRequestIds.current = new Set(nextRequests.map((chat) => chat.id));
+      knownChatStamps.current = new Map(nextChats.map((chat) => [chat.id, chat.updatedAt]));
+    };
+
     const poll = async () => {
       try {
         const response = await fetch('/api/rider/chats');
@@ -142,9 +180,12 @@ function RiderProvider({
         const data = await response.json();
         if (active) {
           const alive = (chat: RiderChatSummary) => !droppedChats.current.has(chat.id);
+          const nextRequests = ((data.requests ?? []) as RiderChatSummary[]).filter(alive);
+          const nextChats = ((data.chats ?? []) as RiderChatSummary[]).filter(alive);
 
-          setRequests(((data.requests ?? []) as RiderChatSummary[]).filter(alive));
-          setChats(((data.chats ?? []) as RiderChatSummary[]).filter(alive));
+          announceArrivals(nextRequests, nextChats);
+          setRequests(nextRequests);
+          setChats(nextChats);
           if (data.wallet) setWallet(data.wallet);
         }
       } catch {
@@ -194,6 +235,7 @@ const RIDER_PAGES = {
   home: '/rider',
   requests: '/rider/requests',
   chats: '/rider/chats',
+  history: '/rider/history',
   wallet: '/rider/wallet',
   messages: '/rider/messages',
 } as const;
@@ -202,6 +244,7 @@ const RIDER_LINKS: { href: string; label: string; icon: LucideIcon; needsApprova
   { href: RIDER_PAGES.home, label: 'Dashboard', icon: LayoutDashboard },
   { href: RIDER_PAGES.requests, label: 'New requests', icon: Inbox, needsApproval: true },
   { href: RIDER_PAGES.chats, label: 'Order chats', icon: MessagesSquare, needsApproval: true },
+  { href: RIDER_PAGES.history, label: 'Order history', icon: ClipboardList, needsApproval: true },
   { href: RIDER_PAGES.wallet, label: 'Wallet', icon: Wallet, needsApproval: true },
   { href: RIDER_PAGES.messages, label: 'Messages', icon: Headset },
 ];

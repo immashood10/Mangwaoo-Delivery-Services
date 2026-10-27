@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
 import { chatDispatchPoint, isRiderEligibleForChat } from '@/lib/rider-dispatch';
-import { RECHARGE_TITLE, riderHold } from '@/lib/rider-wallet-config';
+import { getRiderRatings } from '@/lib/rider-orders';
+import { RECHARGE_TITLE, deliveryChargeForChat, riderHold } from '@/lib/rider-wallet-config';
 import type { RiderChat, RiderChatMessage } from '@/lib/generated/prisma/client';
 import {
   ALLOWED_CHAT_IMAGE_TYPES,
@@ -36,6 +37,13 @@ export function serializeRiderChat(chat: ChatWithPeople) {
     pickupText: chat.pickupText,
     pickupLat: chat.pickupLatitude,
     pickupLng: chat.pickupLongitude,
+    deliveryCharge: deliveryChargeForChat({
+      deliveryCharge: chat.deliveryCharge,
+      lat: chat.latitude,
+      lng: chat.longitude,
+      pickupLat: chat.pickupLatitude,
+      pickupLng: chat.pickupLongitude,
+    }),
     customerName: chat.customer.user.name,
     riderName: chat.rider?.user.name ?? null,
     createdAt: chat.createdAt.toISOString(),
@@ -176,10 +184,38 @@ function deny(message: string, status: number): ChatAccess {
   return { error: NextResponse.json({ error: message }, { status }) };
 }
 
-/** Full chat summary (customer + rider names) for responses that render chat headers. */
+/**
+ * The chat as the screens show it. Once a rider is on the order it also says how customers rate that rider, and after the
+ * order was delivered whether the customer can still rate this ride (or the stars they gave).
+ */
+export async function summarizeRiderChat(chat: ChatWithPeople) {
+  const summary = serializeRiderChat(chat);
+
+  if (!chat.riderId) return summary;
+
+  const isClosed = chat.status === 'CLOSED';
+  const [ratings, record] = await Promise.all([
+    getRiderRatings([chat.riderId]),
+    isClosed ? prisma.riderOrderRecord.findUnique({ where: { chatId: chat.id }, select: { status: true, stars: true } }) : Promise.resolve(null),
+  ]);
+
+  return {
+    ...summary,
+    riderRating: ratings.get(chat.riderId) ?? null,
+    ...(isClosed
+      ? {
+          myStars: record?.stars ?? null,
+          // A closed chat that has no history line yet finished before history was kept: it counts as delivered.
+          canRate: record ? record.status === 'DELIVERED' && record.stars === null : true,
+        }
+      : {}),
+  };
+}
+
+/** Full chat summary (customer + rider names, rider rating) for responses that render chat headers. */
 export async function getRiderChatSummary(chatId: string) {
   const chat = await prisma.riderChat.findUnique({ where: { id: chatId }, include: RIDER_CHAT_INCLUDE });
-  return chat ? serializeRiderChat(chat) : null;
+  return chat ? summarizeRiderChat(chat) : null;
 }
 
 /**

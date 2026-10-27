@@ -19,13 +19,13 @@ export type RiderApprovalRow = {
   isApproved: boolean;
   isOnline: boolean;
   createdAt: string;
-  /** Which CNIC photos are on file */
+  /** Which photos (the two sides of the CNIC, the face) are on file */
   documents: RiderDocumentKind[];
   /** What is still missing before the rider can be approved (empty when the application is complete) */
   missing: string[];
 };
 
-const DOCUMENT_ORDER: RiderDocumentKind[] = ['CNIC_FRONT', 'CNIC_BACK'];
+const DOCUMENT_ORDER: RiderDocumentKind[] = ['CNIC_FRONT', 'CNIC_BACK', 'FACE'];
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Karachi' });
@@ -120,7 +120,7 @@ function RiderCard({ rider, isBusy, onSetApproval }: { rider: RiderApprovalRow; 
         </p>
       ) : null}
 
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:max-w-md">
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:max-w-xl sm:grid-cols-3">
         {DOCUMENT_ORDER.map((kind) => (
           <div key={kind}>
             <p className="mb-1 text-xs font-semibold text-ink">{RIDER_DOCUMENT_LABELS[kind]}</p>
@@ -132,7 +132,7 @@ function RiderCard({ rider, isBusy, onSetApproval }: { rider: RiderApprovalRow; 
                   src={`/api/admin/riders/${rider.id}/documents/${kind}`}
                   alt={`${rider.name}: ${RIDER_DOCUMENT_LABELS[kind]}`}
                   loading="lazy"
-                  className="h-28 w-full rounded-lg border border-gray-200 bg-brand-light object-cover"
+                  className={`h-28 w-full rounded-lg border border-gray-200 bg-brand-light object-cover ${kind === 'FACE' ? 'object-top' : ''}`}
                 />
               </a>
             ) : (

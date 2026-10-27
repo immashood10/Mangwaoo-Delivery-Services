@@ -3,16 +3,16 @@ import { resolveRiderChatAccess } from '@/lib/rider-chat';
 import { notifyAdminsAfterResponse, notifyAfterResponse } from '@/lib/notify';
 import { ADMIN_PAGES } from '@/lib/notification-types';
 import { closeOrderChat } from '@/lib/rider-wallet';
-import { MAX_DECLARED_FEE_PKR, RECHARGE_TITLE, formatPkr, rechargeMessage } from '@/lib/rider-wallet-config';
+import { RECHARGE_TITLE, formatPkr, rechargeMessage } from '@/lib/rider-wallet-config';
 
 /**
  * Finishes a delivered order: the rider's "Complete order" or the customer's "Order received". When a rider had taken
- * the order this is the moment Mangwaoo's commission is charged to the rider's wallet. A rider may send `{ fee }`, the
- * delivery charge they got; the commission never works from less than the delivery rate for the ride's distance. An admin's "Close"
- * only closes the chat (no commission: use Rider Wallets > Adjust if one is due). "End chat" is NOT this: it cancels
- * the order and deletes the chat (`/cancel`).
+ * the order this is the moment Mangwaoo's commission is charged to the rider's wallet. The delivery charge it is a
+ * percentage of comes from the order itself (the chat's delivery charge, see `deliveryChargeForChat`); nothing the rider
+ * sends is read. An admin's "Close" only closes the chat (no commission: use Rider Wallets > Adjust if one is due).
+ * "End chat" is NOT this: it cancels the order and deletes the chat (`/cancel`).
  */
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const access = await resolveRiderChatAccess(id);
   if ('error' in access) return access.error;
@@ -22,27 +22,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Reply first to take this order.' }, { status: 403 });
   }
 
-  let declaredFee: number | null = null;
-
-  if (access.role === 'RIDER') {
-    const body = await request.json().catch(() => null);
-    const raw = body?.fee;
-
-    if (raw !== undefined && raw !== null && raw !== '') {
-      const fee = typeof raw === 'number' ? raw : Number(raw);
-
-      if (!Number.isInteger(fee) || fee < 1 || fee > MAX_DECLARED_FEE_PKR) {
-        return NextResponse.json({ error: 'Enter the delivery charge in whole rupees, e.g. 150.' }, { status: 400 });
-      }
-
-      declaredFee = fee;
-    }
-  }
-
-  const { found, commission: result } = await closeOrderChat(id, { declaredFee, charge: access.role !== 'ADMIN' });
+  const { found, commission: result, finished } = await closeOrderChat(id, { charge: access.role !== 'ADMIN' });
 
   if (!found) {
     return NextResponse.json({ error: 'This order chat is no longer available.' }, { status: 404 });
+  }
+
+  // The rider says it is delivered: the customer may not be looking at the chat, so they are told and asked to rate the ride.
+  if (access.role === 'RIDER' && finished) {
+    notifyAfterResponse(async () => ({
+      userId: finished.customerUserId,
+      type: 'ORDER' as const,
+      title: 'Order delivered',
+      message: `${finished.riderName} marked your order as delivered. How was the ride? Please rate your rider.`,
+      href: `/rate-rider/${id}`,
+      refId: `rate:${id}`,
+    }));
   }
 
   if (result?.change?.startedHold && result.change.orderAccess === 'AUTO') {

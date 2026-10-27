@@ -4,7 +4,9 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Bike, CheckCircle2, PackageSearch } from 'lucide-react';
 import RiderChatThread from './RiderChatThread';
+import RiderRatingForm from './RiderRatingForm';
 import RouteSummary from './RouteSummary';
+import StarRating, { RiderRatingLabel } from './StarRating';
 import type { RiderChatSummary } from '@/lib/rider-chat-types';
 
 /** Radar-style "looking for a rider" animation. */
@@ -67,10 +69,29 @@ export default function FindingRider({ initialChat }: { initialChat: RiderChatSu
               <Bike className="h-10 w-10" />
             </div>
             <h1 className="mt-3 text-2xl font-bold text-ink">{chat.riderName ?? 'Your rider'} is on the way</h1>
+            {chat.riderRating !== undefined ? (
+              <div className="mt-1 flex justify-center">
+                <RiderRatingLabel rating={chat.riderRating} />
+              </div>
+            ) : null}
             <p className="mt-1 text-brand-gray">Your rider accepted the order. Chat below for updates.</p>
           </>
         )}
       </div>
+
+      {/* After the delivery: rate the rider (once), or what was given. */}
+      {isClosed && chat.riderName ? (
+        chat.canRate ? (
+          <div className="mb-6">
+            <RiderRatingForm chatId={chat.id} riderName={chat.riderName} />
+          </div>
+        ) : chat.myStars ? (
+          <p className="mb-6 flex flex-wrap items-center justify-center gap-2 rounded-2xl bg-surface p-4 text-sm font-semibold text-ink shadow-soft">
+            You rated {chat.riderName}
+            <StarRating value={chat.myStars} className="h-5 w-5" />
+          </p>
+        ) : null
+      ) : null}
 
       <div className="overflow-hidden rounded-2xl bg-surface shadow-soft">
         <RouteSummary chat={chat} className="border-b border-gray-100 bg-gray-50 px-4 py-3" />

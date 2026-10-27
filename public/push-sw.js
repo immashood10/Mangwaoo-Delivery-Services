@@ -14,11 +14,17 @@ self.addEventListener('push', (event) => {
   }
 
   const title = typeof data.title === 'string' && data.title ? data.title : 'Mangwaoo';
+  const tag = typeof data.tag === 'string' && data.tag ? data.tag : undefined;
   const options = {
     body: typeof data.body === 'string' ? data.body : '',
     icon: '/favicon.ico',
     badge: '/favicon.ico',
-    tag: typeof data.tag === 'string' ? data.tag : undefined,
+    tag,
+    // With the site closed the phone or computer plays its own notification sound (a web page cannot choose it) and a
+    // phone buzzes. A notification with the same tag normally replaces the old one quietly; `renotify` makes it sound again.
+    silent: false,
+    vibrate: [200, 100, 200],
+    renotify: tag !== undefined,
     data: { url: typeof data.url === 'string' ? data.url : '/' },
   };
 

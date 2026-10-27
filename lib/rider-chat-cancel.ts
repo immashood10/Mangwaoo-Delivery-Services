@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { ORDER_RECORD_CHAT_SELECT, orderSnapshot, recordRiderOrder } from '@/lib/rider-orders';
 
 export type CancelOutcome =
   | { kind: 'missing' }
@@ -19,8 +20,11 @@ export type CancelOutcome =
  *
  * The chat row is locked first, so a rider completing the order at the very same moment and this cancel can't both
  * win: whichever gets the lock first decides, the other one is told.
+ *
+ * `by` is who pressed "End chat". When a rider had already taken the order, the order stays in that rider's history as
+ * cancelled (the chat is the only thing deleted), written here before the chat goes.
  */
-export async function cancelOrderChat(chatId: string): Promise<CancelOutcome> {
+export async function cancelOrderChat(chatId: string, by: 'RIDER' | 'CUSTOMER'): Promise<CancelOutcome> {
   return prisma.$transaction(
     async (tx) => {
       const locked = await tx.$queryRaw<{ status: string }[]>`
@@ -32,13 +36,15 @@ export async function cancelOrderChat(chatId: string): Promise<CancelOutcome> {
       const chat = await tx.riderChat.findUnique({
         where: { id: chatId },
         select: {
-          riderId: true,
-          customer: { select: { userId: true, user: { select: { name: true } } } },
+          ...ORDER_RECORD_CHAT_SELECT,
           rider: { select: { userId: true, user: { select: { name: true } } } },
         },
       });
 
       if (!chat) return { kind: 'missing' } as const;
+
+      const snapshot = orderSnapshot(chat);
+      if (snapshot) await recordRiderOrder(tx, snapshot, { status: 'CANCELLED', cancelledBy: by });
 
       // Messages first, then their attachments, then the chat (the same order the admin's "Delete" uses).
       await tx.riderChatMessage.deleteMany({ where: { chatId } });

@@ -26,6 +26,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import PushToggle from '@/components/PushToggle';
+import { enableNotificationSound, playNotificationSound } from '@/lib/notification-sound';
 import type { NotificationKind, NotificationSnapshot, SellerNotification } from '@/lib/notification-types';
 
 const POLL_INTERVAL_MS = 12000;
@@ -71,9 +72,10 @@ function timeAgo(iso: string) {
 }
 
 /**
- * Keeps the seller's unread notifications fresh (polling), pops a toast for each new one, and marks a
- * page's notifications as seen as soon as the seller opens that page. Seen notifications disappear
- * from here; whatever they were about stays in its own page.
+ * Keeps the seller's unread notifications fresh (polling), pops a toast for each new one (with a short chime, see
+ * lib/notification-sound.ts), and marks a page's notifications as seen as soon as the seller opens that page. Seen
+ * notifications disappear from here; whatever they were about stays in its own page. This one provider serves the
+ * seller, the admin, the customer and the rider, so every notification in the app comes with the sound.
  */
 export function SellerNotificationsProvider({
   initial,
@@ -97,12 +99,23 @@ export function SellerNotificationsProvider({
   const [toasts, setToasts] = useState<SellerNotification[]>([]);
   const knownKeys = useRef(new Set(initial.items.map(keyOf)));
   const previousPath = useRef<string | null>(null);
+  // A bell that starts empty and loads right away (customers, riders) gets, in its first answer, what was already
+  // waiting: that pops up as before, but it is not news, so it has no sound.
+  const hasBaseline = useRef(!fetchOnMount);
+
+  useEffect(() => {
+    enableNotificationSound();
+  }, []);
 
   const apply = useCallback((next: NotificationSnapshot) => {
     const fresh = next.items.filter((item) => !knownKeys.current.has(keyOf(item)));
     fresh.forEach((item) => knownKeys.current.add(keyOf(item)));
     setSnapshot(next);
-    if (fresh.length > 0) setToasts((current) => [...fresh, ...current].slice(0, MAX_TOASTS));
+    if (fresh.length > 0) {
+      setToasts((current) => [...fresh, ...current].slice(0, MAX_TOASTS));
+      if (hasBaseline.current) playNotificationSound();
+    }
+    hasBaseline.current = true;
   }, []);
 
   /** Tells the server these are seen, then settles on its answer. */

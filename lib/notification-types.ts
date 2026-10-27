@@ -33,6 +33,7 @@ export const ADMIN_PAGES = {
   sellers: '/admin/sellers',
   riders: '/admin/riders',
   riderWallets: '/admin/rider-wallets',
+  riderReviews: '/admin/rider-reviews',
   ads: '/admin/ads',
 } as const;
 

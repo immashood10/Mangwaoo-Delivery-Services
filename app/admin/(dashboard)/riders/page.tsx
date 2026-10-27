@@ -41,8 +41,9 @@ export default async function AdminRidersPage() {
       </div>
       <h1 className="mb-2 text-3xl font-bold text-ink">Rider Approvals</h1>
       <p className="mb-8 text-brand-gray">
-        Riders only receive customer order chats once approved here. Check each rider&apos;s CNIC photos and number plate
-        first; a rider can&apos;t be approved until the CNIC (number and both photos) and number plate are on file.
+        Riders only receive customer order chats once approved here. Check each rider&apos;s CNIC photos, face photo and
+        number plate first; a rider can&apos;t be approved until the CNIC (number and both photos), a face photo and the
+        number plate are on file.
       </p>
 
       <AdminRiderApprovals

@@ -15,8 +15,6 @@ export const MAX_ORDERS_ON_CREDIT = 100;
 
 export const MIN_TOP_UP_PKR = 50;
 export const MAX_TOP_UP_PKR = 100000;
-/** The most a rider may declare as the delivery charge of one order. */
-export const MAX_DECLARED_FEE_PKR = 100000;
 export const MAX_WALLET_NOTE_LENGTH = 200;
 /** The screenshot a rider may attach to a recharge request (the browser shrinks it first, so this is generous). */
 export const MAX_PAYMENT_SCREENSHOT_BYTES = 3 * 1024 * 1024;
@@ -54,8 +52,8 @@ export function commissionFor(fee: number, percent: number) {
 }
 
 /**
- * The least an order chat's delivery charge can be: the delivery rate for the ride from the pickup to the drop-off
- * (`lib/delivery.ts`), so a rider can't avoid the commission by declaring nothing. 0 when the chat has no pickup point.
+ * The delivery rate for the ride from the pickup to the drop-off (`lib/delivery.ts`). 0 when the chat has no pickup point.
+ * This is the delivery charge of a chat that did not come from a checkout (see `deliveryChargeForChat`).
  */
 export function minimumFeeForChat(chat: {
   lat: number;
@@ -66,6 +64,22 @@ export function minimumFeeForChat(chat: {
   if (chat.pickupLat === null || chat.pickupLng === null) return 0;
 
   return deliveryFeeForDistance(distanceInKm({ lat: chat.pickupLat, lng: chat.pickupLng }, { lat: chat.lat, lng: chat.lng }));
+}
+
+/**
+ * The delivery charge of an order chat, in whole PKR, and what Mangwaoo's commission is a percentage of. The rider never
+ * types it: a chat opened by a checkout carries the delivery fee the server charged that customer (`deliveryCharge`, 0 for
+ * an order with no delivery fee such as MangwaooMart); any other chat uses the delivery rate for its pickup → drop-off ride.
+ * The rider's screen and the server both call this, so the number shown is the number charged.
+ */
+export function deliveryChargeForChat(chat: {
+  deliveryCharge: number | null;
+  lat: number;
+  lng: number;
+  pickupLat: number | null;
+  pickupLng: number | null;
+}) {
+  return chat.deliveryCharge ?? minimumFeeForChat(chat);
 }
 
 /** "Rs 1,250". Negative amounts keep their minus sign: "-Rs 450". */

@@ -3,6 +3,9 @@ import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import BuyerDashboard from '@/components/BuyerDashboard';
 
+/** How long after a delivery the account page keeps asking the customer to rate the rider. */
+const RATE_REMINDER_DAYS = 7;
+
 export default async function AccountPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const { tab } = await searchParams;
   const initialTab = tab === 'history' || tab === 'messages' ? tab : 'orders';
@@ -21,7 +24,11 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     redirect('/login?next=/account');
   }
 
-  const [martOrders, gulplazaOrders] = await Promise.all([
+  // Rides delivered in the last week that the customer has not rated yet: a reminder with a link, for those who closed the form.
+  // eslint-disable-next-line react-hooks/purity -- server component, rendered per request
+  const ratableSince = new Date(Date.now() - RATE_REMINDER_DAYS * 24 * 60 * 60 * 1000);
+
+  const [martOrders, gulplazaOrders, unratedRides] = await Promise.all([
     prisma.order.findMany({
       where: { customerId: customer.id },
       orderBy: { createdAt: 'desc' },
@@ -43,6 +50,12 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         payment: true,
         coupon: { select: { code: true } },
       },
+    }),
+    prisma.riderOrderRecord.findMany({
+      where: { customerId: customer.id, status: 'DELIVERED', stars: null, endedAt: { gte: ratableSince } },
+      orderBy: { endedAt: 'desc' },
+      take: 3,
+      select: { chatId: true, endedAt: true, rider: { select: { user: { select: { name: true } } } } },
     }),
   ]);
 
@@ -89,5 +102,11 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     })),
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  return <BuyerDashboard key={initialTab} customerName={customer.user.name} orders={orders} initialTab={initialTab} />;
+  const ratePrompts = unratedRides.map((ride) => ({
+    chatId: ride.chatId,
+    riderName: ride.rider.user.name,
+    deliveredAt: ride.endedAt.toISOString(),
+  }));
+
+  return <BuyerDashboard key={initialTab} customerName={customer.user.name} orders={orders} ratePrompts={ratePrompts} initialTab={initialTab} />;
 }

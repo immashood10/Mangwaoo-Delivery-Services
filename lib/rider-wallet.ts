@@ -1,10 +1,11 @@
 import type { Prisma } from '@/lib/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
+import { ORDER_RECORD_CHAT_SELECT, orderSnapshot, recordRiderOrder } from '@/lib/rider-orders';
 import {
   DEFAULT_COMMISSION_PERCENT,
   DEFAULT_ORDERS_ON_CREDIT,
   commissionFor,
-  minimumFeeForChat,
+  deliveryChargeForChat,
   type RiderOrderAccess,
 } from '@/lib/rider-wallet-config';
 
@@ -116,17 +117,22 @@ export type CloseResult = {
   found: boolean;
   /** The commission charged to the rider; null when nothing was charged. */
   commission: CommissionResult | null;
+  /** Set when this call ended an order a rider had taken (so the customer can be told, and asked to rate the rider). */
+  finished: { riderName: string; customerUserId: string } | null;
 };
 
 /**
  * Finishes an order chat. With `charge`, a chat that a rider had claimed (ACTIVE) also charges the rider Mangwaoo's
- * commission, exactly once: the percentage of the delivery charge, which is what the rider declared but never less than
- * the delivery rate for the ride's distance (`minimumFeeForChat`). That is what a delivered order is: the rider's "Complete order" or the
+ * commission, exactly once: the percentage of the chat's delivery charge, which the server already knows
+ * (`deliveryChargeForChat`: the delivery fee of the checkout that opened it, or the delivery rate for the ride's
+ * distance), so the rider types nothing. That is what a delivered order is: the rider's "Complete order" or the
  * customer's "Order received". Without `charge` (an admin closing a chat) it only closes it; so does closing a chat
  * nobody claimed or one that is already closed. A cancelled order never comes through here: `cancelOrderChat` deletes it.
+ * The order's line in the rider's history (lib/rider-orders.ts) is written in the same transaction: delivered, or
+ * closed by Mangwaoo.
  */
-export async function closeOrderChat(chatId: string, options: { declaredFee: number | null; charge: boolean }): Promise<CloseResult> {
-  const { declaredFee, charge } = options;
+export async function closeOrderChat(chatId: string, options: { charge: boolean }): Promise<CloseResult> {
+  const { charge } = options;
 
   return prisma.$transaction(async (tx) => {
     const closed = await tx.riderChat.updateMany({ where: { id: chatId, status: 'ACTIVE' }, data: { status: 'CLOSED' } });
@@ -134,45 +140,53 @@ export async function closeOrderChat(chatId: string, options: { declaredFee: num
     if (closed.count === 0) {
       const existing = await tx.riderChat.findUnique({ where: { id: chatId }, select: { status: true } });
 
-      if (!existing) return { found: false, commission: null };
+      if (!existing) return { found: false, commission: null, finished: null };
 
       if (existing.status === 'OPEN') {
         await tx.riderChat.updateMany({ where: { id: chatId, status: 'OPEN' }, data: { status: 'CLOSED' } });
       }
 
-      return { found: true, commission: null };
+      return { found: true, commission: null, finished: null };
     }
-
-    if (!charge) return { found: true, commission: null };
 
     const chat = await tx.riderChat.findUnique({
       where: { id: chatId },
       select: {
-        riderId: true,
+        ...ORDER_RECORD_CHAT_SELECT,
         latitude: true,
         longitude: true,
         pickupLatitude: true,
         pickupLongitude: true,
+        deliveryCharge: true,
         rider: { select: { userId: true, user: { select: { name: true } } } },
-        customer: { select: { user: { select: { name: true } } } },
       },
     });
+    const snapshot = chat ? orderSnapshot(chat) : null;
 
-    if (!chat?.riderId || !chat.rider) return { found: true, commission: null };
+    if (!chat || !snapshot || !chat.rider) return { found: true, commission: null, finished: null };
 
-    await lockRider(tx, chat.riderId);
+    const finished = { riderName: chat.rider.user.name, customerUserId: chat.customer.userId };
+
+    // An admin closing a chat only closes it: no commission, and the rider's history says Mangwaoo closed it.
+    if (!charge) {
+      await recordRiderOrder(tx, snapshot, { status: 'CLOSED' });
+
+      return { found: true, commission: null, finished };
+    }
+
+    await lockRider(tx, snapshot.riderId);
 
     const settings = await getWalletSettings(tx);
-    const minimumFee = minimumFeeForChat({
+    const baseFee = deliveryChargeForChat({
+      deliveryCharge: chat.deliveryCharge,
       lat: chat.latitude,
       lng: chat.longitude,
       pickupLat: chat.pickupLatitude,
       pickupLng: chat.pickupLongitude,
     });
-    const baseFee = Math.max(declaredFee ?? 0, minimumFee);
-    const commission = commissionFor(baseFee, settings.commissionPercent);
+    const commission = Math.max(0, commissionFor(baseFee, settings.commissionPercent));
     const result = {
-      riderId: chat.riderId,
+      riderId: snapshot.riderId,
       riderUserId: chat.rider.userId,
       riderName: chat.rider.user.name,
       commission,
@@ -180,20 +194,25 @@ export async function closeOrderChat(chatId: string, options: { declaredFee: num
       percent: settings.commissionPercent,
     };
 
-    if (commission <= 0) return { found: true, commission: { ...result, change: null } };
+    if (commission <= 0) {
+      await recordRiderOrder(tx, snapshot, { status: 'DELIVERED', deliveryCharge: baseFee, commission: 0 });
+
+      return { found: true, commission: { ...result, change: null }, finished };
+    }
 
     await tx.riderLedgerEntry.create({
       data: {
-        riderId: chat.riderId,
+        riderId: snapshot.riderId,
         type: 'COMMISSION',
         amount: -commission,
         baseAmount: baseFee,
         chatId,
-        note: `${settings.commissionPercent}% of Rs ${baseFee.toLocaleString('en-PK')} delivery charge · order for ${chat.customer.user.name}`,
+        note: `${settings.commissionPercent}% of Rs ${baseFee.toLocaleString('en-PK')} delivery charge · order for ${snapshot.customerName}`,
       },
     });
+    await recordRiderOrder(tx, snapshot, { status: 'DELIVERED', deliveryCharge: baseFee, commission });
 
-    return { found: true, commission: { ...result, change: await recomputeWallet(tx, chat.riderId) } };
+    return { found: true, commission: { ...result, change: await recomputeWallet(tx, snapshot.riderId) }, finished };
   }, TRANSACTION_OPTIONS);
 }
 

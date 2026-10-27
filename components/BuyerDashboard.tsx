@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { User, MapPin, Banknote, Smartphone, XCircle, PackageSearch, History as HistoryIcon, MessageSquare } from 'lucide-react';
+import { User, MapPin, Banknote, Smartphone, XCircle, PackageSearch, History as HistoryIcon, MessageSquare, Star, ChevronRight } from 'lucide-react';
 import MessagesInbox from './MessagesInbox';
 
 type OrderItem = {
@@ -28,6 +29,13 @@ type Order = {
   paymentMethod: string | null;
   paymentStatus: string | null;
   items: OrderItem[];
+};
+
+/** A recent delivery whose rider the customer has not rated yet. */
+type RatePrompt = {
+  chatId: string;
+  riderName: string;
+  deliveredAt: string;
 };
 
 const ORDER_STATUS_STYLES: Record<string, string> = {
@@ -161,13 +169,41 @@ function OrderCard({ order, onCancelled }: { order: Order; onCancelled: () => vo
   );
 }
 
+/** "How was your rider?" reminders, for customers who closed the rating form after a delivery. */
+function RatePrompts({ prompts }: { prompts: RatePrompt[] }) {
+  if (prompts.length === 0) return null;
+
+  return (
+    <section aria-label="Rate your rider" className="mb-6 space-y-2">
+      {prompts.map((prompt) => (
+        <Link
+          key={prompt.chatId}
+          href={`/rate-rider/${prompt.chatId}`}
+          className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 transition hover:border-accent"
+        >
+          <Star className="h-5 w-5 shrink-0 text-warning" aria-hidden="true" />
+          <span className="min-w-0 flex-1 text-sm text-ink">
+            <span className="block truncate font-semibold">How was {prompt.riderName}&apos;s delivery?</span>
+            <span className="block text-xs text-brand-gray">
+              Delivered {new Date(prompt.deliveredAt).toLocaleString('en-PK', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Karachi' })} · tap to rate your rider
+            </span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-brand-gray" aria-hidden="true" />
+        </Link>
+      ))}
+    </section>
+  );
+}
+
 export default function BuyerDashboard({
   customerName,
   orders,
+  ratePrompts = [],
   initialTab = 'orders',
 }: {
   customerName: string;
   orders: Order[];
+  ratePrompts?: RatePrompt[];
   initialTab?: TabId;
 }) {
   const router = useRouter();
@@ -213,6 +249,7 @@ export default function BuyerDashboard({
 
       {activeTab === 'orders' && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+          <RatePrompts prompts={ratePrompts} />
           {activeOrders.length === 0 ? (
             <p className="text-brand-gray text-sm">
               No active orders. Items you order from MangwaooMart or Food will show up here.
