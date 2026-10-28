@@ -3,8 +3,12 @@ import { distanceInKm, formatDistance, isRealLocation, type Coordinates } from '
 // Food delivery is charged by distance: the kilometres from the restaurant to the customer's location, at a flat
 // rate per kilometre. Only food has a delivery fee (MangwaooMart has none).
 
-/** What one kilometre of delivery costs, in PKR. */
-export const DELIVERY_RATE_PER_KM = 70;
+/**
+ * What one kilometre of delivery costs, in PKR. Rs 80 since 2026-10-28 (the owner counts the rider's bike at 30 km to
+ * the litre, not 40); it was Rs 70 from 2026-10-25, and before that Rs 10, the petrol alone. Orders already placed
+ * keep the fee they were charged. Everything that shows or charges a delivery fee reads this one number.
+ */
+export const DELIVERY_RATE_PER_KM = 80;
 
 /**
  * Distances are worked in tenths of a kilometre, the same precision the screens show, so the fee always matches
@@ -28,7 +32,7 @@ export function deliveryFeeForDistance(distanceKm: number) {
  * The "nearby" distance, in kilometres (in a straight line) from the customer's location: the delivery address they
  * picked, or the drop-off pinned in the cart. The home page and the Food page list only restaurants inside it. A
  * restaurant farther away can still be found (search, favourites) and ordered from, with a note that the delivery
- * charge is higher (it is Rs 70 a kilometre) and that ordering from a nearby restaurant is better.
+ * charge is higher (`DELIVERY_RATE_PER_KM` a kilometre) and that ordering from a nearby restaurant is better.
  */
 export const FOOD_DELIVERY_RADIUS_KM = 5;
 

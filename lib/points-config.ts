@@ -79,11 +79,6 @@ export function formatPoints(points: number) {
   return points.toLocaleString('en-PK');
 }
 
-/** "1 to 100", or just "5" when both ends are the same. */
-export function rangeLabel(min: number, max: number) {
-  return min === max ? String(min) : `${min} to ${max}`;
-}
-
 type SettingsInput = Partial<Record<keyof LoyaltySettingsValues, unknown>> | null | undefined;
 
 const toWhole = (value: unknown) => (typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN);

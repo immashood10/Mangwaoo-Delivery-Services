@@ -12,7 +12,6 @@ import {
   WALLET_ENTRY_LABELS,
   formatPkr,
   formatPoints,
-  rangeLabel,
   type PayoutMethodKey,
 } from '@/lib/points-config';
 
@@ -244,7 +243,7 @@ export default function PointsWallet({ data, defaultName, defaultPhone }: { data
             Send to JazzCash / EasyPaisa
           </button>
           {data.walletBalance < settings.minWithdrawal ? (
-            <p className="mt-3 text-xs text-brand-gray">You can send money once you have at least {formatPkr(settings.minWithdrawal)}.</p>
+            <p className="mt-3 text-xs text-brand-gray">Not enough in your wallet to send yet.</p>
           ) : pending.length >= MAX_PENDING_WITHDRAWALS ? (
             <p className="mt-3 text-xs text-brand-gray">You have {pending.length} requests waiting. You can ask again once Mangwaoo has sent them.</p>
           ) : null}
@@ -370,9 +369,7 @@ export default function PointsWallet({ data, defaultName, defaultPhone }: { data
                 className={INPUT_CLASS}
                 required
               />
-              <p className="mt-1 text-xs text-brand-gray">
-                {formatPkr(settings.minWithdrawal)} to {formatPkr(data.walletBalance)}
-              </p>
+              <p className="mt-1 text-xs text-brand-gray">Up to {formatPkr(data.walletBalance)}</p>
             </div>
 
             {withdrawError ? (
@@ -405,15 +402,14 @@ export default function PointsWallet({ data, defaultName, defaultPhone }: { data
         <h2 className="text-lg font-bold text-ink">How it works</h2>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-brand-gray">
           <li>
-            Every order that is delivered wins you <span className="font-semibold text-ink">{rangeLabel(settings.pointsMin, settings.pointsMax)} Mangwaoo Points</span>
+            Every order that is delivered wins <span className="font-semibold text-ink">Mangwaoo Points</span>
             {settings.minOrderAmount > 0 ? ` (orders of ${formatPkr(settings.minOrderAmount)} or more)` : ''}.
           </li>
           <li>
-            Cash in <span className="font-semibold text-ink">{formatPoints(settings.redeemPoints)} points</span> for a surprise cashback of{' '}
-            <span className="font-semibold text-ink">{formatPkr(settings.cashbackMin)}{settings.cashbackMax > settings.cashbackMin ? ` to ${formatPkr(settings.cashbackMax)}` : ''}</span> in your wallet.
+            Cash in <span className="font-semibold text-ink">{formatPoints(settings.redeemPoints)} points</span> for a surprise cashback in your wallet.
           </li>
           <li>
-            Send your wallet money to your JazzCash or EasyPaisa account whenever you like (at least {formatPkr(settings.minWithdrawal)}). Mangwaoo checks and sends it.
+            Send your wallet money to your JazzCash or EasyPaisa account. Mangwaoo checks and sends it.
           </li>
         </ul>
       </section>
