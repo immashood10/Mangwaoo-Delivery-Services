@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Minus, Plus, Trash2, ShoppingCart, MessageCircle, Banknote, Smartphone, BadgePercent, X, Gift } from 'lucide-react';
 import { useCart } from '@/lib/cart-context';
 import { useDeliveryAddress } from '@/lib/delivery-address-context';
-import { DELIVERY_RATE_PER_KM, FOOD_DELIVERY_RADIUS_KM, farAwayNote } from '@/lib/delivery';
+import { DELIVERY_RATE_PER_KM, FOOD_DELIVERY_RADIUS_KM, MINIMUM_DELIVERY_FEE, farAwayNote } from '@/lib/delivery';
 import { formatPortion, withPortionLabel } from '@/lib/food-portions';
 import type { Quote } from '@/lib/checkout-types';
 import LocationPicker, { type PickedLocation } from '@/components/LocationPicker';
@@ -511,7 +511,7 @@ export default function CartPage() {
               ))}
               {cartHasFood ? (
                 <p className="text-xs text-gray-400">
-                  {`Delivery is charged on food only: PKR ${DELIVERY_RATE_PER_KM} per km from the restaurant to you.`}
+                  {`Delivery is charged on food only: PKR ${DELIVERY_RATE_PER_KM} per km from the restaurant to you, never less than PKR ${MINIMUM_DELIVERY_FEE}.`}
                 </p>
               ) : null}
 

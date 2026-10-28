@@ -1,7 +1,7 @@
 import { distanceInKm, formatDistance, isRealLocation, type Coordinates } from '@/lib/geo';
 
 // Food delivery is charged by distance: the kilometres from the restaurant to the customer's location, at a flat
-// rate per kilometre. Only food has a delivery fee (MangwaooMart has none).
+// rate per kilometre, and never less than a minimum. Only food has a delivery fee (MangwaooMart has none).
 
 /**
  * What one kilometre of delivery costs, in PKR. Rs 80 since 2026-10-28 (the owner counts the rider's bike at 30 km to
@@ -11,6 +11,12 @@ import { distanceInKm, formatDistance, isRealLocation, type Coordinates } from '
 export const DELIVERY_RATE_PER_KM = 80;
 
 /**
+ * The least a delivery costs, in PKR (owner's request, 2026-10-28): a ride of one kilometre or less is charged this, not
+ * the few rupees its distance comes to (0.4 km would be Rs 32 at the rate above). Today it is the price of one kilometre.
+ */
+export const MINIMUM_DELIVERY_FEE = 80;
+
+/**
  * Distances are worked in tenths of a kilometre, the same precision the screens show, so the fee always matches
  * the "3.2 km" next to it.
  */
@@ -18,12 +24,17 @@ export function billedDistanceKm(distanceKm: number) {
   return Math.round(distanceKm * 10) / 10;
 }
 
-/** The delivery fee in whole PKR (rounded up) for a ride of `distanceKm` from the restaurant to the customer. */
+/**
+ * The delivery fee in whole PKR (rounded up, and never below `MINIMUM_DELIVERY_FEE`) for a ride of `distanceKm` from the
+ * restaurant to the customer.
+ */
 export function deliveryFeeForDistance(distanceKm: number) {
   const tenthsOfKm = Math.round(distanceKm * 10);
 
   // The tiny allowance keeps floating point (e.g. 11.000000000000002) from rounding a whole rupee up.
-  return Math.ceil((tenthsOfKm * DELIVERY_RATE_PER_KM) / 10 - 1e-9);
+  const byDistance = Math.ceil((tenthsOfKm * DELIVERY_RATE_PER_KM) / 10 - 1e-9);
+
+  return Math.max(MINIMUM_DELIVERY_FEE, byDistance);
 }
 
 // ── Where a restaurant delivers ─────────────────────────────

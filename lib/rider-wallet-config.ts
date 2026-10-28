@@ -52,7 +52,8 @@ export function commissionFor(fee: number, percent: number) {
 }
 
 /**
- * The delivery rate for the ride from the pickup to the drop-off (`lib/delivery.ts`). 0 when the chat has no pickup point.
+ * The delivery fee for the ride from the pickup to the drop-off (`lib/delivery.ts`: the per-km rate, never below the minimum
+ * fee). 0 when the chat has no pickup point.
  * This is the delivery charge of a chat that did not come from a checkout (see `deliveryChargeForChat`).
  */
 export function minimumFeeForChat(chat: {
