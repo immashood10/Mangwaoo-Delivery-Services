@@ -36,7 +36,12 @@ export type RiderProfile = {
 
 /** The rider's money standing: negative balance = owes Mangwaoo; `hold` = may not receive the next order. */
 export type RiderWalletState = { balance: number; unpaidOrders: number; hold: RiderHold };
-export type RiderRules = { commissionPercent: number; ordersOnCredit: number };
+export type RiderRules = {
+  commissionPercent: number;
+  ordersOnCredit: number;
+  /** Whether a completed order pays the rider a surprise delivery bonus (lib/rider-bonus.ts). */
+  bonusEnabled: boolean;
+};
 
 export function holdMessage(hold: Exclude<RiderHold, null>) {
   return hold === 'PAYMENT'

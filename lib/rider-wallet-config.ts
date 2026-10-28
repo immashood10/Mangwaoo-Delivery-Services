@@ -4,7 +4,8 @@
 // finishes. Each finished order adds a COMMISSION line to the rider's wallet (a negative amount); the rider pays by
 // sending money to Mangwaoo and an admin adds it (TOP_UP). A rider may have a few finished orders unpaid
 // ("orders on credit", 5 to start with); once that many are unpaid the rider is not eligible for the next order until
-// the commission is paid. An admin can override this for one rider (always allow / block).
+// the commission is paid. An admin can override this for one rider (always allow / block). A rider also gets a random delivery
+// bonus for every order they complete (a BONUS line, positive money: lib/rider-bonus-config.ts), which counts like a payment.
 
 import { deliveryFeeForDistance } from '@/lib/delivery';
 import { distanceInKm } from '@/lib/geo';
@@ -23,7 +24,7 @@ export const MAX_ADJUSTMENT_PKR = 1000000;
 export const RIDER_TOP_UP_METHODS = ['EasyPaisa', 'JazzCash', 'Bank transfer'] as const;
 
 export type RiderOrderAccess = 'AUTO' | 'ALLOWED' | 'BLOCKED';
-export type RiderLedgerKind = 'COMMISSION' | 'TOP_UP' | 'ADJUSTMENT';
+export type RiderLedgerKind = 'COMMISSION' | 'TOP_UP' | 'ADJUSTMENT' | 'BONUS';
 export type RiderTopUpState = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 /** Why a rider can't receive the next order: unpaid commission, or an admin blocked them. null = eligible. */

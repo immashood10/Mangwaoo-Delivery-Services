@@ -1,6 +1,7 @@
 import type { Prisma } from '@/lib/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
 import { releaseCouponIfUnused } from '@/lib/coupons';
+import { closeCustomerLoyaltyCard, releaseLoyaltyIfUnused } from '@/lib/loyalty-card';
 import { invalidateBanSnapshot } from '@/lib/bans';
 import { refreshFoodCatalog, refreshMartCatalog, refreshStories } from '@/lib/catalog-cache';
 import { orderRef } from '@/lib/order-number';
@@ -58,6 +59,7 @@ async function cancelOpenOrders(tx: Prisma.TransactionClient, owner: OrderOwner,
     }
 
     await releaseCouponIfUnused(tx, order.redemptionId);
+    await releaseLoyaltyIfUnused(tx, order.loyaltyRedemptionId);
     note(order.id, orderRef('mart', order.orderNumber), order.seller.userId);
     cancelled += 1;
   }
@@ -71,6 +73,7 @@ async function cancelOpenOrders(tx: Prisma.TransactionClient, owner: OrderOwner,
     }
 
     await releaseCouponIfUnused(tx, order.redemptionId);
+    await releaseLoyaltyIfUnused(tx, order.loyaltyRedemptionId);
     note(order.id, orderRef('gulplaza', order.orderNumber), order.seller.userId);
     cancelled += 1;
   }
@@ -107,6 +110,8 @@ export async function removeAccount(userId: string, adminId: string): Promise<Re
       const customerId = user.customer.id;
 
       cancelled += await cancelOpenOrders(tx, { customerId }, true);
+      // The Loyalty Card can never be used or applied for again.
+      await closeCustomerLoyaltyCard(tx, customerId);
       // An order a rider had taken ends here: the rider's history says Mangwaoo closed it.
       const takenChats = await tx.riderChat.findMany({
         where: { customerId, status: 'ACTIVE', riderId: { not: null } },

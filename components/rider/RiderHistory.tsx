@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Banknote, Clock, Flag, MapPin, PackageCheck, PackageX, Percent, Star } from 'lucide-react';
+import { Banknote, Clock, Flag, Gift, MapPin, PackageCheck, PackageX, Percent, Star } from 'lucide-react';
 import StarRating from '@/components/StarRating';
 import { useRider } from '@/components/rider/RiderShell';
 import {
@@ -97,6 +97,11 @@ function OrderCard({ item }: { item: RiderHistoryItem }) {
               Mangwaoo&apos;s share <span className="font-bold text-ink">{formatPkr(item.commission)}</span>
             </span>
           ) : null}
+          {item.kind === 'DELIVERED' && item.bonus !== null ? (
+            <span className="text-brand-gray">
+              Bonus <span className="font-bold text-success">+{formatPkr(item.bonus)}</span>
+            </span>
+          ) : null}
         </div>
       ) : null}
 
@@ -127,7 +132,7 @@ function OrderCard({ item }: { item: RiderHistoryItem }) {
 
 /** The rider's order history: how many orders they delivered, how many were cancelled, how many are still going, and each of them. */
 export default function RiderHistory() {
-  const { rider } = useRider();
+  const { rider, rules } = useRider();
   const [filter, setFilter] = useState<RiderHistoryFilter>('all');
   const [range, setRange] = useState<RiderHistoryRange>('all');
   const [data, setData] = useState<RiderHistoryResponse | null>(null);
@@ -262,6 +267,9 @@ export default function RiderHistory() {
         </div>
         <StatCard icon={Banknote} label="Delivery charges (delivered)" value={summary ? formatPkr(summary.deliveryCharges) : '…'} tone="bg-brand-red-primary/10 text-accent" />
         <StatCard icon={Percent} label="Mangwaoo's share of them" value={summary ? formatPkr(summary.commission) : '…'} tone="bg-brand-red-primary/10 text-accent" />
+        {rules.bonusEnabled || (summary?.bonus ?? 0) > 0 ? (
+          <StatCard icon={Gift} label="Delivery bonuses earned" value={summary ? formatPkr(summary.bonus) : '…'} tone="bg-green-50 text-success" />
+        ) : null}
       </section>
 
       {summary && summary.closed > 0 ? (

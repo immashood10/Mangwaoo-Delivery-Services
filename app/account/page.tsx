@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { withPortionLabel } from '@/lib/food-portions';
 import { orderRef } from '@/lib/order-number';
 import { prisma } from '@/lib/prisma';
+import { getLoyaltyCardSummary } from '@/lib/loyalty-card';
 import BuyerDashboard from '@/components/BuyerDashboard';
 
 /** How long after a delivery the account page keeps asking the customer to rate the rider. */
@@ -30,7 +31,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   // eslint-disable-next-line react-hooks/purity -- server component, rendered per request
   const ratableSince = new Date(Date.now() - RATE_REMINDER_DAYS * 24 * 60 * 60 * 1000);
 
-  const [martOrders, gulplazaOrders, unratedRides, earnedPoints] = await Promise.all([
+  const [martOrders, gulplazaOrders, unratedRides, earnedPoints, loyalty] = await Promise.all([
     prisma.order.findMany({
       where: { customerId: customer.id },
       orderBy: { createdAt: 'desc' },
@@ -61,6 +62,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     }),
     // The Mangwaoo Points each delivered order won, shown on the order.
     prisma.pointsEntry.findMany({ where: { customerId: customer.id, type: 'EARNED' }, select: { orderId: true, points: true } }),
+    // The Loyalty Card link shows the card's state (can apply / waiting / active).
+    getLoyaltyCardSummary(customer.id),
   ]);
   const pointsByOrder = new Map(earnedPoints.map((entry) => [entry.orderId, entry.points]));
 
@@ -73,6 +76,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       totalAmount: Number(order.totalAmount),
       deliveryFee: 0,
       discountAmount: Number(order.discountAmount),
+      loyaltyDiscount: Number(order.loyaltyDiscount),
+      loyaltyPercent: order.loyaltyPercent,
       couponCode: order.coupon?.code ?? null,
       createdAt: order.createdAt.toISOString(),
       sellerName: order.seller.businessName,
@@ -95,6 +100,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       totalAmount: Number(order.totalAmount),
       deliveryFee: Number(order.deliveryFee),
       discountAmount: Number(order.discountAmount),
+      loyaltyDiscount: Number(order.loyaltyDiscount),
+      loyaltyPercent: order.loyaltyPercent,
       couponCode: order.coupon?.code ?? null,
       createdAt: order.createdAt.toISOString(),
       sellerName: order.seller.businessName,
@@ -117,5 +124,5 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     deliveredAt: ride.endedAt.toISOString(),
   }));
 
-  return <BuyerDashboard key={initialTab} customerName={customer.user.name} orders={orders} ratePrompts={ratePrompts} initialTab={initialTab} points={customer.points} />;
+  return <BuyerDashboard key={initialTab} customerName={customer.user.name} orders={orders} ratePrompts={ratePrompts} initialTab={initialTab} points={customer.points} loyalty={loyalty} />;
 }

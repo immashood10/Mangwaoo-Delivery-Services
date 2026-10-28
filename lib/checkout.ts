@@ -10,15 +10,19 @@ import { ADMIN_PAGES, SELLER_PAGES } from '@/lib/notification-types';
 import { normalizeCouponCode, type CouponScope } from '@/lib/coupons';
 import { MART_PRODUCTS } from '@/lib/data';
 import { readPortions } from '@/lib/food-portions';
-import type { CouponInfo, Marketplace, OrderQuote, Quote } from '@/lib/checkout-types';
+import { consumeLoyaltyOffer, getLoyaltyOffer, type LoyaltyOffer } from '@/lib/loyalty-card';
+import { allocateLoyaltyDiscount } from '@/lib/loyalty-card-config';
+import type { CouponInfo, LoyaltyInfo, Marketplace, OrderQuote, Quote } from '@/lib/checkout-types';
 
-export type { CouponInfo, Marketplace, OrderQuote, Quote };
+export type { CouponInfo, LoyaltyInfo, Marketplace, OrderQuote, Quote };
 
 // Prices a cart and turns it into orders. The browser only says WHAT is wanted (products, quantities, where to
 // deliver, which coupon); every amount comes from here, from the database:
 //   - items: the listed price of each product
 //   - food delivery: distance charge of the ride from each restaurant to the customer (lib/delivery.ts); MangwaooMart has none
 //   - coupon: a % off the items it applies to (never the delivery fee), paid by Mangwaoo, not the seller
+//   - Loyalty Card: for a customer with an active card, the random % their card drew for this order, off what the items
+//     still cost after the coupon (never the delivery fee), paid by Mangwaoo, not the seller (lib/loyalty-card.ts)
 
 export type CheckoutLine = {
   productId: string;
@@ -234,13 +238,18 @@ function sampleOrders(lines: CheckoutLine[], groups: Group[]): OrderQuote[] {
     distanceKm: null,
     deliveryNote: null,
     farAway: false,
+    couponDiscount: 0,
+    loyaltyDiscount: 0,
     discount: 0,
     total: subtotal,
   }));
 }
 
-/** `staleLines` are the names of dishes sold by weight whose chosen size is no longer on offer (they are not in `groups`). */
-type Priced = { groups: Group[]; quote: Quote; coupon: Coupon | null; staleLines: string[] };
+/**
+ * `staleLines` are the names of dishes sold by weight whose chosen size is no longer on offer (they are not in `groups`).
+ * `loyalty` is the customer's Loyalty Card offer when it is taking something off this cart (placeOrders uses it up).
+ */
+type Priced = { groups: Group[]; quote: Quote; coupon: Coupon | null; loyalty: LoyaltyOffer | null; staleLines: string[] };
 
 /** Prices the cart. Throws a CheckoutError for a coupon that can't be used. */
 export async function priceCheckout(input: {
@@ -267,10 +276,30 @@ export async function priceCheckout(input: {
     shares = allocateDiscount(coupon as Coupon, groups);
   }
 
+  // The customer's Loyalty Card: the random % it drew for this order, off what each order's items still cost after the coupon.
+  let loyalty: LoyaltyOffer | null = null;
+  let loyaltyShares: number[] = [];
+
+  if (groups.length > 0) {
+    loyalty = await getLoyaltyOffer(input.customerId);
+
+    if (loyalty) {
+      loyaltyShares = allocateLoyaltyDiscount(loyalty.percent, loyalty.maxDiscount, groups.map((group) => group.subtotal - (shares.get(group) ?? 0)));
+
+      // Under Rs 1 in all (a tiny cart): nothing is taken off, so the card's draw is not used up.
+      if (loyaltyShares.every((share) => share === 0)) {
+        loyalty = null;
+        loyaltyShares = [];
+      }
+    }
+  }
+
   // The sample items come last, so `orders[i]` stays the order of `groups[i]` (placeOrders relies on that).
-  const orders: OrderQuote[] = groups.map((group) => {
+  const orders: OrderQuote[] = groups.map((group, index) => {
     const isFood = group.marketplace === 'gulplaza';
-    const discount = shares.get(group) ?? 0;
+    const couponDiscount = shares.get(group) ?? 0;
+    const loyaltyDiscount = loyaltyShares[index] ?? 0;
+    const discount = couponDiscount + loyaltyDiscount;
     let deliveryFee = 0;
     let distanceKm: number | null = null;
     let deliveryNote: OrderQuote['deliveryNote'] = null;
@@ -299,6 +328,8 @@ export async function priceCheckout(input: {
       distanceKm,
       deliveryNote,
       farAway,
+      couponDiscount,
+      loyaltyDiscount,
       discount,
       total: group.subtotal - discount + deliveryFee,
     };
@@ -309,12 +340,14 @@ export async function priceCheckout(input: {
   return {
     groups,
     coupon,
+    loyalty,
     staleLines,
     quote: {
       orders,
       subtotal: sum((order) => order.subtotal),
       delivery: sum((order) => order.deliveryFee),
       discount: sum((order) => order.discount),
+      couponDiscount: sum((order) => order.couponDiscount),
       total: sum((order) => order.total),
       coupon: coupon
         ? {
@@ -324,6 +357,7 @@ export async function priceCheckout(input: {
             maxDiscountAmount: coupon.maxDiscountAmount === null ? null : Number(coupon.maxDiscountAmount),
           }
         : null,
+      loyalty: loyalty ? { percent: loyalty.percent, discount: sum((order) => order.loyaltyDiscount) } : null,
     },
   };
 }
@@ -372,9 +406,10 @@ function assertFoodDeliverable(orders: OrderQuote[]) {
   }
 }
 
-function ownerNotification(marketplace: Marketplace, input: PlaceOrdersInput, lines: CheckoutLine[], orders: OrderQuote[]) {
+function ownerNotification(marketplace: Marketplace, input: PlaceOrdersInput, lines: CheckoutLine[], orders: OrderQuote[], loyaltyPercent: number | null) {
   const delivery = orders.reduce((sum, order) => sum + order.deliveryFee, 0);
-  const discount = orders.reduce((sum, order) => sum + order.discount, 0);
+  const couponDiscount = orders.reduce((sum, order) => sum + order.couponDiscount, 0);
+  const loyaltyDiscount = orders.reduce((sum, order) => sum + order.loyaltyDiscount, 0);
 
   return [
     marketplace === 'mart' ? '🛒 New order request' : '🍽️ New Food order request',
@@ -384,7 +419,8 @@ function ownerNotification(marketplace: Marketplace, input: PlaceOrdersInput, li
     `Payment: ${input.paymentMethod === 'CASH_ON_DELIVERY' ? 'Cash on Delivery' : 'EasyPaisa / JazzCash'}`,
     ...(input.note ? [`Note: ${input.note}`] : []),
     ...(marketplace === 'gulplaza' && delivery > 0 ? [`Delivery fee: PKR ${delivery.toLocaleString()}`] : []),
-    ...(discount > 0 && input.couponCode ? [`Coupon: ${input.couponCode.toUpperCase()} (−PKR ${discount.toLocaleString()})`] : []),
+    ...(couponDiscount > 0 && input.couponCode ? [`Coupon: ${input.couponCode.toUpperCase()} (−PKR ${couponDiscount.toLocaleString()})`] : []),
+    ...(loyaltyDiscount > 0 && loyaltyPercent ? [`Loyalty Card: ${loyaltyPercent}% (−PKR ${loyaltyDiscount.toLocaleString()})`] : []),
     '',
     'Items:',
     ...lines.map((line) => `- ${line.name ?? 'Item'} x${line.qty}${line.price ? ` (${line.price})` : ''}`),
@@ -397,7 +433,7 @@ function ownerNotification(marketplace: Marketplace, input: PlaceOrdersInput, li
  */
 export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersResult> {
   // A coupon that can't be used stops the checkout here, before anyone is told about an order.
-  const { groups, quote, coupon, staleLines } = await priceCheckout({
+  const { groups, quote, coupon, loyalty, staleLines } = await priceCheckout({
     lines: input.lines,
     dropoff: input.dropoff,
     couponCode: input.couponCode,
@@ -423,7 +459,8 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
           marketplace,
           input,
           input.lines.filter((line) => line.marketplace === marketplace),
-          quote.orders.filter((order) => order.marketplace === marketplace)
+          quote.orders.filter((order) => order.marketplace === marketplace),
+          quote.loyalty?.percent ?? null
         )
       )
     )
@@ -448,6 +485,19 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
         const redemption = await tx.couponRedemption.create({ data: { couponId: coupon.id, customerId: input.customer.id } });
         await tx.coupon.update({ where: { id: coupon.id }, data: { usedCount: { increment: 1 } } });
         redemptionId = redemption.id;
+      }
+
+      // The Loyalty Card discount the cart was priced with is used up here (one checkout at a time per card). If the card
+      // changed since the cart was priced, nothing is placed: the customer looks at the cart again instead of paying a
+      // different amount than they were shown.
+      let loyaltyRedemptionId: string | null = null;
+
+      if (loyalty && quote.loyalty) {
+        loyaltyRedemptionId = await consumeLoyaltyOffer(tx, input.customer.id, loyalty, quote.loyalty.discount);
+
+        if (!loyaltyRedemptionId) {
+          throw new CheckoutError(409, 'Your Loyalty Card discount just changed. Please look at your cart and place the order again.');
+        }
       }
 
       const address = await tx.address.create({
@@ -488,7 +538,10 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
           totalAmount: group.subtotal,
           discountAmount: orderQuote.discount,
           note: input.note || null,
-          ...(coupon && orderQuote.discount > 0 ? { couponId: coupon.id, redemptionId } : {}),
+          ...(coupon && orderQuote.couponDiscount > 0 ? { couponId: coupon.id, redemptionId } : {}),
+          ...(loyalty && loyaltyRedemptionId && orderQuote.loyaltyDiscount > 0
+            ? { loyaltyDiscount: orderQuote.loyaltyDiscount, loyaltyPercent: loyalty.percent, loyaltyRedemptionId }
+            : {}),
         };
         const itemRows = group.lines.map((line) => ({ productId: line.productId, quantity: line.quantity, price: line.price }));
         // A dish sold by weight remembers the size that was ordered (its price is that size's price).

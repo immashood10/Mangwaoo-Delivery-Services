@@ -90,6 +90,7 @@ export async function getSuperAdminData(rangeDays: SuperRange) {
     commission,
     owed,
     disputes,
+    bonuses,
   ] = await Promise.all([
     salesBetween(new Date(0), nowDate),
     salesBetween(weekAgo, nowDate),
@@ -121,6 +122,8 @@ export async function getSuperAdminData(rangeDays: SuperRange) {
     prisma.riderLedgerEntry.aggregate({ where: { type: 'COMMISSION' }, _sum: { amount: true } }),
     prisma.rider.aggregate({ where: { walletBalance: { lt: 0 }, user: { deletedAt: null } }, _sum: { walletBalance: true } }),
     prisma.riderOrderRecord.count({ where: { complaint: { not: null }, complaintResolvedAt: null } }),
+    // What the riders' delivery bonuses have cost Mangwaoo (positive money lines on the riders' side)
+    prisma.riderLedgerEntry.aggregate({ where: { type: 'BONUS' }, _sum: { amount: true } }),
   ]);
 
   // Daily sales for the chart (Karachi days)
@@ -212,6 +215,7 @@ export async function getSuperAdminData(rangeDays: SuperRange) {
       // What Mangwaoo earned: the commission taken from riders (stored as negative money lines on the riders' side)
       revenue: Math.abs(commission._sum.amount ?? 0),
       owedByRiders: Math.abs(owed._sum.walletBalance ?? 0),
+      bonusesPaid: bonuses._sum.amount ?? 0,
       openComplaints: disputes,
     },
   };

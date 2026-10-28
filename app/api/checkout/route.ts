@@ -62,6 +62,10 @@ export async function POST(request: NextRequest) {
 
     if (chatRequest && dropoff) {
       try {
+        // The longest restaurant → customer ride of this checkout: what the rider's delivery bonus is judged by (MangwaooMart has none).
+        const distanceKm = quote.orders
+          .slice(0, orders.length)
+          .reduce<number | null>((longest, order) => (order.marketplace === 'gulplaza' && order.distanceKm !== null ? Math.max(longest ?? 0, order.distanceKm) : longest), null);
         const owner = await prisma.user.findUnique({ where: { id: resolved.customer.userId }, select: { name: true } });
         const opened = owner
           ? await startOrContinueOrderChat({
@@ -74,6 +78,7 @@ export async function POST(request: NextRequest) {
               text: chatRequest.text,
               // The server's own number: the delivery fees of the food orders just priced (0 for MangwaooMart).
               deliveryCharge: Math.round(quote.delivery),
+              distanceKm,
             })
           : null;
 
@@ -94,6 +99,7 @@ export async function POST(request: NextRequest) {
         })),
         totals: { subtotal: quote.subtotal, delivery: quote.delivery, discount: quote.discount, total: quote.total },
         coupon: quote.coupon,
+        loyalty: quote.loyalty,
         chat,
       },
       { status: 201 }

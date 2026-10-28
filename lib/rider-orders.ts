@@ -35,7 +35,7 @@ export type OrderSnapshot = {
 };
 
 export type RiderOrderOutcome =
-  | { status: 'DELIVERED'; deliveryCharge: number; commission: number }
+  | { status: 'DELIVERED'; deliveryCharge: number; commission: number; /** The delivery bonus paid for it (null = none). */ bonus?: number | null }
   /** Closed by Mangwaoo without a delivery being confirmed (an admin closed the chat, the customer's account was removed). */
   | { status: 'CLOSED' }
   | { status: 'CANCELLED'; cancelledBy: RiderOrderCancelledBy };
@@ -76,10 +76,10 @@ export function orderSnapshot(chat: ChatForRecord): OrderSnapshot | null {
 export async function recordRiderOrder(db: Db, snapshot: OrderSnapshot, outcome: RiderOrderOutcome, { keepExisting = false } = {}) {
   const ended =
     outcome.status === 'DELIVERED'
-      ? { status: 'DELIVERED' as const, cancelledBy: null, deliveryCharge: outcome.deliveryCharge, commission: outcome.commission }
+      ? { status: 'DELIVERED' as const, cancelledBy: null, deliveryCharge: outcome.deliveryCharge, commission: outcome.commission, bonus: outcome.bonus ?? null }
       : outcome.status === 'CANCELLED'
-        ? { status: 'CANCELLED' as const, cancelledBy: outcome.cancelledBy, deliveryCharge: null, commission: null }
-        : { status: 'CLOSED' as const, cancelledBy: null, deliveryCharge: null, commission: null };
+        ? { status: 'CANCELLED' as const, cancelledBy: outcome.cancelledBy, deliveryCharge: null, commission: null, bonus: null }
+        : { status: 'CLOSED' as const, cancelledBy: null, deliveryCharge: null, commission: null, bonus: null };
   const endedAt = new Date();
 
   await db.riderOrderRecord.upsert({
@@ -134,6 +134,11 @@ export async function reconcileOrderRecords(db: Db, scope: { riderId: string } |
     select: { chatId: true, amount: true, baseAmount: true },
   });
   const ledgerByChat = new Map(ledger.flatMap((entry) => (entry.chatId ? [[entry.chatId, entry] as const] : [])));
+  const bonusLines = await db.riderLedgerEntry.findMany({
+    where: { type: 'BONUS', bonusChatId: { in: missing.map((row) => row.id) } },
+    select: { bonusChatId: true, amount: true },
+  });
+  const bonusByChat = new Map(bonusLines.flatMap((entry) => (entry.bonusChatId ? [[entry.bonusChatId, entry.amount] as const] : [])));
 
   await db.riderOrderRecord.createMany({
     data: missing.map((row) => {
@@ -149,6 +154,7 @@ export async function reconcileOrderRecords(db: Db, scope: { riderId: string } |
         status: 'DELIVERED' as const,
         deliveryCharge: entry?.baseAmount ?? null,
         commission: entry ? -entry.amount : null,
+        bonus: bonusByChat.get(row.id) ?? null,
         takenAt: row.takenAt,
         endedAt: row.endedAt,
       };
@@ -295,7 +301,7 @@ export async function getRiderHistory(
 
   const [counts, delivered, pendingChats, ratings, finished] = await Promise.all([
     prisma.riderOrderRecord.groupBy({ by: ['status'], where: inRange, _count: { _all: true } }),
-    prisma.riderOrderRecord.aggregate({ where: { ...inRange, status: 'DELIVERED' }, _sum: { deliveryCharge: true, commission: true } }),
+    prisma.riderOrderRecord.aggregate({ where: { ...inRange, status: 'DELIVERED' }, _sum: { deliveryCharge: true, commission: true, bonus: true } }),
     prisma.riderChat.findMany({
       where: { riderId, status: 'ACTIVE' },
       orderBy: { claimedAt: 'desc' },
@@ -351,6 +357,7 @@ export async function getRiderHistory(
               pickupLng: chat.pickupLongitude,
             }),
             commission: null,
+            bonus: null,
             cancelledBy: null,
             takenAt: (chat.claimedAt ?? chat.createdAt).toISOString(),
             endedAt: null,
@@ -367,6 +374,7 @@ export async function getRiderHistory(
     addressText: record.addressText,
     deliveryCharge: record.deliveryCharge,
     commission: record.commission,
+    bonus: record.bonus,
     cancelledBy: record.cancelledBy,
     takenAt: record.takenAt.toISOString(),
     endedAt: record.endedAt.toISOString(),
@@ -382,6 +390,7 @@ export async function getRiderHistory(
       pending: pendingChats.length,
       deliveryCharges: delivered._sum.deliveryCharge ?? 0,
       commission: delivered._sum.commission ?? 0,
+      bonus: delivered._sum.bonus ?? 0,
     },
     rating: ratings.get(riderId) ?? null,
     items: [...pendingItems, ...finishedItems],

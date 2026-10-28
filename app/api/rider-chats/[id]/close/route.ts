@@ -11,6 +11,8 @@ import { RECHARGE_TITLE, formatPkr, rechargeMessage } from '@/lib/rider-wallet-c
  * percentage of comes from the order itself (the chat's delivery charge, see `deliveryChargeForChat`); nothing the rider
  * sends is read. An admin's "Close" only closes the chat (no commission: use Rider Wallets > Adjust if one is due).
  * "End chat" is NOT this: it cancels the order and deletes the chat (`/cancel`).
+ * The same moment pays the rider a random delivery bonus by the distance of the ride (lib/rider-bonus.ts): the rider's answer
+ * carries it and the rider's bell tells them, whichever side pressed the button; the customer is not shown it.
  */
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -22,7 +24,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Reply first to take this order.' }, { status: 403 });
   }
 
-  const { found, commission: result, finished } = await closeOrderChat(id, { charge: access.role !== 'ADMIN' });
+  const { found, commission: result, bonus, finished } = await closeOrderChat(id, { charge: access.role !== 'ADMIN' });
 
   if (!found) {
     return NextResponse.json({ error: 'This order chat is no longer available.' }, { status: 404 });
@@ -37,6 +39,30 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       message: `${finished.riderName} marked your order as delivered. How was the ride? Please rate your rider.`,
       href: `/rate-rider/${id}`,
       refId: `rate:${id}`,
+    }));
+  }
+
+  // The rider's bonus is told in the bell (and as a push) so it is never missed, even when the customer pressed the button.
+  if (bonus && result && finished) {
+    notifyAfterResponse(async () => ({
+      userId: result.riderUserId,
+      type: 'ACCOUNT' as const,
+      title: 'You earned a bonus!',
+      message: `${formatPkr(bonus.amount)} bonus for your delivery to ${finished.customerName}. It was added to your wallet.`,
+      href: '/rider/wallet',
+      refId: `rider-bonus:${id}`,
+    }));
+  }
+
+  // A bonus that covers what the rider owed ends their payment hold.
+  if (result?.change?.endedHold && result.change.orderAccess === 'AUTO') {
+    notifyAfterResponse(async () => ({
+      userId: result.riderUserId,
+      type: 'ACCOUNT' as const,
+      title: 'You can receive orders again',
+      message: 'Your bonus cleared what you owed: you can go online and receive new orders.',
+      href: '/rider/wallet',
+      refId: `rider-wallet:${result.riderId}`,
     }));
   }
 
@@ -74,5 +100,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
           },
         }
       : {}),
+    // What the rider earned for this order (shown on their screen; never to the customer).
+    ...(bonus && access.role === 'RIDER' ? { bonus: { amount: bonus.amount, tier: bonus.tier } } : {}),
   });
 }

@@ -30,6 +30,8 @@ export type RiderHistoryItem = {
   deliveryCharge: number | null;
   /** What Mangwaoo took from the delivery charge (delivered orders). */
   commission: number | null;
+  /** The delivery bonus Mangwaoo paid the rider for the order (delivered orders; null = none). */
+  bonus: number | null;
   cancelledBy: RiderOrderCancelledBy | null;
   takenAt: string;
   endedAt: string | null;
@@ -48,6 +50,8 @@ export type RiderHistorySummary = {
   /** The delivery charges of the delivered orders, and the part of it Mangwaoo took. */
   deliveryCharges: number;
   commission: number;
+  /** The delivery bonuses paid for the delivered orders. */
+  bonus: number;
 };
 
 export type RiderRatingSummary = { average: number; count: number };

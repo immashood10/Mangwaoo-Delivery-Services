@@ -6,6 +6,7 @@ import {
   Bike,
   CircleDashed,
   Clock,
+  CreditCard,
   Flag,
   LayoutDashboard,
   MapPin,
@@ -57,6 +58,7 @@ async function getDashboardData() {
     pendingAds,
     cartCustomers,
     pendingPayouts,
+    pendingCards,
   ] = await Promise.all([
     // Pending riders / sellers who haven't confirmed their WhatsApp number are unfinished signups, not counted.
     prisma.rider.count({ where: { isApproved: false, user: LIVE_ACCOUNT } }),
@@ -88,12 +90,15 @@ async function getDashboardData() {
     prisma.customer.count({ where: { user: LIVE_ACCOUNT, cartItems: { some: {} } } }),
     // Customers waiting for their Mangwaoo Points wallet money (the Wallet Payouts page).
     prisma.walletWithdrawal.count({ where: { status: 'PENDING' } }),
+    // Customers who applied for a Loyalty Card and wait for approval (the Loyalty Cards page).
+    prisma.loyaltyCard.count({ where: { status: 'PENDING' } }),
   ]);
 
   return {
     pendingAds,
     cartCustomers,
     pendingPayouts,
+    pendingCards,
     pendingRiders,
     approvedRiders,
     onlineRiders,
@@ -298,6 +303,13 @@ export default async function AdminDashboardPage({
             description="Mangwaoo Points: set the rules, and send customers their cashback to JazzCash or EasyPaisa when they ask."
             icon={Banknote}
             badge={data.pendingPayouts > 0 ? `${data.pendingPayouts} waiting` : undefined}
+          />
+          <SectionCard
+            href="/admin/loyalty-cards"
+            title="Loyalty Cards"
+            description="Customers with enough delivered orders can apply. Approve a card and every order they place gets a random discount."
+            icon={CreditCard}
+            badge={data.pendingCards > 0 ? `${data.pendingCards} waiting` : undefined}
           />
           <SectionCard
             href="/admin/stories"

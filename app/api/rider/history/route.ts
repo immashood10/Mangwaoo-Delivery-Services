@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   }
 
   const noHistory: RiderHistoryResponse = {
-    summary: { delivered: 0, cancelled: 0, closed: 0, pending: 0, deliveryCharges: 0, commission: 0 },
+    summary: { delivered: 0, cancelled: 0, closed: 0, pending: 0, deliveryCharges: 0, commission: 0, bonus: 0 },
     rating: null,
     items: [],
     nextCursor: null,

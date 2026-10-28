@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import RiderShell from '@/components/rider/RiderShell';
+import { getBonusSettings } from '@/lib/rider-bonus';
 import { getWalletSettings } from '@/lib/rider-wallet';
 import { riderHold } from '@/lib/rider-wallet-config';
 
@@ -17,12 +18,13 @@ export default async function RiderLayout({ children }: { children: React.ReactN
 
   if (!session || session.role !== 'RIDER') redirect('/login?next=/rider');
 
-  const [rider, settings] = await Promise.all([
+  const [rider, settings, bonusSettings] = await Promise.all([
     prisma.rider.findUnique({
       where: { userId: session.userId },
       include: { user: { select: { name: true } }, documents: { where: { kind: 'FACE' }, select: { id: true } } },
     }),
     getWalletSettings(),
+    getBonusSettings(),
   ]);
 
   if (!rider) redirect('/login');
@@ -37,7 +39,7 @@ export default async function RiderLayout({ children }: { children: React.ReactN
         hasFacePhoto: rider.documents.length > 0,
       }}
       wallet={{ balance: rider.walletBalance, unpaidOrders: rider.unpaidOrders, hold: riderHold(rider) }}
-      rules={settings}
+      rules={{ ...settings, bonusEnabled: bonusSettings.enabled }}
     >
       {children}
     </RiderShell>

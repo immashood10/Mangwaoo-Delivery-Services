@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowLeft, Bike, CheckCircle2, ChevronRight, ClipboardList, Clock, Headset, Inbox, MapPin, MessagesSquare, Power, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Bike, CheckCircle2, ChevronRight, ClipboardList, Clock, Gift, Headset, Inbox, MapPin, MessagesSquare, Power, Wallet } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { RiderRatingLabel } from '@/components/StarRating';
 import RiderChatThread from '@/components/RiderChatThread';
@@ -248,9 +248,10 @@ function OrderActions({
       }
 
       onCompleted(
-        data?.commission
+        (data?.commission
           ? `Order completed. ${formatPkr(data.commission.amount)} (${data.commission.percent}% of ${formatPkr(data.commission.baseFee)}) was added to what you owe Mangwaoo.`
-          : 'Order completed.',
+          : 'Order completed.') +
+          (data?.bonus ? ` You earned a ${formatPkr(data.bonus.amount)} bonus, added to your account.` : ''),
         Boolean(data?.commission?.onHold)
       );
     } catch {
@@ -299,6 +300,12 @@ function OrderActions({
               ? `Mangwaoo keeps ${rules.commissionPercent}%${commission > 0 ? `: ${formatPkr(commission)} on this order` : ''}, which is added to your account.`
               : 'This order has no delivery charge, so nothing is added to your account.'}
           </p>
+          {rules.bonusEnabled ? (
+            <p className="mt-1.5 flex items-start gap-1.5 text-xs font-semibold text-success">
+              <Gift className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              You also get a surprise bonus for this order, added to your account when you complete it.
+            </p>
+          ) : null}
 
           {error ? (
             <p role="alert" className="mt-2 text-sm text-danger">

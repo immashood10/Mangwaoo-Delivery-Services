@@ -6,6 +6,7 @@ import { ADMIN_PAGES } from '@/lib/notification-types';
 import { notifyAdminsAfterResponse } from '@/lib/notify';
 import { detectRasterImage } from '@/lib/image-signature';
 import { enforceRateLimits } from '@/lib/rate-limit';
+import { getBonusSettings } from '@/lib/rider-bonus';
 import { getWalletSettings } from '@/lib/rider-wallet';
 import {
   MAX_PAYMENT_SCREENSHOT_BYTES,
@@ -42,8 +43,9 @@ export async function GET() {
 
   if (!rider) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
 
-  const [settings, entries, topUps, completed] = await Promise.all([
+  const [settings, bonusSettings, entries, topUps, completed] = await Promise.all([
     getWalletSettings(),
+    getBonusSettings(),
     prisma.riderLedgerEntry.findMany({
       where: { riderId: rider.id },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -77,6 +79,7 @@ export async function GET() {
         completedOrders: completed,
         commissionPercent: settings.commissionPercent,
         ordersOnCredit: settings.ordersOnCredit,
+        bonusEnabled: bonusSettings.enabled,
       },
       entries: entries.map((entry) => ({ ...entry, createdAt: entry.createdAt.toISOString() })),
       topUps: topUps.map(({ screenshot, ...topUp }) => ({ ...topUp, hasScreenshot: screenshot !== null, createdAt: topUp.createdAt.toISOString() })),

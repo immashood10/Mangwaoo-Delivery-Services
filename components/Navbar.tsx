@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Menu, X, MapPin, LocateFixed, Search, ShoppingCart, ChevronDown, Store, LogOut, ShieldCheck, PackageSearch, House, Briefcase, Heart, Trash2, Bike, MessagesSquare, LayoutDashboard, Settings, History, Gift, type LucideIcon } from 'lucide-react';
+import { Menu, X, MapPin, LocateFixed, Search, ShoppingCart, ChevronDown, Store, LogOut, ShieldCheck, PackageSearch, House, Briefcase, Heart, Trash2, Bike, MessagesSquare, LayoutDashboard, Settings, History, Gift, CreditCard, type LucideIcon } from 'lucide-react';
 import { PROFESSIONAL_SERVICES } from '@/lib/data';
 import {
   ADDRESS_TAGS,
@@ -582,6 +582,14 @@ export default function Navbar() {
                         >
                           <Gift className="w-4 h-4" />
                           Mangwaoo Points
+                        </Link>
+                        <Link
+                          href="/account/loyalty-card"
+                          onClick={() => setIsUserMenuOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-brand-light"
+                        >
+                          <CreditCard className="w-4 h-4" />
+                          Loyalty Card
                         </Link>
                         <Link
                           href="/account/settings"

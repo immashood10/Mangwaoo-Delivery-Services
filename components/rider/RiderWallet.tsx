@@ -23,6 +23,8 @@ type WalletView = {
     completedOrders: number;
     commissionPercent: number;
     ordersOnCredit: number;
+    /** Whether a completed order pays a surprise delivery bonus. */
+    bonusEnabled: boolean;
   };
   entries: { id: string; type: RiderLedgerKind; amount: number; baseAmount: number | null; note: string | null; createdAt: string }[];
   topUps: {
@@ -44,6 +46,7 @@ const ENTRY_LABELS: Record<RiderLedgerKind, string> = {
   COMMISSION: 'Order commission',
   TOP_UP: 'Payment received',
   ADJUSTMENT: 'Adjustment',
+  BONUS: 'Delivery bonus',
 };
 
 const INPUT_CLASS =
@@ -267,6 +270,9 @@ export default function RiderWallet() {
           <li>
             Every order you complete adds Mangwaoo&apos;s {wallet.commissionPercent}% of the delivery charge to what you owe.
           </li>
+          {wallet.bonusEnabled ? (
+            <li>Every order you complete also earns you a surprise bonus. It is added to your account, so it counts against what you owe.</li>
+          ) : null}
           <li>You can have {wallet.ordersOnCredit} finished orders unpaid. After that, recharge your account to receive the next order.</li>
           <li>Pay by {payment.method}, send us the transaction ID (and a screenshot of the payment) below, and Mangwaoo adds the money to your account.</li>
         </ul>

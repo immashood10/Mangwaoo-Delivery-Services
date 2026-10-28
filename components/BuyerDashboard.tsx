@@ -4,8 +4,9 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { User, MapPin, Banknote, Smartphone, XCircle, PackageSearch, History as HistoryIcon, MessageSquare, Star, ChevronRight, Gift } from 'lucide-react';
+import { User, MapPin, Banknote, Smartphone, XCircle, PackageSearch, History as HistoryIcon, MessageSquare, Star, ChevronRight, Gift, CreditCard } from 'lucide-react';
 import MessagesInbox from './MessagesInbox';
+import type { LoyaltyCardStatusKey } from '@/lib/loyalty-card-config';
 
 type OrderItem = {
   id: string;
@@ -20,10 +21,14 @@ type Order = {
   ref: string;
   marketplace: 'mart' | 'gulplaza';
   status: string;
-  /** The items. What the customer pays is this minus the coupon discount plus the delivery fee (food only). */
+  /** The items. What the customer pays is this minus the discounts plus the delivery fee (food only). */
   totalAmount: number;
   deliveryFee: number;
+  /** The coupon and the Loyalty Card together; `loyaltyDiscount` is the card's part of it. */
   discountAmount: number;
+  loyaltyDiscount: number;
+  /** The % the Loyalty Card drew for this order (null = no card discount). */
+  loyaltyPercent: number | null;
   couponCode: string | null;
   createdAt: string;
   sellerName: string;
@@ -147,9 +152,14 @@ function OrderCard({ order, onCancelled }: { order: Order; onCancelled: () => vo
       {order.discountAmount > 0 || order.deliveryFee > 0 ? (
         <div className="mt-2 space-y-0.5 text-right text-xs text-brand-gray">
           <p>Items PKR {order.totalAmount.toLocaleString()}</p>
-          {order.discountAmount > 0 ? (
+          {order.discountAmount - order.loyaltyDiscount > 0 ? (
             <p className="text-success">
-              Coupon{order.couponCode ? ` ${order.couponCode}` : ''} − PKR {order.discountAmount.toLocaleString()}
+              Coupon{order.couponCode ? ` ${order.couponCode}` : ''} − PKR {(order.discountAmount - order.loyaltyDiscount).toLocaleString()}
+            </p>
+          ) : null}
+          {order.loyaltyDiscount > 0 ? (
+            <p className="text-success">
+              Loyalty Card{order.loyaltyPercent ? ` (${order.loyaltyPercent}%)` : ''} − PKR {order.loyaltyDiscount.toLocaleString()}
             </p>
           ) : null}
           {order.deliveryFee > 0 ? <p>Delivery + PKR {order.deliveryFee.toLocaleString()}</p> : null}
@@ -212,6 +222,7 @@ export default function BuyerDashboard({
   ratePrompts = [],
   initialTab = 'orders',
   points = 0,
+  loyalty = { status: null, canApply: false },
 }: {
   customerName: string;
   orders: Order[];
@@ -219,6 +230,8 @@ export default function BuyerDashboard({
   initialTab?: TabId;
   /** The customer's Mangwaoo Points, shown next to the link to the points page. */
   points?: number;
+  /** The state of the customer's Loyalty Card, shown next to the link to its page. */
+  loyalty?: { status: LoyaltyCardStatusKey | null; canApply: boolean };
 }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
@@ -259,14 +272,30 @@ export default function BuyerDashboard({
             )}
           </button>
         ))}
-        <Link
-          href="/account/points"
-          className="ml-auto flex shrink-0 items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-semibold text-brand-gray transition-colors hover:text-accent"
-        >
-          <Gift className="w-4 h-4" />
-          Mangwaoo Points
-          {points > 0 && <span className="rounded-full bg-brand-red-primary/10 px-2 py-0.5 text-xs text-accent">{points.toLocaleString('en-PK')}</span>}
-        </Link>
+        <div className="ml-auto flex shrink-0">
+          <Link
+            href="/account/loyalty-card"
+            className="flex shrink-0 items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-semibold text-brand-gray transition-colors hover:text-accent"
+          >
+            <CreditCard className="w-4 h-4" />
+            Loyalty Card
+            {loyalty.status === 'APPROVED' ? (
+              <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs text-success">Active</span>
+            ) : loyalty.status === 'PENDING' ? (
+              <span className="rounded-full bg-yellow-50 px-2 py-0.5 text-xs text-warning">Pending</span>
+            ) : loyalty.canApply ? (
+              <span className="rounded-full bg-brand-red-primary/10 px-2 py-0.5 text-xs text-accent">Apply</span>
+            ) : null}
+          </Link>
+          <Link
+            href="/account/points"
+            className="flex shrink-0 items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-semibold text-brand-gray transition-colors hover:text-accent"
+          >
+            <Gift className="w-4 h-4" />
+            Mangwaoo Points
+            {points > 0 && <span className="rounded-full bg-brand-red-primary/10 px-2 py-0.5 text-xs text-accent">{points.toLocaleString('en-PK')}</span>}
+          </Link>
+        </div>
       </div>
 
       {activeTab === 'orders' && (

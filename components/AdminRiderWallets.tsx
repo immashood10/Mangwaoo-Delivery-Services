@@ -8,6 +8,7 @@ import {
   Bike,
   CheckCircle2,
   ChevronDown,
+  Gift,
   History as HistoryIcon,
   Image as ImageIcon,
   Phone,
@@ -16,6 +17,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
+import { BONUS_LIMITS, type RiderBonusSettingsValues } from '@/lib/rider-bonus-config';
 import {
   ACCESS_LABELS,
   MAX_ORDERS_ON_CREDIT,
@@ -57,6 +59,10 @@ export type PendingTopUp = {
 };
 
 type Settings = { commissionPercent: number; ordersOnCredit: number };
+
+/** The delivery bonus: its rules, and what it has paid so far. */
+export type BonusOverview = { settings: RiderBonusSettingsValues; paid: number; orders: number };
+
 type HistoryEntry = { id: string; type: RiderLedgerKind; amount: number; baseAmount: number | null; note: string | null; createdAt: string };
 
 const FIELD_CLASS =
@@ -66,7 +72,14 @@ const LABEL_CLASS = 'mb-1.5 block text-sm font-semibold text-ink';
 const BUTTON_CLASS =
   'inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-ink hover:border-accent hover:text-accent disabled:opacity-60';
 
-const ENTRY_LABELS: Record<RiderLedgerKind, string> = { COMMISSION: 'Order commission', TOP_UP: 'Payment received', ADJUSTMENT: 'Adjustment' };
+const ENTRY_LABELS: Record<RiderLedgerKind, string> = { COMMISSION: 'Order commission', TOP_UP: 'Payment received', ADJUSTMENT: 'Adjustment', BONUS: 'Delivery bonus' };
+
+/** The three tiers of the delivery bonus as the form lists them: which settings each one reads. */
+const BONUS_TIERS = [
+  { id: 'near', title: 'Short orders', km: 'nearMaxKm', min: 'nearMin', max: 'nearMax' },
+  { id: 'mid', title: 'Middle orders', km: 'midMaxKm', min: 'midMin', max: 'midMax' },
+  { id: 'far', title: 'Long orders', km: null, min: 'farMin', max: 'farMax' },
+] as const;
 
 async function send(url: string, method: 'POST' | 'PUT' | 'PATCH', body: unknown) {
   try {
@@ -437,7 +450,7 @@ type DialogState = { kind: 'payment' | 'adjust'; rider: WalletRider } | { kind: 
 type Filter = 'all' | 'not-eligible' | 'owes';
 
 /** Admin > Rider Wallets: who owes Mangwaoo commission, who may receive the next order, and the tools to manage it. */
-export default function AdminRiderWallets({ riders, pending, settings }: { riders: WalletRider[]; pending: PendingTopUp[]; settings: Settings }) {
+export default function AdminRiderWallets({ riders, pending, settings, bonus }: { riders: WalletRider[]; pending: PendingTopUp[]; settings: Settings; bonus: BonusOverview }) {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>('all');
   const [dialog, setDialog] = useState<DialogState>(null);
@@ -448,6 +461,18 @@ export default function AdminRiderWallets({ riders, pending, settings }: { rider
   const [percent, setPercent] = useState(String(settings.commissionPercent));
   const [credit, setCredit] = useState(String(settings.ordersOnCredit));
   const [isSavingRule, setIsSavingRule] = useState(false);
+  const [bonusOn, setBonusOn] = useState(bonus.settings.enabled);
+  const [bonusForm, setBonusForm] = useState({
+    nearMaxKm: String(bonus.settings.nearMaxKm),
+    midMaxKm: String(bonus.settings.midMaxKm),
+    nearMin: String(bonus.settings.nearMin),
+    nearMax: String(bonus.settings.nearMax),
+    midMin: String(bonus.settings.midMin),
+    midMax: String(bonus.settings.midMax),
+    farMin: String(bonus.settings.farMin),
+    farMax: String(bonus.settings.farMax),
+  });
+  const [isSavingBonus, setIsSavingBonus] = useState(false);
   const [approveAmounts, setApproveAmounts] = useState<Record<string, string>>({});
   const [viewing, setViewing] = useState<PendingTopUp | null>(null);
 
@@ -508,6 +533,39 @@ export default function AdminRiderWallets({ riders, pending, settings }: { rider
 
   const ruleChanged = Number(percent) !== settings.commissionPercent || Number(credit) !== settings.ordersOnCredit;
 
+  const bonusChanged =
+    bonusOn !== bonus.settings.enabled || (Object.keys(bonusForm) as (keyof typeof bonusForm)[]).some((key) => Number(bonusForm[key]) !== bonus.settings[key]);
+
+  const setBonusField = (key: keyof typeof bonusForm, value: string) => setBonusForm((current) => ({ ...current, [key]: value }));
+
+  const saveBonus = async (event: FormEvent) => {
+    event.preventDefault();
+    setIsSavingBonus(true);
+    setNotice('');
+    setError('');
+
+    const result = await send('/api/admin/rider-bonus-settings', 'PUT', {
+      enabled: bonusOn,
+      nearMaxKm: Number(bonusForm.nearMaxKm),
+      midMaxKm: Number(bonusForm.midMaxKm),
+      nearMin: Number(bonusForm.nearMin),
+      nearMax: Number(bonusForm.nearMax),
+      midMin: Number(bonusForm.midMin),
+      midMax: Number(bonusForm.midMax),
+      farMin: Number(bonusForm.farMin),
+      farMax: Number(bonusForm.farMax),
+    });
+
+    setIsSavingBonus(false);
+
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+
+    done('Saved. The new bonus rules apply to orders completed from now on; bonuses already paid stay.');
+  };
+
   return (
     <div className="space-y-8">
       {notice ? (
@@ -527,6 +585,7 @@ export default function AdminRiderWallets({ riders, pending, settings }: { rider
         <Stat label="Total owed to Mangwaoo" value={formatPkr(totalOwed)} tone={totalOwed > 0 ? 'danger' : 'ink'} />
         <Stat label="Not eligible for orders" value={String(notEligible.length)} tone={notEligible.length > 0 ? 'danger' : 'ink'} />
         <Stat label="Recharges to check" value={String(pending.length)} />
+        <Stat label="Delivery bonuses paid so far" value={`${formatPkr(bonus.paid)} (${bonus.orders})`} />
       </section>
 
       <section className="rounded-2xl bg-surface p-5 shadow-soft">
@@ -556,6 +615,93 @@ export default function AdminRiderWallets({ riders, pending, settings }: { rider
           After that many unpaid orders a rider can&apos;t go online or take the next order until they have paid everything they owe. Orders already finished keep the
           commission they were charged. Set 0 to ask for payment before every next order.
         </p>
+      </section>
+
+      <section className="rounded-2xl bg-surface p-5 shadow-soft">
+        <h2 className="flex items-center gap-2 text-lg font-bold text-ink">
+          <Gift className="h-5 w-5 text-accent" aria-hidden="true" />
+          Delivery bonus
+        </h2>
+        <p className="mt-1 text-sm text-brand-gray">
+          A rider who completes an order gets a random bonus, added to their wallet (so it counts against what they owe). The farther the order, the bigger it can be.
+          Mangwaoo pays it. An order whose distance is not known (MangwaooMart only) counts as a short one.
+        </p>
+        <form onSubmit={saveBonus} className="mt-3 space-y-4">
+          <label className="flex cursor-pointer items-center gap-3">
+            <input
+              type="checkbox"
+              checked={bonusOn}
+              onChange={(event) => setBonusOn(event.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
+            />
+            <span className="text-sm font-semibold text-ink">
+              The delivery bonus is on <span className="font-normal text-brand-gray">(off = no new bonuses)</span>
+            </span>
+          </label>
+
+          <div className="space-y-3">
+            {BONUS_TIERS.map((tier) => (
+              <div key={tier.id} className="grid gap-3 rounded-xl border border-gray-100 p-3 sm:grid-cols-[9rem_1fr_1fr] sm:items-end" data-bonus-tier={tier.id}>
+                <p className="text-sm font-semibold text-ink sm:pb-2.5">{tier.title}</p>
+                <div>
+                  <p className={LABEL_CLASS}>{tier.km ? 'Up to (km)' : 'Distance'}</p>
+                  {tier.km ? (
+                    <input
+                      aria-label={`${tier.title}: up to km`}
+                      type="number"
+                      min={0.1}
+                      max={BONUS_LIMITS.km}
+                      step={0.1}
+                      value={bonusForm[tier.km]}
+                      onChange={(event) => setBonusField(tier.km, event.target.value)}
+                      className={INPUT_CLASS}
+                      required
+                    />
+                  ) : (
+                    <p className="rounded-xl border border-dashed border-gray-200 px-4 py-2.5 text-sm text-brand-gray">Farther than {bonusForm.midMaxKm || '…'} km</p>
+                  )}
+                </div>
+                <div>
+                  <p className={LABEL_CLASS}>Bonus (PKR)</p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      aria-label={`${tier.title}: lowest bonus`}
+                      type="number"
+                      min={1}
+                      max={BONUS_LIMITS.amount}
+                      step={1}
+                      value={bonusForm[tier.min]}
+                      onChange={(event) => setBonusField(tier.min, event.target.value)}
+                      className={INPUT_CLASS}
+                      required
+                    />
+                    <span className="text-sm text-brand-gray">to</span>
+                    <input
+                      aria-label={`${tier.title}: highest bonus`}
+                      type="number"
+                      min={1}
+                      max={BONUS_LIMITS.amount}
+                      step={1}
+                      value={bonusForm[tier.max]}
+                      onChange={(event) => setBonusField(tier.max, event.target.value)}
+                      className={INPUT_CLASS}
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-brand-gray">A random whole number of rupees between the two, for each completed order. Distances are judged to 0.1 km, like the delivery fee.</p>
+
+          <button
+            type="submit"
+            disabled={isSavingBonus || !bonusChanged}
+            className="rounded-xl bg-brand-red-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-red-secondary disabled:opacity-50"
+          >
+            {isSavingBonus ? 'Saving…' : 'Save bonus rules'}
+          </button>
+        </form>
       </section>
 
       {pending.length > 0 ? (

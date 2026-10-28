@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Minus, Plus, Trash2, ShoppingCart, MessageCircle, Banknote, Smartphone, BadgePercent, X, Gift } from 'lucide-react';
+import { Minus, Plus, Trash2, ShoppingCart, MessageCircle, Banknote, Smartphone, BadgePercent, X, Gift, CreditCard } from 'lucide-react';
 import { useCart } from '@/lib/cart-context';
 import { useDeliveryAddress } from '@/lib/delivery-address-context';
 import { DELIVERY_RATE_PER_KM, FOOD_DELIVERY_RADIUS_KM, MINIMUM_DELIVERY_FEE, farAwayNote } from '@/lib/delivery';
@@ -48,6 +48,8 @@ export default function CartPage() {
   const [couponInput, setCouponInput] = useState('');
   const [appliedCode, setAppliedCode] = useState<string | null>(null);
   const [result, setResult] = useState<QuoteResult | null>(null);
+  // Bumped when placing the order failed because a price changed (e.g. the Loyalty Card's discount), to ask the server for the price again.
+  const [quoteTick, setQuoteTick] = useState(0);
 
   const dropoffLat = dropoff?.lat ?? null;
   const dropoffLng = dropoff?.lng ?? null;
@@ -90,7 +92,7 @@ export default function CartPage() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [quoteKey, lines, dropoffLat, dropoffLng, appliedCode]);
+  }, [quoteKey, quoteTick, lines, dropoffLat, dropoffLng, appliedCode]);
 
   const quote = result?.quote ?? null;
   const isPricing = result?.key !== quoteKey;
@@ -131,10 +133,12 @@ export default function CartPage() {
 
     // The summary the rider reads in the order chat. The amounts are the ones the server priced for the cart on screen;
     // the delivery charge the rider's commission is worked out from is saved by the server itself, not read from this text.
-    const totals: Pick<Quote, 'subtotal' | 'delivery' | 'discount' | 'total'> = quote ?? {
+    const totals: Pick<Quote, 'subtotal' | 'delivery' | 'discount' | 'couponDiscount' | 'loyalty' | 'total'> = quote ?? {
       subtotal: shownSubtotal,
       delivery: 0,
       discount: 0,
+      couponDiscount: 0,
+      loyalty: null,
       total,
     };
     const vendors = [...new Set(items.map((item) => item.vendor))];
@@ -142,7 +146,8 @@ export default function CartPage() {
       totals.discount > 0 || totals.delivery > 0
         ? [
             `Items ${pkr(totals.subtotal)}`,
-            ...(totals.discount > 0 ? [`− coupon ${appliedCoupon?.code ?? ''} ${pkr(totals.discount)}`] : []),
+            ...(totals.couponDiscount > 0 ? [`− coupon ${appliedCoupon?.code ?? ''} ${pkr(totals.couponDiscount)}`] : []),
+            ...(totals.loyalty && totals.loyalty.discount > 0 ? [`− loyalty card ${totals.loyalty.percent}% ${pkr(totals.loyalty.discount)}`] : []),
             ...(totals.delivery > 0 ? [`+ delivery ${pkr(totals.delivery)}`] : []),
             `= ${pkr(totals.total)}`,
           ].join(' ')
@@ -194,6 +199,8 @@ export default function CartPage() {
 
       if (!response.ok) {
         setFormError(payload?.error ?? 'Could not place your order. Please try again.');
+        // A price or stock changed while the customer was looking at the cart: show them the current numbers.
+        if (response.status === 409) setQuoteTick((tick) => tick + 1);
         return;
       }
 
@@ -467,10 +474,21 @@ export default function CartPage() {
                 <span className="font-semibold text-ink">{pkr(shownSubtotal)}</span>
               </div>
 
-              {quote && appliedCoupon && quote.discount > 0 ? (
+              {quote && appliedCoupon && quote.couponDiscount > 0 ? (
                 <div className="flex items-center justify-between">
                   <span className="text-brand-gray">Coupon {appliedCoupon.code}</span>
-                  <span className="font-semibold text-success">− {pkr(quote.discount)}</span>
+                  <span className="font-semibold text-success">− {pkr(quote.couponDiscount)}</span>
+                </div>
+              ) : null}
+
+              {/* The Loyalty Card: the random % the card drew for this order (only for a customer with an active card). */}
+              {quote?.loyalty && quote.loyalty.discount > 0 ? (
+                <div className="flex items-center justify-between" data-testid="loyalty-line">
+                  <span className="flex items-center gap-1.5 text-brand-gray">
+                    <CreditCard className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
+                    Loyalty Card · {quote.loyalty.percent}% off
+                  </span>
+                  <span className="font-semibold text-success">− {pkr(quote.loyalty.discount)}</span>
                 </div>
               ) : null}
 

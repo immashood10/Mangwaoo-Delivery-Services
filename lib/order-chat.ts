@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/prisma';
+import { billedDistanceKm } from '@/lib/delivery';
+import { distanceInKm } from '@/lib/geo';
 import { ADMIN_PAGES } from '@/lib/notification-types';
 import { notifyAdminsAfterResponse } from '@/lib/notify';
 import { getRiderChatSummary, serializeRiderChat } from '@/lib/rider-chat';
@@ -12,6 +14,10 @@ export const MAX_ORDER_CHAT_ADDRESS_LENGTH = 300;
  * `deliveryCharge` is only for a chat opened by a checkout: the delivery fee the SERVER charged (whole PKR, 0 when the
  * order has none), which is what the rider's commission is later worked out from. A second checkout joining a live chat
  * adds its fee to the chat's. null (a chat that is not from a checkout) leaves the charge alone.
+ *
+ * `distanceKm` is how far the ride is (judged to 0.1 km), which the rider's delivery bonus follows: a checkout passes the longest
+ * restaurant → customer distance of its food orders (null = it has none, MangwaooMart only). Left out, a chat with a pickup
+ * point is judged pickup → drop-off. A second checkout joining a live chat can only make the remembered distance longer.
  */
 export async function startOrContinueOrderChat(input: {
   customer: { id: string; name: string };
@@ -22,14 +28,21 @@ export async function startOrContinueOrderChat(input: {
   pickupText: string;
   text: string;
   deliveryCharge: number | null;
+  distanceKm?: number | null;
 }) {
   const { customer, deliveryCharge } = input;
   const messageData = { senderRole: 'CUSTOMER' as const, senderName: customer.name, body: input.text };
+  const distanceKm =
+    input.distanceKm !== undefined
+      ? input.distanceKm
+      : input.pickup
+        ? billedDistanceKm(distanceInKm(input.pickup, { lat: input.lat, lng: input.lng }))
+        : null;
 
   const existing = await prisma.riderChat.findFirst({
     where: { customerId: customer.id, status: { in: ['OPEN', 'ACTIVE'] } },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, deliveryCharge: true },
+    select: { id: true, deliveryCharge: true, deliveryDistanceKm: true },
   });
 
   if (existing) {
@@ -40,6 +53,7 @@ export async function startOrContinueOrderChat(input: {
         data: {
           updatedAt: new Date(),
           ...(deliveryCharge !== null ? { deliveryCharge: (existing.deliveryCharge ?? 0) + deliveryCharge } : {}),
+          ...(distanceKm !== null && distanceKm > (existing.deliveryDistanceKm ?? -1) ? { deliveryDistanceKm: distanceKm } : {}),
         },
         select: { id: true },
       }),
@@ -59,6 +73,7 @@ export async function startOrContinueOrderChat(input: {
       pickupLongitude: input.pickup?.lng ?? null,
       pickupText: input.pickupText,
       deliveryCharge,
+      deliveryDistanceKm: distanceKm,
     },
   });
   await prisma.riderChatMessage.create({ data: { chatId: chat.id, ...messageData } });

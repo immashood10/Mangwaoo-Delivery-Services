@@ -3,6 +3,7 @@ import { Wallet } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { RIDER_ONLINE_WINDOW_MS } from '@/lib/rider-dispatch';
+import { getBonusSettings } from '@/lib/rider-bonus';
 import { getWalletSettings } from '@/lib/rider-wallet';
 import { riderHold } from '@/lib/rider-wallet-config';
 import AdminRiderWallets from '@/components/AdminRiderWallets';
@@ -19,7 +20,7 @@ export default async function AdminRiderWalletsPage() {
     redirect('/admin/login');
   }
 
-  const [riders, pending, settings] = await Promise.all([
+  const [riders, pending, settings, bonusSettings, bonusPaid] = await Promise.all([
     prisma.rider.findMany({
       // Approved riders, plus anyone who already has money on their account; unfinished signups and deleted accounts are skipped.
       where: { user: { phoneVerifiedAt: { not: null }, deletedAt: null }, OR: [{ isApproved: true }, { ledger: { some: {} } }] },
@@ -53,6 +54,9 @@ export default async function AdminRiderWalletsPage() {
       },
     }),
     getWalletSettings(),
+    getBonusSettings(),
+    // What the delivery bonus has paid so far (the BONUS lines of the riders' wallets).
+    prisma.riderLedgerEntry.aggregate({ where: { type: 'BONUS' }, _sum: { amount: true }, _count: { _all: true } }),
   ]);
 
   // eslint-disable-next-line react-hooks/purity -- server component, rendered per request
@@ -105,6 +109,7 @@ export default async function AdminRiderWalletsPage() {
           createdAt: topUp.createdAt.toISOString(),
         }))}
         settings={settings}
+        bonus={{ settings: bonusSettings, paid: bonusPaid._sum.amount ?? 0, orders: bonusPaid._count._all }}
       />
     </div>
   );

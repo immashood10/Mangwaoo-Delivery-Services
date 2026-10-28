@@ -9,6 +9,13 @@ export type CouponInfo = {
   maxDiscountAmount: number | null;
 };
 
+/** The customer's Loyalty Card discount on this checkout (a random % the card drew for their next order). */
+export type LoyaltyInfo = {
+  percent: number;
+  /** What it takes off, in PKR (all the orders of the checkout together). */
+  discount: number;
+};
+
 /**
  * What one order of the checkout costs. A cart with items from three sellers makes three orders. Sample items (no
  * database row, `sellerId` `sample:<vendor>`) are priced the same way but come last and are never placed.
@@ -30,6 +37,11 @@ export type OrderQuote = {
   deliveryNote: 'NEEDS_DROPOFF' | 'NO_RESTAURANT_PIN' | null;
   /** Food only: the restaurant is farther than the nearby radius (5 km). The order goes ahead, at the higher fee for the longer ride. */
   farAway: boolean;
+  /** What the coupon takes off this order (PKR). */
+  couponDiscount: number;
+  /** What the customer's Loyalty Card takes off this order (PKR), after the coupon. */
+  loyaltyDiscount: number;
+  /** Both together: coupon + Loyalty Card. */
   discount: number;
   /** What the customer pays for this order: items − discount + delivery. */
   total: number;
@@ -39,7 +51,12 @@ export type Quote = {
   orders: OrderQuote[];
   subtotal: number;
   delivery: number;
+  /** All discounts together (coupon + Loyalty Card). */
   discount: number;
+  /** The coupon's part of `discount`. */
+  couponDiscount: number;
   total: number;
   coupon: CouponInfo | null;
+  /** The Loyalty Card's part of `discount`; null for a customer without an active card. */
+  loyalty: LoyaltyInfo | null;
 };

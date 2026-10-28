@@ -5,6 +5,7 @@ import { getSellerUserIds, notifyAfterResponse } from '@/lib/notify';
 import { orderRef } from '@/lib/order-number';
 import { SELLER_PAGES } from '@/lib/notification-types';
 import { releaseCouponIfUnused } from '@/lib/coupons';
+import { releaseLoyaltyIfUnused } from '@/lib/loyalty-card';
 
 const CANCELLABLE_STATUSES = ['PENDING', 'CONFIRMED', 'PREPARING'] as const;
 
@@ -48,6 +49,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     // A coupon used by this checkout is given back once all its orders are cancelled.
     await releaseCouponIfUnused(tx, order.redemptionId);
+    // The same for the Loyalty Card's discount: its percent goes back on the card.
+    await releaseLoyaltyIfUnused(tx, order.loyaltyRedemptionId);
 
     return true;
   });

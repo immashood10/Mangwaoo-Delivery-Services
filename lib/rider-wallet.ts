@@ -1,5 +1,9 @@
 import type { Prisma } from '@/lib/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
+import { billedDistanceKm } from '@/lib/delivery';
+import { distanceInKm } from '@/lib/geo';
+import { drawBonus, getBonusSettings } from '@/lib/rider-bonus';
+import type { BonusTier } from '@/lib/rider-bonus-config';
 import { ORDER_RECORD_CHAT_SELECT, orderSnapshot, recordRiderOrder } from '@/lib/rider-orders';
 import {
   DEFAULT_COMMISSION_PERCENT,
@@ -112,13 +116,18 @@ export type CommissionResult = {
   change: WalletChange | null;
 };
 
+/** The delivery bonus paid for an order (lib/rider-bonus.ts): the amount, the tier and the distance it was judged by (null = not known). */
+export type BonusResult = { amount: number; tier: BonusTier; distanceKm: number | null };
+
 export type CloseResult = {
   /** false when the chat no longer exists (it was cancelled in the meantime). */
   found: boolean;
   /** The commission charged to the rider; null when nothing was charged. */
   commission: CommissionResult | null;
+  /** The delivery bonus this call paid to the rider; null when none was (an admin's close, bonuses off, a chat that was already closed). */
+  bonus: BonusResult | null;
   /** Set when this call ended an order a rider had taken (so the customer can be told, and asked to rate the rider). */
-  finished: { riderName: string; customerUserId: string } | null;
+  finished: { riderName: string; customerUserId: string; customerName: string } | null;
 };
 
 /**
@@ -129,7 +138,8 @@ export type CloseResult = {
  * customer's "Order received". Without `charge` (an admin closing a chat) it only closes it; so does closing a chat
  * nobody claimed or one that is already closed. A cancelled order never comes through here: `cancelOrderChat` deletes it.
  * The order's line in the rider's history (lib/rider-orders.ts) is written in the same transaction: delivered, or
- * closed by Mangwaoo.
+ * closed by Mangwaoo. A delivered order also pays the rider a random delivery bonus (a BONUS line, lib/rider-bonus.ts),
+ * judged by the distance of the ride: it is positive money, set off against the commission, and exactly once like it.
  */
 export async function closeOrderChat(chatId: string, options: { charge: boolean }): Promise<CloseResult> {
   const { charge } = options;
@@ -140,13 +150,13 @@ export async function closeOrderChat(chatId: string, options: { charge: boolean 
     if (closed.count === 0) {
       const existing = await tx.riderChat.findUnique({ where: { id: chatId }, select: { status: true } });
 
-      if (!existing) return { found: false, commission: null, finished: null };
+      if (!existing) return { found: false, commission: null, bonus: null, finished: null };
 
       if (existing.status === 'OPEN') {
         await tx.riderChat.updateMany({ where: { id: chatId, status: 'OPEN' }, data: { status: 'CLOSED' } });
       }
 
-      return { found: true, commission: null, finished: null };
+      return { found: true, commission: null, bonus: null, finished: null };
     }
 
     const chat = await tx.riderChat.findUnique({
@@ -158,20 +168,21 @@ export async function closeOrderChat(chatId: string, options: { charge: boolean 
         pickupLatitude: true,
         pickupLongitude: true,
         deliveryCharge: true,
+        deliveryDistanceKm: true,
         rider: { select: { userId: true, user: { select: { name: true } } } },
       },
     });
     const snapshot = chat ? orderSnapshot(chat) : null;
 
-    if (!chat || !snapshot || !chat.rider) return { found: true, commission: null, finished: null };
+    if (!chat || !snapshot || !chat.rider) return { found: true, commission: null, bonus: null, finished: null };
 
-    const finished = { riderName: chat.rider.user.name, customerUserId: chat.customer.userId };
+    const finished = { riderName: chat.rider.user.name, customerUserId: chat.customer.userId, customerName: snapshot.customerName };
 
-    // An admin closing a chat only closes it: no commission, and the rider's history says Mangwaoo closed it.
+    // An admin closing a chat only closes it: no commission, no bonus, and the rider's history says Mangwaoo closed it.
     if (!charge) {
       await recordRiderOrder(tx, snapshot, { status: 'CLOSED' });
 
-      return { found: true, commission: null, finished };
+      return { found: true, commission: null, bonus: null, finished };
     }
 
     await lockRider(tx, snapshot.riderId);
@@ -194,25 +205,48 @@ export async function closeOrderChat(chatId: string, options: { charge: boolean 
       percent: settings.commissionPercent,
     };
 
-    if (commission <= 0) {
-      await recordRiderOrder(tx, snapshot, { status: 'DELIVERED', deliveryCharge: baseFee, commission: 0 });
+    // The delivery bonus: a random amount by the distance of the ride (the one the chat remembers, or pickup → drop-off for a
+    // request with a pickup point; unknown counts as the first tier). One per order: this transaction is the only one that
+    // gets past the status guard above, and `bonusChatId` is unique as a second safety.
+    const bonusSettings = await getBonusSettings(tx);
+    const distanceKm =
+      chat.deliveryDistanceKm ??
+      (chat.pickupLatitude !== null && chat.pickupLongitude !== null
+        ? billedDistanceKm(distanceInKm({ lat: chat.pickupLatitude, lng: chat.pickupLongitude }, { lat: chat.latitude, lng: chat.longitude }))
+        : null);
+    const bonus: BonusResult | null = bonusSettings.enabled ? { ...drawBonus(distanceKm, bonusSettings), distanceKm } : null;
 
-      return { found: true, commission: { ...result, change: null }, finished };
+    if (commission > 0) {
+      await tx.riderLedgerEntry.create({
+        data: {
+          riderId: snapshot.riderId,
+          type: 'COMMISSION',
+          amount: -commission,
+          baseAmount: baseFee,
+          chatId,
+          note: `${settings.commissionPercent}% of Rs ${baseFee.toLocaleString('en-PK')} delivery charge · order for ${snapshot.customerName}`,
+        },
+      });
     }
 
-    await tx.riderLedgerEntry.create({
-      data: {
-        riderId: snapshot.riderId,
-        type: 'COMMISSION',
-        amount: -commission,
-        baseAmount: baseFee,
-        chatId,
-        note: `${settings.commissionPercent}% of Rs ${baseFee.toLocaleString('en-PK')} delivery charge · order for ${snapshot.customerName}`,
-      },
-    });
-    await recordRiderOrder(tx, snapshot, { status: 'DELIVERED', deliveryCharge: baseFee, commission });
+    if (bonus) {
+      await tx.riderLedgerEntry.create({
+        data: {
+          riderId: snapshot.riderId,
+          type: 'BONUS',
+          amount: bonus.amount,
+          bonusChatId: chatId,
+          note: `Delivery bonus${bonus.distanceKm !== null ? ` · ${bonus.distanceKm} km` : ''} · order for ${snapshot.customerName}`,
+        },
+      });
+    }
 
-    return { found: true, commission: { ...result, change: await recomputeWallet(tx, snapshot.riderId) }, finished };
+    await recordRiderOrder(tx, snapshot, { status: 'DELIVERED', deliveryCharge: baseFee, commission, bonus: bonus?.amount ?? null });
+
+    // A line was written (a commission, a bonus or both): the rider's numbers and the payment hold follow it.
+    const change = commission > 0 || bonus ? await recomputeWallet(tx, snapshot.riderId) : null;
+
+    return { found: true, commission: { ...result, change }, bonus, finished };
   }, TRANSACTION_OPTIONS);
 }
 

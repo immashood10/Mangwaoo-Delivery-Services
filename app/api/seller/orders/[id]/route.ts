@@ -4,6 +4,7 @@ import { resolveSellerApi } from '@/lib/seller-api';
 import { refreshFoodCatalog, refreshMartCatalog } from '@/lib/catalog-cache';
 import { FINISHED_STATUSES } from '@/lib/seller-types';
 import { releaseCouponIfUnused } from '@/lib/coupons';
+import { ensureLoyaltyInvitation, releaseLoyaltyIfUnused } from '@/lib/loyalty-card';
 import { notifyAfterResponse } from '@/lib/notify';
 import { awardOrderPoints, type OrderKindKey } from '@/lib/points';
 
@@ -48,6 +49,30 @@ async function awardPoints(kind: OrderKindKey, orderId: string) {
   }
 }
 
+/**
+ * A customer whose delivered orders have just reached the number the Loyalty Card needs is invited to apply (once: the
+ * invitation is one row per customer). A problem here is logged and never undoes the delivery: the customer's card page
+ * catches up on anything that was missed.
+ */
+async function inviteToLoyaltyCard(customerId: string) {
+  try {
+    const invite = await ensureLoyaltyInvitation(customerId);
+
+    if (!invite.invited) return;
+
+    notifyAfterResponse(async () => ({
+      userId: invite.customerUserId,
+      type: 'ACCOUNT' as const,
+      title: 'Apply for your Loyalty Card',
+      message: `You have had ${invite.ordersRequired} orders delivered! You can now apply for the Mangwaoo Loyalty Card and get a surprise discount on every order.`,
+      href: '/account/loyalty-card',
+      refId: `loyalty-card:invite:${customerId}`,
+    }));
+  } catch (error) {
+    console.error('Could not invite to the Loyalty Card:', error);
+  }
+}
+
 // Moves an order to its next step (accept → prepare → out for delivery → delivered) or cancels it.
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolved = await resolveSellerApi();
@@ -88,6 +113,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         }
 
         await releaseCouponIfUnused(tx, order.redemptionId);
+        await releaseLoyaltyIfUnused(tx, order.loyaltyRedemptionId);
       }
 
       return true;
@@ -95,7 +121,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (!changed) return conflict();
     if (status === 'CANCELLED') refreshMartCatalog();
-    if (status === 'DELIVERED') await awardPoints('MART', id);
+    if (status === 'DELIVERED') {
+      await awardPoints('MART', id);
+      await inviteToLoyaltyCard(order.customerId);
+    }
 
     return NextResponse.json({ order: { id, status } });
   }
@@ -117,6 +146,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }
 
       await releaseCouponIfUnused(tx, order.redemptionId);
+      await releaseLoyaltyIfUnused(tx, order.loyaltyRedemptionId);
     }
 
     return true;
@@ -124,7 +154,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   if (!changed) return conflict();
   if (status === 'CANCELLED') refreshFoodCatalog();
-  if (status === 'DELIVERED') await awardPoints('GULPLAZA', id);
+  if (status === 'DELIVERED') {
+    await awardPoints('GULPLAZA', id);
+    await inviteToLoyaltyCard(order.customerId);
+  }
 
   return NextResponse.json({ order: { id, status } });
 }

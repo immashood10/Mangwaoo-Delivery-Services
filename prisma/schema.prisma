@@ -187,6 +187,10 @@ model Customer {
   pointsEntries PointsEntry[]
   walletEntries WalletEntry[]
   withdrawals   WalletWithdrawal[]
+
+  // ── Loyalty Card (see lib/loyalty-card.ts) ──
+  loyaltyCard        LoyaltyCard?
+  loyaltyRedemptions LoyaltyRedemption[]
 }
 
 model Seller {
@@ -292,6 +296,9 @@ enum RiderLedgerType {
   COMMISSION
   TOP_UP
   ADJUSTMENT
+  /// A random bonus Mangwaoo pays for a delivered order (see lib/rider-bonus.ts). Positive money on the rider's side, so it is
+  /// set off against the commission the rider owes, like a payment.
+  BONUS
 }
 
 enum RiderTopUpStatus {
@@ -314,6 +321,8 @@ model RiderLedgerEntry {
   chatId     String?         @unique
   /// TOP_UP made from a rider's recharge request.
   topUpId    String?         @unique
+  /// BONUS: the order chat the bonus was paid for. A plain id like `chatId`; unique = one bonus per order.
+  bonusChatId String?        @unique
   note       String?
   createdAt  DateTime        @default(now())
 
@@ -361,6 +370,24 @@ model RiderWalletSettings {
   /// How many finished orders may be unpaid before the rider must pay up to get the next one.
   ordersOnCredit    Int      @default(5)
   updatedAt         DateTime @updatedAt
+}
+
+/// The delivery bonus rule, editable by an admin (Admin > Rider Wallets). A single row with id "default". A rider who completes an
+/// order gets a random bonus (whole PKR) that depends on how far the order was: up to `nearMaxKm` (judged to 0.1 km) a number
+/// from nearMin to nearMax, up to `midMaxKm` one from midMin to midMax, beyond that one from farMin to farMax.
+model RiderBonusSettings {
+  id        String   @id @default("default")
+  /// Off = no new bonuses; the ones already paid stay.
+  enabled   Boolean  @default(true)
+  nearMaxKm Float    @default(3)
+  midMaxKm  Float    @default(5)
+  nearMin   Int      @default(1)
+  nearMax   Int      @default(20)
+  midMin    Int      @default(1)
+  midMax    Int      @default(50)
+  farMin    Int      @default(50)
+  farMax    Int      @default(100)
+  updatedAt DateTime @updatedAt
 }
 
 enum RiderDocumentKind {
@@ -509,7 +536,7 @@ model Order {
   status       OrderStatus @default(PENDING)
   /// The items only (what the seller earns). The customer pays this minus `discountAmount`; MangwaooMart orders have no delivery fee.
   totalAmount  Decimal
-  /// Taken off by the coupon (paid by Mangwaoo, not the seller)
+  /// Taken off by the coupon and the Loyalty Card together (paid by Mangwaoo, not the seller); `loyaltyDiscount` is the card's part
   discountAmount Decimal   @default(0)
   // Optional message from the customer to the vendor, entered at checkout
   note         String?
@@ -532,6 +559,12 @@ model Order {
   coupon     Coupon?  @relation(fields: [couponId], references: [id])
   redemptionId String?
   redemption CouponRedemption? @relation(fields: [redemptionId], references: [id])
+  /// The Loyalty Card discount of this order: its share in PKR (part of `discountAmount`), the % the card drew, and the
+  /// checkout it belongs to (so it can be given back when every order of that checkout is cancelled).
+  loyaltyDiscount     Decimal            @default(0)
+  loyaltyPercent      Int?
+  loyaltyRedemptionId String?
+  loyaltyRedemption   LoyaltyRedemption? @relation(fields: [loyaltyRedemptionId], references: [id], onDelete: SetNull)
 
   items    OrderItem[]
   payment  Payment?
@@ -610,6 +643,10 @@ model RiderChat {
   // delivery fees). null = the chat did not come from a checkout: its charge is then the delivery rate for the ride
   // from the pickup to the drop-off (minimumFeeForChat). Mangwaoo's commission is a percentage of this.
   deliveryCharge  Int?
+  // How far the ride is, in km (judged to 0.1 km): the longest restaurant → customer distance of the checkout(s) that opened
+  // the chat, or the pickup → drop-off distance of a chat with a pickup point. null = not known (MangwaooMart only, older chats).
+  // The tier of the rider's delivery bonus follows it.
+  deliveryDistanceKm Float?
   status          RiderChatStatus @default(OPEN)
   claimedAt       DateTime?
   createdAt       DateTime        @default(now())
@@ -661,6 +698,8 @@ model RiderOrderRecord {
   /// Delivered orders: the delivery charge in whole PKR and what Mangwaoo took from it.
   deliveryCharge Int?
   commission     Int?
+  /// Delivered orders: the delivery bonus Mangwaoo paid for it, in whole PKR (null = none: before bonuses existed, or switched off).
+  bonus          Int?
   takenAt        DateTime
   endedAt        DateTime               @default(now())
 
@@ -874,7 +913,7 @@ model GulplazaOrder {
   totalAmount  Decimal
   /// Fuel cost of the ride from the restaurant to the customer (see lib/delivery.ts), paid to the rider
   deliveryFee  Decimal     @default(0)
-  /// Taken off by the coupon (paid by Mangwaoo, not the seller)
+  /// Taken off by the coupon and the Loyalty Card together (paid by Mangwaoo, not the seller); `loyaltyDiscount` is the card's part
   discountAmount Decimal   @default(0)
   // Optional message from the customer to the vendor, entered at checkout
   note         String?
@@ -895,6 +934,12 @@ model GulplazaOrder {
   coupon     Coupon?  @relation(fields: [couponId], references: [id])
   redemptionId String?
   redemption CouponRedemption? @relation(fields: [redemptionId], references: [id])
+  /// The Loyalty Card discount of this order: its share in PKR (part of `discountAmount`), the % the card drew, and the
+  /// checkout it belongs to (so it can be given back when every order of that checkout is cancelled).
+  loyaltyDiscount     Decimal            @default(0)
+  loyaltyPercent      Int?
+  loyaltyRedemptionId String?
+  loyaltyRedemption   LoyaltyRedemption? @relation(fields: [loyaltyRedemptionId], references: [id], onDelete: SetNull)
 
   items   GulplazaOrderItem[]
   payment GulplazaPayment?
@@ -1260,5 +1305,84 @@ model LoyaltySettings {
   minWithdrawal  Int      @default(1)
   /// Orders with items worth less than this win no points (PKR; 0 = every delivered order wins).
   minOrderAmount Int      @default(0)
+  updatedAt      DateTime @updatedAt
+}
+
+// ── Loyalty Card (see lib/loyalty-card.ts) ──────────────────
+
+enum LoyaltyCardStatus {
+  /// Delivered enough orders to apply; has not applied yet
+  ELIGIBLE
+  /// Applied; waiting for an admin
+  PENDING
+  /// The card is active: every order gets a surprise discount
+  APPROVED
+  /// An admin turned the application down (the customer may apply again)
+  REJECTED
+  /// An admin took the card back
+  REVOKED
+}
+
+/// A customer's Mangwaoo Loyalty Card: one row per customer, from the moment they are eligible (after enough delivered
+/// orders) through their application and the admin's decision to, once approved, a random discount on every order.
+model LoyaltyCard {
+  id           String            @id @default(cuid())
+  customerId   String            @unique
+  customer     Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// The number on the card (MW-LC10001): numbered by the database in the order the rows are made, never reused.
+  cardNumber   Int               @unique @default(autoincrement())
+  status       LoyaltyCardStatus @default(ELIGIBLE)
+  /// APPROVED: the discount % (random, from the rules' range) the customer's NEXT order gets. Drawn when the card is
+  /// approved and again each time an order uses it; given back when every order of that checkout is cancelled.
+  nextPercent  Int?
+  eligibleAt   DateTime          @default(now())
+  appliedAt    DateTime?
+  approvedAt   DateTime?
+  /// The admin who approved, turned down or took back the card (a plain id), and when.
+  reviewedById String?
+  reviewedAt   DateTime?
+  /// The reason the admin gave for turning the application down or taking the card back.
+  note         String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  redemptions LoyaltyRedemption[]
+
+  @@index([status, appliedAt])
+}
+
+/// One row per checkout that used a Loyalty Card discount (a checkout can create several orders). `percent` is what the
+/// card drew, `amount` what it took off in PKR; `releasedAt` is set when every order of the checkout ended up cancelled
+/// (the percent then goes back on the card, like a coupon use).
+model LoyaltyRedemption {
+  id         String      @id @default(cuid())
+  cardId     String
+  card       LoyaltyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  percent    Int
+  amount     Int
+  createdAt  DateTime    @default(now())
+  releasedAt DateTime?
+
+  orders         Order[]
+  gulplazaOrders GulplazaOrder[]
+
+  @@index([cardId, createdAt])
+  @@index([customerId])
+}
+
+/// The rules of the Loyalty Card, editable by an admin (Admin > Loyalty Cards). A single row with id "default".
+model LoyaltyCardSettings {
+  id             String   @id @default("default")
+  /// Off = no new invitations or applications and no discounts; cards stay as they are.
+  enabled        Boolean  @default(true)
+  /// Delivered orders a customer needs before they can apply.
+  ordersRequired Int      @default(20)
+  /// Every order of a card holder gets a random discount from percentMin to percentMax percent.
+  percentMin     Int      @default(1)
+  percentMax     Int      @default(10)
+  /// The most one checkout can be reduced by (PKR); 0 = no limit.
+  maxDiscount    Int      @default(0)
   updatedAt      DateTime @updatedAt
 }

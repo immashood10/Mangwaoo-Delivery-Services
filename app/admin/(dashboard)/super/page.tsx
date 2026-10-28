@@ -6,6 +6,7 @@ import {
   Bike,
   Crown,
   Flag,
+  Gift,
   Package,
   ShieldCheck,
   ShoppingCart,
@@ -273,6 +274,13 @@ export default async function SuperOverviewPage({ searchParams }: { searchParams
                 <div>
                   <p className="text-xs text-brand-gray">Riders still owe Mangwaoo</p>
                   <p className="font-bold text-ink">{pkr(data.system.owedByRiders)}</p>
+                </div>
+              </li>
+              <li className="flex items-center gap-3 rounded-xl bg-brand-light p-3">
+                <Gift className="h-5 w-5 shrink-0 text-accent" />
+                <div>
+                  <p className="text-xs text-brand-gray">Rider delivery bonuses paid (a cost to Mangwaoo)</p>
+                  <p className="font-bold text-ink">{pkr(data.system.bonusesPaid)}</p>
                 </div>
               </li>
               <li>
