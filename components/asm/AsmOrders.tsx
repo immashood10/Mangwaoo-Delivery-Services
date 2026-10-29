@@ -51,9 +51,11 @@ function waitingFor(iso: string) {
 function AssignPanel({
   chat,
   onAssigned,
+  onUnassigned,
 }: {
   chat: ManagerChatRow;
   onAssigned: (chatId: string, rider: { id: string; name: string }) => void;
+  onUnassigned: (chatId: string, riderName: string) => void;
 }) {
   const hasRider = chat.status === 'ACTIVE';
   // A waiting order shows the riders at once; one that has a rider shows them when the manager wants to change it.
@@ -64,6 +66,7 @@ function AssignPanel({
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<AssignableRider | null>(null);
+  const [confirmUnassign, setConfirmUnassign] = useState(false);
 
   useEffect(() => {
     if (!picking) return;
@@ -154,6 +157,9 @@ function AssignPanel({
           >
             Change rider
           </button>
+          <button type="button" onClick={() => setConfirmUnassign(true)} className="rounded-full border border-gray-300 px-3 py-1.5 text-xs font-semibold text-danger hover:border-danger">
+            Remove rider
+          </button>
         </div>
       ) : (
         <>
@@ -240,6 +246,27 @@ function AssignPanel({
             return problem;
           }}
           onCancel={() => setConfirmTarget(null)}
+        />
+      ) : null}
+      {confirmUnassign ? (
+        <ConfirmDialog
+          title="Remove this rider?"
+          message={`Remove ${chat.riderName ?? 'the rider'} from this order?`}
+          note="The order returns to your waiting list, and both the rider and customer are notified."
+          confirmLabel="Remove rider"
+          onConfirm={async () => {
+            try {
+              const response = await fetch(`/api/asm/chats/${chat.id}/unassign`, { method: 'POST' });
+              const data = await response.json().catch(() => null);
+              if (!response.ok) return data?.error ?? 'Could not remove the rider.';
+              onUnassigned(chat.id, chat.riderName ?? 'The rider');
+              setConfirmUnassign(false);
+              return null;
+            } catch {
+              return 'Could not reach the server.';
+            }
+          }}
+          onCancel={() => setConfirmUnassign(false)}
         />
       ) : null}
     </div>
@@ -370,6 +397,11 @@ export default function AsmOrders() {
     setNotice(`The order was given to ${rider.name}. They and the customer were told.`);
   };
 
+  const handleUnassigned = (chatId: string, riderName: string) => {
+    setChats((current) => current.map((chat) => (chat.id === chatId ? { ...chat, status: 'OPEN', riderId: null, riderName: null } : chat)));
+    setNotice(`${riderName} was removed. The order is back in the waiting list.`);
+  };
+
   return (
     <div className="space-y-4">
       <div>
@@ -495,7 +527,7 @@ export default function AsmOrders() {
                 </div>
               </div>
               <RouteSummary chat={selectedChat} className="max-h-40 shrink-0 overflow-y-auto border-b border-gray-100 px-4 py-2.5" />
-              <AssignPanel key={selectedChat.id} chat={selectedChat} onAssigned={handleAssigned} />
+              <AssignPanel key={selectedChat.id} chat={selectedChat} onAssigned={handleAssigned} onUnassigned={handleUnassigned} />
               <div className="h-[24rem] min-h-0">
                 <RiderChatThread
                   key={selectedChat.id}

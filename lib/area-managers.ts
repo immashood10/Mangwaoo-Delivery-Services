@@ -401,6 +401,7 @@ export async function listAssignableRiders(from: Coordinates | null): Promise<As
       lastSeenAt: true,
       lastLatitude: true,
       lastLongitude: true,
+      locationUpdatedAt: true,
       orderAccess: true,
       paymentHold: true,
       unpaidOrders: true,
@@ -433,6 +434,9 @@ export async function listAssignableRiders(from: Coordinates | null): Promise<As
       hold,
       canAssign: online && hold === null,
       reason,
+      location: position && rider.locationUpdatedAt
+        ? { ...position, updatedAt: rider.locationUpdatedAt.toISOString() }
+        : null,
     };
 
     return { row, lastSeen: rider.lastSeenAt?.getTime() ?? 0 };

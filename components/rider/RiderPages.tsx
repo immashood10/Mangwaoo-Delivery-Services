@@ -7,6 +7,7 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import { RiderRatingLabel } from '@/components/StarRating';
 import RiderChatThread from '@/components/RiderChatThread';
 import SupportChat from '@/components/SupportChat';
+import ManagerMessages from '@/components/rider/ManagerMessages';
 import RiderFacePhotoCard from '@/components/rider/RiderFacePhotoCard';
 import { holdMessage, useRider } from '@/components/rider/RiderShell';
 import type { RiderChatSummary } from '@/lib/rider-chat-types';
@@ -478,6 +479,7 @@ export function RiderMessages() {
   return (
     <div>
       <h1 className="mb-4 text-2xl font-bold text-ink">Messages</h1>
+      <ManagerMessages />
       <SupportChat
         emptyState={
           <div className="rounded-2xl bg-surface p-8 text-center shadow-soft">

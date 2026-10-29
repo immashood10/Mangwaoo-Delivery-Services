@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Bike } from 'lucide-react';
+import AsmRiderConversation from '@/components/asm/AsmRiderConversation';
 import { RiderRatingLabel } from '@/components/StarRating';
 import type { AssignableRider } from '@/lib/area-managers-config';
 import { formatDistance } from '@/lib/geo';
@@ -90,6 +91,18 @@ export default function AsmRiders() {
                 <span>{rider.activeOrders === 0 ? 'No order now' : `${rider.activeOrders} ${rider.activeOrders === 1 ? 'order' : 'orders'} now`}</span>
                 <RiderRatingLabel rating={rider.rating} className="!font-normal" />
               </p>
+              {rider.location ? (
+                <a
+                  href={`https://www.google.com/maps?q=${rider.location.lat},${rider.location.lng}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline"
+                >
+                  Last known location · {new Date(rider.location.updatedAt).toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' })}
+                </a>
+              ) : (
+                <p className="mt-2 text-xs text-brand-gray">Location not shared yet</p>
+              )}
               <p className={`mt-2 text-xs font-semibold ${rider.hold ? 'text-danger' : rider.online ? 'text-success' : 'text-brand-gray'}`}>
                 {rider.hold
                   ? `${rider.reason}${rider.hold === 'PAYMENT' ? ` (${rider.unpaidOrders} unpaid ${rider.unpaidOrders === 1 ? 'order' : 'orders'})` : ''}`
@@ -97,6 +110,7 @@ export default function AsmRiders() {
                     ? 'Can take an order'
                     : 'Offline'}
               </p>
+              <AsmRiderConversation riderId={rider.id} riderName={rider.name} />
             </li>
           ))}
         </ul>

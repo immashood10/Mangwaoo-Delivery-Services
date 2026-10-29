@@ -122,4 +122,5 @@ export type AssignableRider = {
   canAssign: boolean;
   /** One short line for the screen when `canAssign` is false. */
   reason: string | null;
+  location: { lat: number; lng: number; updatedAt: string } | null;
 };
