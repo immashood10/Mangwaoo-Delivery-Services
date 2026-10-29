@@ -3,8 +3,8 @@
 // How it works: Mangwaoo keeps a percentage (30 % to start with) of the delivery charge of every order a rider
 // finishes. Each finished order adds a COMMISSION line to the rider's wallet (a negative amount); the rider pays by
 // sending money to Mangwaoo and an admin adds it (TOP_UP). A rider may have a few finished orders unpaid
-// ("orders on credit", 5 to start with); once that many are unpaid the rider is not eligible for the next order until
-// the commission is paid. An admin can override this for one rider (always allow / block). A rider also gets a random delivery
+// (“orders on credit”, 5 to start with); once that many are unpaid the rider is not eligible for the next order until
+// the commission is paid. An admin can block a rider, but cannot bypass an unpaid-payment hold. A rider also gets a random delivery
 // bonus for every order they complete (a BONUS line, positive money: lib/rider-bonus-config.ts), which counts like a payment.
 
 import { deliveryFeeForDistance } from '@/lib/delivery';
@@ -34,16 +34,15 @@ export const RECHARGE_TITLE = 'Please recharge your account';
 
 export const ACCESS_LABELS: Record<RiderOrderAccess, string> = {
   AUTO: 'Automatic (by payments)',
-  ALLOWED: 'Always allowed',
+  ALLOWED: 'Manual allow',
   BLOCKED: 'Blocked',
 };
 
 /** Whether the rider may receive the next order, as far as the wallet and the admin are concerned. */
 export function riderHold(rider: { orderAccess: RiderOrderAccess; paymentHold: boolean }): RiderHold {
+  if (rider.paymentHold) return 'PAYMENT';
   if (rider.orderAccess === 'BLOCKED') return 'ADMIN';
-  if (rider.orderAccess === 'ALLOWED') return null;
-
-  return rider.paymentHold ? 'PAYMENT' : null;
+  return null;
 }
 
 /** Mangwaoo's share of `fee`, in whole PKR (rounded up). */

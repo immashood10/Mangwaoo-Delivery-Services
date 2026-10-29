@@ -83,6 +83,14 @@ export async function POST(request: NextRequest) {
           : null;
 
         chat = opened?.chat ? { id: opened.chat.id } : null;
+        if (chat) {
+          const martIds = orders.filter((order) => order.marketplace === 'mart').map((order) => order.id);
+          const foodIds = orders.filter((order) => order.marketplace === 'gulplaza').map((order) => order.id);
+          await Promise.all([
+            martIds.length ? prisma.order.updateMany({ where: { id: { in: martIds }, customerId: resolved.customer.id }, data: { riderChatId: chat.id } }) : Promise.resolve(),
+            foodIds.length ? prisma.gulplazaOrder.updateMany({ where: { id: { in: foodIds }, customerId: resolved.customer.id }, data: { riderChatId: chat.id } }) : Promise.resolve(),
+          ]);
+        }
       } catch {
         chat = null;
       }

@@ -71,7 +71,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
 function notifyStanding(rider: { id: string; userId: string }, change: WalletChange, lead: string) {
   // What the rider reads: what happened, and whether they can receive orders again.
-  const released = change.endedHold && change.orderAccess === 'AUTO';
+  const released = change.endedHold;
 
   notifyAfterResponse(async () => ({
     userId: rider.userId,

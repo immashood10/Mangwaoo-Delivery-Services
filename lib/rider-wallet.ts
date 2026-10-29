@@ -90,8 +90,8 @@ async function recomputeWallet(tx: Tx, riderId: string, options: { relax?: boole
       walletBalance: balance,
       unpaidOrders,
       paymentHold,
-      // A rider who just lost the right to orders goes offline at once (an admin's "always allowed" keeps them on).
-      ...(startedHold && rider.orderAccess === 'AUTO' ? { isAvailable: false, lastSeenAt: null } : {}),
+      // A rider who just reached the unpaid-order limit goes offline at once, regardless of the manual allow setting.
+      ...(startedHold ? { isAvailable: false, lastSeenAt: null } : {}),
     },
   });
 
@@ -128,6 +128,8 @@ export type CloseResult = {
   bonus: BonusResult | null;
   /** Set when this call ended an order a rider had taken (so the customer can be told, and asked to rate the rider). */
   finished: { riderName: string; customerUserId: string; customerName: string } | null;
+  /** Marketplace orders linked to this rider chat and completed in the same transaction. */
+  deliveredOrders: { kind: 'MART' | 'GULPLAZA'; id: string }[];
 };
 
 /**
@@ -150,13 +152,13 @@ export async function closeOrderChat(chatId: string, options: { charge: boolean 
     if (closed.count === 0) {
       const existing = await tx.riderChat.findUnique({ where: { id: chatId }, select: { status: true } });
 
-      if (!existing) return { found: false, commission: null, bonus: null, finished: null };
+      if (!existing) return { found: false, commission: null, bonus: null, finished: null, deliveredOrders: [] };
 
       if (existing.status === 'OPEN') {
         await tx.riderChat.updateMany({ where: { id: chatId, status: 'OPEN' }, data: { status: 'CLOSED' } });
       }
 
-      return { found: true, commission: null, bonus: null, finished: null };
+      return { found: true, commission: null, bonus: null, finished: null, deliveredOrders: [] };
     }
 
     const chat = await tx.riderChat.findUnique({
@@ -174,7 +176,7 @@ export async function closeOrderChat(chatId: string, options: { charge: boolean 
     });
     const snapshot = chat ? orderSnapshot(chat) : null;
 
-    if (!chat || !snapshot || !chat.rider) return { found: true, commission: null, bonus: null, finished: null };
+    if (!chat || !snapshot || !chat.rider) return { found: true, commission: null, bonus: null, finished: null, deliveredOrders: [] };
 
     const finished = { riderName: chat.rider.user.name, customerUserId: chat.customer.userId, customerName: snapshot.customerName };
 
@@ -182,7 +184,7 @@ export async function closeOrderChat(chatId: string, options: { charge: boolean 
     if (!charge) {
       await recordRiderOrder(tx, snapshot, { status: 'CLOSED' });
 
-      return { found: true, commission: null, bonus: null, finished };
+      return { found: true, commission: null, bonus: null, finished, deliveredOrders: [] };
     }
 
     await lockRider(tx, snapshot.riderId);
@@ -243,10 +245,23 @@ export async function closeOrderChat(chatId: string, options: { charge: boolean 
 
     await recordRiderOrder(tx, snapshot, { status: 'DELIVERED', deliveryCharge: baseFee, commission, bonus: bonus?.amount ?? null });
 
+    // A cart checkout can create multiple seller orders under one rider chat. Completing that delivery also completes
+    // those customer orders, which makes them appear in history and lets the points award run from the same delivery.
+    const mart = await tx.order.findMany({ where: { riderChatId: chatId, status: { not: 'CANCELLED' } }, select: { id: true } });
+    const food = await tx.gulplazaOrder.findMany({ where: { riderChatId: chatId, status: { not: 'CANCELLED' } }, select: { id: true } });
+    await tx.order.updateMany({ where: { riderChatId: chatId, status: { not: 'CANCELLED' } }, data: { status: 'DELIVERED', deliveredAt: new Date() } });
+    await tx.gulplazaOrder.updateMany({ where: { riderChatId: chatId, status: { not: 'CANCELLED' } }, data: { status: 'DELIVERED', deliveredAt: new Date() } });
+
     // A line was written (a commission, a bonus or both): the rider's numbers and the payment hold follow it.
     const change = commission > 0 || bonus ? await recomputeWallet(tx, snapshot.riderId) : null;
 
-    return { found: true, commission: { ...result, change }, bonus, finished };
+    return {
+      found: true,
+      commission: { ...result, change },
+      bonus,
+      finished,
+      deliveredOrders: [...mart.map((order) => ({ kind: 'MART' as const, id: order.id })), ...food.map((order) => ({ kind: 'GULPLAZA' as const, id: order.id }))],
+    };
   }, TRANSACTION_OPTIONS);
 }
 

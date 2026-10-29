@@ -621,10 +621,14 @@ model Order {
   loyaltyPercent      Int?
   loyaltyRedemptionId String?
   loyaltyRedemption   LoyaltyRedemption? @relation(fields: [loyaltyRedemptionId], references: [id], onDelete: SetNull)
+  riderChatId String?
+  riderChat RiderChat? @relation("RiderChatMartOrders", fields: [riderChatId], references: [id], onDelete: SetNull)
 
   items    OrderItem[]
   payment  Payment?
   tracking DeliveryTracking?
+
+  @@index([riderChatId])
 }
 
 enum OrderStatus {
@@ -714,6 +718,8 @@ model RiderChat {
 
   messages    RiderChatMessage[]
   attachments RiderChatAttachment[]
+  martOrders  Order[] @relation("RiderChatMartOrders")
+  foodOrders  GulplazaOrder[] @relation("RiderChatFoodOrders")
 
   @@index([status])
   @@index([areaId, status])
@@ -1007,9 +1013,13 @@ model GulplazaOrder {
   loyaltyPercent      Int?
   loyaltyRedemptionId String?
   loyaltyRedemption   LoyaltyRedemption? @relation(fields: [loyaltyRedemptionId], references: [id], onDelete: SetNull)
+  riderChatId String?
+  riderChat RiderChat? @relation("RiderChatFoodOrders", fields: [riderChatId], references: [id], onDelete: SetNull)
 
   items   GulplazaOrderItem[]
   payment GulplazaPayment?
+
+  @@index([riderChatId])
 }
 
 model GulplazaOrderItem {

@@ -92,7 +92,7 @@ export default async function AdminRiderWalletsPage() {
       <p className="mb-8 text-brand-gray">
         Mangwaoo keeps {settings.commissionPercent}% of the delivery charge of every order a rider completes. A rider can have {settings.ordersOnCredit}{' '}
         finished orders unpaid; after that they can&apos;t receive the next order until they pay. You decide who is eligible: add the payments you
-        receive, remind riders to recharge, or allow / block a rider yourself.
+        receive or remind riders to recharge. A rider with {settings.ordersOnCredit} unpaid orders is marked a defaulter and cannot receive another order until the balance is paid; the manual allow setting cannot bypass this payment hold.
       </p>
 
       <AdminRiderWallets

@@ -4,6 +4,7 @@ import { notifyAdminsAfterResponse, notifyAfterResponse } from '@/lib/notify';
 import { ADMIN_PAGES } from '@/lib/notification-types';
 import { closeOrderChat } from '@/lib/rider-wallet';
 import { RECHARGE_TITLE, formatPkr, rechargeMessage } from '@/lib/rider-wallet-config';
+import { awardOrderPoints } from '@/lib/points';
 
 /**
  * Finishes a delivered order: the rider's "Complete order" or the customer's "Order received". When a rider had taken
@@ -29,10 +30,18 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Reply first to take this order.' }, { status: 403 });
   }
 
-  const { found, commission: result, bonus, finished } = await closeOrderChat(id, { charge: access.role !== 'ADMIN' });
+  const { found, commission: result, bonus, finished, deliveredOrders } = await closeOrderChat(id, { charge: access.role !== 'ADMIN' });
 
   if (!found) {
     return NextResponse.json({ error: 'This order chat is no longer available.' }, { status: 404 });
+  }
+
+  for (const order of deliveredOrders) {
+    try {
+      await awardOrderPoints(order.kind, order.id);
+    } catch (error) {
+      console.error('Could not award points for rider-delivered order', order.id, error);
+    }
   }
 
   // The rider says it is delivered: the customer may not be looking at the chat, so they are told and asked to rate the ride.
@@ -60,7 +69,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   }
 
   // A bonus that covers what the rider owed ends their payment hold.
-  if (result?.change?.endedHold && result.change.orderAccess === 'AUTO') {
+  if (result?.change?.endedHold) {
     notifyAfterResponse(async () => ({
       userId: result.riderUserId,
       type: 'ACCOUNT' as const,
@@ -71,7 +80,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     }));
   }
 
-  if (result?.change?.startedHold && result.change.orderAccess === 'AUTO') {
+  if (result?.change?.startedHold) {
     const { change } = result;
 
     // The rider is told to recharge; the admins see who is now on hold.
@@ -101,7 +110,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
             baseFee: result.baseFee,
             percent: result.percent,
             balance: result.change?.balance ?? null,
-            onHold: result.change ? result.change.paymentHold && result.change.orderAccess === 'AUTO' : false,
+            onHold: result.change ? result.change.paymentHold : false,
           },
         }
       : {}),

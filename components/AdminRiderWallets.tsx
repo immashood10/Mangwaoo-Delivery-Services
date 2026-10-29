@@ -270,11 +270,11 @@ function StatusChip({ rider }: { rider: WalletRider }) {
   }
 
   if (rider.hold === 'PAYMENT') {
-    return <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-danger">Not eligible · unpaid commission</span>;
+    return <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-danger">Defaulter · unpaid commission</span>;
   }
 
   if (rider.orderAccess === 'ALLOWED') {
-    return <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-info">Always allowed</span>;
+    return <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-info">Manual allow</span>;
   }
 
   return <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-semibold text-success">Eligible for next order</span>;

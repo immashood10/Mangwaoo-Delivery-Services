@@ -37,7 +37,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
 
-    const released = result.change?.endedHold && result.change.orderAccess === 'AUTO';
+    const released = result.change?.endedHold;
 
     notifyAfterResponse(async () => ({
       userId: result.riderUserId,
