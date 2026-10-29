@@ -75,6 +75,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 longitude: true,
                 pickupLatitude: true,
                 pickupLongitude: true,
+                areaId: true,
               },
             }),
             prisma.riderChatMessage.findMany({
@@ -105,14 +106,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             lastWrite = Date.now();
           }
 
-          if (chat.status === 'OPEN' && Date.now() - lastNearbyCheck > NEARBY_RIDERS_INTERVAL_MS) {
+          // An order with an area manager is not offered to riders, so there is no "riders nearby" to count.
+          const isOpenToRiders = chat.status === 'OPEN' && chat.areaId === null;
+
+          if (isOpenToRiders && Date.now() - lastNearbyCheck > NEARBY_RIDERS_INTERVAL_MS) {
             nearbyRiderCount = ridersForLocation(chatDispatchPoint(chat), await getOnlineRiders()).length;
             lastNearbyCheck = Date.now();
           }
 
-          // Names/address only change when the status or rider does, so the
+          // Names/address only change when the status, the rider or the area manager does, so the
           // heavier summary read happens only then.
-          const stateKey = `${chat.status}:${chat.riderId ?? ''}`;
+          const stateKey = `${chat.status}:${chat.riderId ?? ''}:${chat.areaId ?? ''}`;
           if (stateKey !== lastStateKey || !summary) {
             summary = await getRiderChatSummary(id);
             lastStateKey = stateKey;
@@ -124,7 +128,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
           const chatJson = JSON.stringify({
             ...summary,
-            nearbyRiderCount: chat.status === 'OPEN' ? nearbyRiderCount : 0,
+            nearbyRiderCount: isOpenToRiders ? nearbyRiderCount : 0,
           });
           if (chatJson !== lastChatJson) {
             lastChatJson = chatJson;

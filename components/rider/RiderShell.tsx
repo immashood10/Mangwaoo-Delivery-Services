@@ -15,6 +15,7 @@ import {
   LogOut,
   Menu,
   MessagesSquare,
+  Navigation,
   Wallet,
   X,
   type LucideIcon,
@@ -59,11 +60,17 @@ type RiderContextValue = {
   toggleOnline: () => Promise<void>;
   requests: RiderChatSummary[];
   chats: RiderChatSummary[];
+  /** The rider has an order in hand: their position goes to the customer who is following it (components/OrderTracker.tsx). */
+  delivering: boolean;
   /** Takes a chat out of the lists at once (the rider just cancelled it, or it was cancelled under them). */
   dropChat: (chatId: string) => void;
 };
 
 const RiderContext = createContext<RiderContextValue | null>(null);
+
+// The position is sent at most this often (a GPS watch can fire every second while moving): often enough for a smooth live map,
+// rarely enough to spare the phone's battery and the database.
+const POSITION_MIN_GAP_MS = 4000;
 
 export function useRider() {
   const context = useContext(RiderContext);
@@ -95,6 +102,9 @@ function RiderProvider({
   const [requests, setRequests] = useState<RiderChatSummary[]>([]);
   const [chats, setChats] = useState<RiderChatSummary[]>([]);
   const coords = useRef<{ lat: number; lng: number } | null>(null);
+  const lastPresenceAt = useRef(0);
+  // An order in hand: the rider's accepted chats (ACTIVE) are what the 5-second poll below brings.
+  const delivering = chats.length > 0;
   // Chats cancelled here: a poll that was already on its way must not bring them back (ids are never reused).
   const droppedChats = useRef(new Set<string>());
   // What the previous poll saw, to tell what has just arrived (null until the first poll has answered).
@@ -137,17 +147,92 @@ function RiderProvider({
         coords.current = { lat: position.coords.latitude, lng: position.coords.longitude };
         setHasLocation(true);
         setError('');
-        void sendPresence(true);
+
+        if (Date.now() - lastPresenceAt.current >= POSITION_MIN_GAP_MS) {
+          lastPresenceAt.current = Date.now();
+          void sendPresence(true);
+        }
       },
       () => setError('Please allow location access so customers can be matched to you.'),
       { enableHighAccuracy: true, maximumAge: 15000 }
     );
-    const timer = window.setInterval(() => void sendPresence(true), 20000);
+    const timer = window.setInterval(() => {
+      lastPresenceAt.current = Date.now();
+      void sendPresence(true);
+    }, 20000);
     return () => {
       navigator.geolocation.clearWatch(watchId);
       window.clearInterval(timer);
     };
   }, [isOnline, rider.isApproved, sendPresence]);
+
+  // While a rider has an order in hand the customer follows them live. An online rider's position already goes out with the
+  // heartbeat above; one who switched themselves offline (or is on payment hold: they may still finish the orders they hold)
+  // sends it through the delivery ping, which writes the position and nothing else, so it never offers them for new requests.
+  useEffect(() => {
+    if (!rider.isApproved || !delivering || isOnline || !navigator.geolocation) return;
+
+    let lastSent = 0;
+    const send = (lat: number, lng: number) => {
+      lastSent = Date.now();
+      void fetch('/api/rider/location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat, lng }),
+      }).catch(() => undefined);
+    };
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        coords.current = { lat: position.coords.latitude, lng: position.coords.longitude };
+        setHasLocation(true);
+        setError('');
+
+        if (Date.now() - lastSent >= POSITION_MIN_GAP_MS) send(position.coords.latitude, position.coords.longitude);
+      },
+      () => setError('Please allow location access so your customer can follow you.'),
+      { enableHighAccuracy: true, maximumAge: 10000 }
+    );
+    const timer = window.setInterval(() => {
+      if (coords.current && Date.now() - lastSent >= POSITION_MIN_GAP_MS) send(coords.current.lat, coords.current.lng);
+    }, 10000);
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      window.clearInterval(timer);
+    };
+  }, [rider.isApproved, delivering, isOnline]);
+
+  // A phone that locks its screen stops sending its position, so the customer's map would freeze: keep the screen awake while
+  // an order is in hand (where the browser allows it; otherwise nothing changes).
+  useEffect(() => {
+    if (!delivering || !('wakeLock' in navigator)) return;
+
+    let lock: WakeLockSentinel | null = null;
+    let stopped = false;
+
+    const acquire = async () => {
+      try {
+        const sentinel = await navigator.wakeLock.request('screen');
+
+        if (stopped) void sentinel.release();
+        else lock = sentinel;
+      } catch {
+        // Not allowed right now (low battery, hidden page): harmless, tracking still works while the screen is on.
+      }
+    };
+    const reacquire = () => {
+      if (document.visibilityState === 'visible' && (!lock || lock.released)) void acquire();
+    };
+
+    void acquire();
+    document.addEventListener('visibilitychange', reacquire);
+
+    return () => {
+      stopped = true;
+      document.removeEventListener('visibilitychange', reacquire);
+      void lock?.release();
+    };
+  }, [delivering]);
 
   useEffect(() => {
     enableNotificationSound();
@@ -170,8 +255,10 @@ function RiderProvider({
 
           return before !== undefined && before !== chat.updatedAt && chat.lastMessageFrom === 'CUSTOMER';
         });
+        // An order an area manager gave this rider appears among their chats without ever having been a request to reply to.
+        const newAssignment = nextChats.some((chat) => !knownChats.has(chat.id) && !knownRequests.has(chat.id));
 
-        if (newRequest || newCustomerMessage) playNotificationSound();
+        if (newRequest || newCustomerMessage || newAssignment) playNotificationSound();
       }
 
       knownRequestIds.current = new Set(nextRequests.map((chat) => chat.id));
@@ -229,8 +316,8 @@ function RiderProvider({
   }, []);
 
   const value = useMemo(
-    () => ({ rider, wallet, rules, isOnline, hasLocation, error, toggleOnline, requests, chats, dropChat }),
-    [rider, wallet, rules, isOnline, hasLocation, error, toggleOnline, requests, chats, dropChat]
+    () => ({ rider, wallet, rules, isOnline, hasLocation, error, toggleOnline, requests, chats, delivering, dropChat }),
+    [rider, wallet, rules, isOnline, hasLocation, error, toggleOnline, requests, chats, delivering, dropChat]
   );
 
   return <RiderContext.Provider value={value}>{children}</RiderContext.Provider>;
@@ -370,6 +457,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 function Frame({ children }: { children: ReactNode }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const pathname = usePathname();
+  const { delivering, hasLocation } = useRider();
   const currentLabel = RIDER_LINKS.find((link) => isActive(pathname, link.href))?.label ?? 'Rider dashboard';
 
   useEffect(() => {
@@ -425,7 +513,25 @@ function Frame({ children }: { children: ReactNode }) {
           <p className="text-sm font-semibold text-brand-gray">{currentLabel}</p>
           <UserNotificationBell />
         </header>
-        <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">{children}</div>
+        <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+          {/* The customer's tracking page shows this rider live while they hold an order, so they are told it is happening. */}
+          {delivering ? (
+            <div
+              role="status"
+              data-testid="delivery-location-notice"
+              className={`mb-6 flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
+                hasLocation ? 'border-green-200 bg-green-50 text-success' : 'border-yellow-200 bg-yellow-50 text-warning'
+              }`}
+            >
+              <Navigation className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <p>
+                <span className="font-semibold">Your customer can follow you live while you deliver.</span>{' '}
+                {hasLocation ? 'Keep this page open and your location on.' : 'Waiting for your location: please allow location access.'}
+              </p>
+            </div>
+          ) : null}
+          {children}
+        </div>
       </div>
     </div>
   );

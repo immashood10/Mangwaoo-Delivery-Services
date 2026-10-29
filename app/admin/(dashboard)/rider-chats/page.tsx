@@ -24,7 +24,8 @@ export default async function AdminRiderChatsPage({ searchParams }: { searchPara
       </div>
       <h1 className="text-3xl font-bold text-ink mb-2">Order Chats</h1>
       <p className="text-brand-gray mb-8">
-        Every customer order chat. Unclaimed chats wait for the nearest rider — you can reply to any of them as
+        Every customer order chat. An order typed in the Chat window waits for the Area Sales Manager of the customer&apos;s area to pick
+        a rider (an area without a manager, and every cart order, waits for the first rider to reply). You can reply to any of them as
         Mangwaoo Support.
       </p>
 

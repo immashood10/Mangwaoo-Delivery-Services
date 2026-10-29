@@ -27,7 +27,9 @@ function createPrismaClient() {
   // fresh TLS handshake (multiple seconds) to db.prisma.io. Keep them alive longer.
   const adapter = new PrismaPg({
     connectionString: process.env.DATABASE_URL,
-    max: 10,
+    // 10 connections per server. A PC running the dev server AND test scripts against Supabase's session pooler (15 clients in all)
+    // can lower it with DATABASE_POOL_MAX (for example 7 for the dev server and 3 for a test script).
+    max: Number(process.env.DATABASE_POOL_MAX) || 10,
     idleTimeoutMillis: 5 * 60 * 1000,
   });
 

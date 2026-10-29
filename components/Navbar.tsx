@@ -4,8 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Menu, X, MapPin, LocateFixed, Search, ShoppingCart, ChevronDown, Store, LogOut, ShieldCheck, PackageSearch, House, Briefcase, Heart, Trash2, Bike, MessagesSquare, LayoutDashboard, Settings, History, Gift, CreditCard, type LucideIcon } from 'lucide-react';
-import { PROFESSIONAL_SERVICES } from '@/lib/data';
+import { Menu, X, MapPin, LocateFixed, Search, ShoppingCart, ChevronDown, Store, LogOut, ShieldCheck, PackageSearch, House, Briefcase, Heart, Trash2, Bike, MessagesSquare, LayoutDashboard, Settings, History, Gift, CreditCard, UserCog, type LucideIcon } from 'lucide-react';
 import {
   ADDRESS_TAGS,
   MAX_ADDRESS_LABEL_LENGTH,
@@ -22,12 +21,15 @@ import { LocationError, detectCurrentLocation, fetchVisitorState, saveVisitorSta
 import SignInModal from './SignInModal';
 import LocationPrompt from './LocationPrompt';
 import OrderChat from './OrderChat';
+import PinMap from './PinMap';
 import StoryLogo from './StoryLogo';
 import UserNotificationBell from './UserNotificationBell';
 import type { PickedLocation } from './LocationPicker';
 import { useCart } from '@/lib/cart-context';
 import { useAuth } from '@/lib/auth-context';
 import { useDeliveryAddress, type DeliveryAddress } from '@/lib/delivery-address-context';
+import { isRealLocation } from '@/lib/geo';
+import { mapPlaceId } from '@/lib/map-math';
 
 type AddressSuggestion = DeliveryAddress;
 
@@ -86,9 +88,6 @@ export default function Navbar() {
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
-
-  const [isServicesMenuOpen, setIsServicesMenuOpen] = useState(false);
-  const servicesMenuRef = useRef<HTMLDivElement>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const { cartCount } = useCart();
@@ -182,21 +181,6 @@ export default function Navbar() {
   }, [isUserMenuOpen]);
 
   useEffect(() => {
-    if (!isServicesMenuOpen) {
-      return;
-    }
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (servicesMenuRef.current && !servicesMenuRef.current.contains(event.target as Node)) {
-        setIsServicesMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isServicesMenuOpen]);
-
-  useEffect(() => {
     const shouldSearch = isAddressModalOpen && addressQuery.trim().length >= 3;
     const searchQuery = postalCode.trim() ? `${addressQuery}, ${postalCode}` : addressQuery;
     const controller = new AbortController();
@@ -257,6 +241,7 @@ export default function Navbar() {
     { name: 'Sell on Mangwaoo', href: '/sell' },
     { name: 'MangwaooMart', href: '/mart' },
     { name: 'Food', href: '/gulplaza' },
+    { name: 'Sports', href: '/sports' },
     { name: 'Contact', href: '/contact' },
   ];
 
@@ -305,6 +290,20 @@ export default function Navbar() {
     }
 
     setIsOrderChatOpen(true);
+  };
+
+  // A drop-off place chosen on the map inside the order chat becomes the delivery address (and is remembered for this browser).
+  const handleAddressPickedOnMap = (location: PickedLocation) => {
+    const place: AddressSuggestion = {
+      id: mapPlaceId(location),
+      label: location.label,
+      postalCode: '',
+      lat: location.lat,
+      lng: location.lng,
+    };
+
+    setSelectedAddress(place);
+    void saveVisitorState({ location: place });
   };
 
   const handleOrderChatNeedsAddress = () => {
@@ -546,7 +545,9 @@ export default function Navbar() {
                             ? 'Admin account'
                             : user.role === 'RIDER'
                               ? 'Rider account'
-                              : 'Customer account'}
+                              : user.role === 'ASM'
+                                ? 'Area manager account'
+                                : 'Customer account'}
                       </p>
                     </div>
                     {user.role === 'CUSTOMER' && (
@@ -621,6 +622,16 @@ export default function Navbar() {
                         Rider Dashboard
                       </Link>
                     )}
+                    {user.role === 'ASM' && (
+                      <Link
+                        href="/asm"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-brand-light"
+                      >
+                        <UserCog className="w-4 h-4" />
+                        Manager Dashboard
+                      </Link>
+                    )}
                     {user.role === 'ADMIN' && (
                       <>
                         <Link
@@ -686,56 +697,18 @@ export default function Navbar() {
             <button
               type="button"
               onClick={handleOrderNow}
-              aria-label="Chat with Rider"
+              aria-label="Chat"
               className="flex shrink-0 items-center space-x-1.5 whitespace-nowrap rounded-full bg-[#9b0000] px-3 py-2 text-sm font-semibold text-white shadow-md shadow-red-200 hover:bg-[#840000] transition-all duration-300 sm:space-x-2 sm:px-4"
             >
               <MessagesSquare className="w-4 h-4" />
-              <span className="min-[480px]:hidden">Chat</span>
-              <span className="hidden min-[480px]:inline">Chat with Rider</span>
+              <span>Chat</span>
             </button>
           </div>
         </div>
 
         <div className="flex min-h-14 items-center justify-start">
           <div className="hidden md:flex items-center space-x-8">
-            {navLinks.slice(0, 4).map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="text-ink hover:text-accent transition-colors font-medium"
-              >
-                {link.name}
-              </Link>
-            ))}
-
-            <div className="relative" ref={servicesMenuRef}>
-              <button
-                type="button"
-                onClick={() => setIsServicesMenuOpen((prev) => !prev)}
-                className="flex items-center gap-1 text-ink hover:text-accent transition-colors font-medium"
-              >
-                Services
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isServicesMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              {isServicesMenuOpen && (
-                <div className="absolute left-0 top-full z-50 mt-3 w-64 overflow-hidden rounded-xl border border-gray-100 bg-surface py-1.5 shadow-lg">
-                  {PROFESSIONAL_SERVICES.map((service) => (
-                    <Link
-                      key={service.slug}
-                      href={`/services-hub#${service.slug}`}
-                      onClick={() => setIsServicesMenuOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-ink hover:bg-brand-light"
-                    >
-                      <span className="text-base leading-none">{service.icon}</span>
-                      {service.name}
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {navLinks.slice(4).map((link) => (
+            {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
@@ -933,31 +906,21 @@ export default function Navbar() {
 
                 {addressError ? <p className="text-xs text-danger">{addressError}</p> : null}
 
-                <div className="relative overflow-hidden rounded-xl border border-gray-200">
-                  <iframe
-                    key={selectedAddress ? selectedAddress.id : 'karachi'}
-                    title="Selected address map"
-                    src={
-                      selectedAddress
-                        ? `https://maps.google.com/maps?q=${selectedAddress.lat},${selectedAddress.lng}&z=17&hl=en&output=embed`
-                        : 'https://maps.google.com/maps?q=Karachi,Pakistan&z=11&hl=en&output=embed'
-                    }
-                    className="h-56 w-full border-0"
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    allowFullScreen
-                  />
-                  <button
-                    type="button"
-                    onClick={handleLocateMe}
-                    disabled={isLocatingAddress}
-                    className="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-surface text-gray-600 shadow-md ring-1 ring-black/5 transition hover:text-[#1a73e8] disabled:cursor-wait"
-                    aria-label="Show my location"
-                    title="Show my location"
-                  >
-                    <LocateFixed className={`h-5 w-5 ${isLocatingAddress ? 'animate-pulse text-[#1a73e8]' : ''}`} />
-                  </button>
-                </div>
+                {/* Typing and "Locate me" are one way in; here any other place can be chosen too: move the map under the pin. */}
+                <PinMap
+                  start={selectedAddress && isRealLocation(selectedAddress) ? { lat: selectedAddress.lat, lng: selectedAddress.lng } : null}
+                  focus={
+                    selectedAddress && isRealLocation(selectedAddress)
+                      ? { id: selectedAddress.id, point: { lat: selectedAddress.lat, lng: selectedAddress.lng } }
+                      : null
+                  }
+                  onMoveStart={() => setSelectedAddress(null)}
+                  onSettle={(place) =>
+                    handleSelectAddressSuggestion({ id: place.id, label: place.label, postalCode: place.postalCode, lat: place.lat, lng: place.lng })
+                  }
+                  className="h-56"
+                />
+                <p className="-mt-1 text-xs text-brand-gray">Not the right spot? Drag the map, or tap a place, to move the pin there.</p>
 
                 <label className="block text-xs text-ink">
                   Postal Code
@@ -1017,39 +980,14 @@ export default function Navbar() {
             onRequestAddress={handleOrderChatNeedsAddress}
             pickup={orderPickup}
             onPickupChange={setOrderPickup}
+            onAddressPicked={handleAddressPickedOnMap}
           />
         )}
 
         {/* Mobile Navigation */}
         {isOpen && (
           <div className="md:hidden border-t border-gray-200 py-4 space-y-3">
-            {navLinks.slice(0, 4).map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="block px-4 py-2 text-ink hover:bg-brand-light rounded-lg transition-colors"
-                onClick={() => setIsOpen(false)}
-              >
-                {link.name}
-              </Link>
-            ))}
-
-            <div>
-              <p className="px-4 py-2 text-xs font-bold uppercase tracking-wide text-brand-gray">Services</p>
-              {PROFESSIONAL_SERVICES.map((service) => (
-                <Link
-                  key={service.slug}
-                  href={`/services-hub#${service.slug}`}
-                  onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-2.5 px-6 py-2 text-ink hover:bg-brand-light rounded-lg transition-colors"
-                >
-                  <span className="text-base leading-none">{service.icon}</span>
-                  {service.name}
-                </Link>
-              ))}
-            </div>
-
-            {navLinks.slice(4).map((link) => (
+            {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}

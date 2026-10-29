@@ -20,6 +20,9 @@ export type RiderChatSummary = {
   deliveryCharge: number;
   customerName: string;
   riderName: string | null;
+  /** The order is with the Area Sales Manager of `areaName`, who picks the rider (absent / false: the first rider to reply takes it). */
+  managed?: boolean;
+  areaName?: string | null;
   createdAt: string;
   updatedAt: string;
   /** How customers rate this order's rider (null: nobody has rated them yet). Set where the customer meets the rider. */
@@ -49,6 +52,8 @@ export type RiderChatMessage = {
 };
 
 export const MAX_RIDER_CHAT_MESSAGE_LENGTH = 2000;
+/** What a shared location says when it has no address of its own ("my location"); a place picked on the map carries its address instead. */
+export const SHARED_LOCATION_BODY = 'Shared a location';
 export const MAX_CHAT_IMAGE_BYTES = 3 * 1024 * 1024;
 export const MAX_CHAT_VOICE_BYTES = 3 * 1024 * 1024;
 export const MAX_CHAT_VOICE_SECONDS = 120;
@@ -64,7 +69,7 @@ export function riderChatMessagePreview(message: { type: RiderChatMessageType; b
     case 'VOICE':
       return '🎤 Voice message';
     case 'LOCATION':
-      return '📍 Location';
+      return message.body && message.body !== SHARED_LOCATION_BODY ? `📍 ${message.body}` : '📍 Location';
     default:
       return message.body;
   }

@@ -51,6 +51,20 @@ model User {
   bans                UserBan[]
   supportThread       SupportThread?
   pushSubscriptions   PushSubscription[]
+  areaManager         AreaManager?
+}
+
+/// An Area Sales Manager's post: the service area (`SERVICE_AREAS` id in lib/data.ts) whose order chats they look after. The
+/// super admin makes and removes these accounts (Admin > Area Managers); several managers may share an area. The account
+/// itself is a `User` with role ASM.
+model AreaManager {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  areaId    Int
+  createdAt DateTime @default(now())
+
+  @@index([areaId])
 }
 
 /// The private chat between the admin team and one seller or rider (Admin > Messages). One thread per account; the
@@ -155,6 +169,8 @@ enum Role {
   SELLER
   RIDER
   ADMIN
+  /// Area Sales Manager: gets the order chats of one service area and assigns riders to them (see lib/area-managers.ts).
+  ASM
 }
 
 enum SellerType {
@@ -262,6 +278,9 @@ model Rider {
   lastLatitude  Float?
   lastLongitude Float?
   lastSeenAt    DateTime?
+  /// When lastLatitude / lastLongitude were last written: by the online heartbeat, or by the location ping a rider sends while
+  /// delivering an order (also when they switched themselves offline). The customer's live tracking shows how fresh it is.
+  locationUpdatedAt DateTime?
 
   orders            Order[]
   locations         RiderLocation[]
@@ -544,6 +563,12 @@ model Order {
   sellerHidden Boolean     @default(false)
   // When the seller marked it delivered; "products sold" in the seller's stats counts from here
   deliveredAt  DateTime?
+  // When the order reached each of the other steps (the live tracking page's timeline, lib/order-tracking.ts); null = not
+  // reached, or reached before tracking existed
+  confirmedAt      DateTime?
+  preparingAt      DateTime?
+  outForDeliveryAt DateTime?
+  cancelledAt      DateTime?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
@@ -649,6 +674,10 @@ model RiderChat {
   deliveryDistanceKm Float?
   status          RiderChatStatus @default(OPEN)
   claimedAt       DateTime?
+  // The service area (SERVICE_AREAS id) whose Area Sales Manager assigns the rider of this order: set for a chat the customer
+  // started with the Chat button while that area had a manager. While OPEN, riders do not see such a chat; the manager picks
+  // one. null = the first rider to reply takes it (checkout orders, and areas without a manager).
+  areaId          Int?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
@@ -656,6 +685,7 @@ model RiderChat {
   attachments RiderChatAttachment[]
 
   @@index([status])
+  @@index([areaId, status])
 }
 
 enum RiderChatStatus {
@@ -921,6 +951,12 @@ model GulplazaOrder {
   sellerHidden Boolean     @default(false)
   // When the seller marked it delivered; "products sold" in the seller's stats counts from here
   deliveredAt  DateTime?
+  // When the order reached each of the other steps (the live tracking page's timeline, lib/order-tracking.ts); null = not
+  // reached, or reached before tracking existed
+  confirmedAt      DateTime?
+  preparingAt      DateTime?
+  outForDeliveryAt DateTime?
+  cancelledAt      DateTime?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 

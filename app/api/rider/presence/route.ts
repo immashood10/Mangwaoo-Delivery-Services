@@ -35,11 +35,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const now = new Date();
+
   await prisma.rider.update({
     where: { id: rider.id },
     data: {
       isAvailable,
-      ...(isAvailable && lat !== null && lng !== null ? { lastLatitude: lat, lastLongitude: lng, lastSeenAt: new Date() } : {}),
+      // `locationUpdatedAt` is how fresh the position is on the customer's tracking page (the delivery ping writes it too).
+      ...(isAvailable && lat !== null && lng !== null ? { lastLatitude: lat, lastLongitude: lng, lastSeenAt: now, locationUpdatedAt: now } : {}),
       ...(!isAvailable ? { lastSeenAt: null } : {}),
     },
   });

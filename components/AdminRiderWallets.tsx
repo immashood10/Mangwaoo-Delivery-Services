@@ -625,6 +625,7 @@ export default function AdminRiderWallets({ riders, pending, settings, bonus }: 
         <p className="mt-1 text-sm text-brand-gray">
           A rider who completes an order gets a random bonus, added to their wallet (so it counts against what they owe). The farther the order, the bigger it can be.
           Mangwaoo pays it. An order whose distance is not known (MangwaooMart only) counts as a short one.
+          Only a completed order pays a bonus: a rider who cancels an order, or whose customer cancels it, gets none.
         </p>
         <form onSubmit={saveBonus} className="mt-3 space-y-4">
           <label className="flex cursor-pointer items-center gap-3">

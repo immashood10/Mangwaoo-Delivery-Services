@@ -271,7 +271,7 @@ export default function RiderWallet() {
             Every order you complete adds Mangwaoo&apos;s {wallet.commissionPercent}% of the delivery charge to what you owe.
           </li>
           {wallet.bonusEnabled ? (
-            <li>Every order you complete also earns you a surprise bonus. It is added to your account, so it counts against what you owe.</li>
+            <li>Every order you complete also earns you a surprise bonus. It is added to your account, so it counts against what you owe. An order you cancel earns no bonus.</li>
           ) : null}
           <li>You can have {wallet.ordersOnCredit} finished orders unpaid. After that, recharge your account to receive the next order.</li>
           <li>Pay by {payment.method}, send us the transaction ID (and a screenshot of the payment) below, and Mangwaoo adds the money to your account.</li>

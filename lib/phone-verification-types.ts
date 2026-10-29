@@ -25,6 +25,6 @@ export type VerifiedUser = {
   id: string;
   name: string;
   email: string;
-  role: 'CUSTOMER' | 'SELLER' | 'RIDER' | 'ADMIN';
+  role: 'CUSTOMER' | 'SELLER' | 'RIDER' | 'ADMIN' | 'ASM';
   phone: string | null;
 };

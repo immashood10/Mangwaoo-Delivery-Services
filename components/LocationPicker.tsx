@@ -1,13 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { LocateFixed, MapPin, Search, X } from 'lucide-react';
+import { LocateFixed, Map as MapIcon, MapPin, Search, X } from 'lucide-react';
+import MapPinPicker from '@/components/MapPinPicker';
+import type { LatLng } from '@/lib/map-math';
+import type { PickedLocation } from '@/lib/picked-location';
 
-export type PickedLocation = {
-  label: string;
-  lat: number;
-  lng: number;
-};
+export type { PickedLocation };
 
 type Suggestion = PickedLocation & { id: string };
 
@@ -16,19 +15,26 @@ const KARACHI_VIEWBOX = '66.75,25.06,67.17,24.78';
 const MIN_QUERY_LENGTH = 3;
 const SEARCH_DEBOUNCE_MS = 400;
 
-/** Address search (OpenStreetMap) plus a "use my current location" shortcut. */
+/** Address search (OpenStreetMap), a "use my current location" shortcut and "Choose on map" for any other place. */
 export default function LocationPicker({
   value,
   onChange,
   placeholder = 'Search a shop, area or street',
   changeLabel = 'Change pickup location',
+  mapTitle = 'Choose the place on the map',
+  mapStart = null,
 }: {
   value: PickedLocation | null;
   onChange: (location: PickedLocation | null) => void;
   placeholder?: string;
   /** Accessible name of the button that clears the chosen location. */
   changeLabel?: string;
+  /** The heading of the "Choose on map" window. */
+  mapTitle?: string;
+  /** Where that map opens (for example the customer's own area); null opens it on Karachi. */
+  mapStart?: LatLng | null;
 }) {
+  const [isMapOpen, setIsMapOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -168,7 +174,7 @@ export default function LocationPicker({
         </ul>
       )}
 
-      <div className="mt-1.5 flex items-center justify-between gap-2">
+      <div className="mt-1.5 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={useCurrentLocation}
@@ -178,10 +184,30 @@ export default function LocationPicker({
           <LocateFixed className={`h-3.5 w-3.5 ${isLocating ? 'animate-pulse' : ''}`} />
           {isLocating ? 'Locating…' : 'Use my current location'}
         </button>
+        <button
+          type="button"
+          onClick={() => setIsMapOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1.5 text-xs font-semibold text-accent hover:bg-red-100"
+        >
+          <MapIcon className="h-3.5 w-3.5" />
+          Choose on map
+        </button>
         {isSearching ? <span className="text-xs text-brand-gray">Searching…</span> : null}
       </div>
 
       {error ? <p className="mt-1 text-xs text-danger">{error}</p> : null}
+
+      {isMapOpen ? (
+        <MapPinPicker
+          title={mapTitle}
+          start={mapStart}
+          onClose={() => setIsMapOpen(false)}
+          onPick={(location) => {
+            setIsMapOpen(false);
+            select(location);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

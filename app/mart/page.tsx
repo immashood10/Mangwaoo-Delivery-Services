@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { MART_ADS, MART_CATEGORIES, MART_PRODUCTS } from '@/lib/data';
 import { Store, X, LayoutGrid } from 'lucide-react';
-import AddToCartButton from '@/components/AddToCartButton';
 import CartBar from '@/components/CartBar';
 import FeaturedRow from '@/components/FeaturedRow';
+import MartProductCard from '@/components/MartProductCard';
 import SidebarAdCard from '@/components/SidebarAdCard';
 import { getMartProducts } from '@/lib/products';
 import { getRunningAds } from '@/lib/promotions';
@@ -159,35 +159,7 @@ export default async function MangwaooMart({
               {products.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
                   {products.map((product) => (
-                    <div
-                      key={product.id}
-                      className="bg-surface rounded-2xl shadow-soft hover:shadow-md transition-all duration-300"
-                    >
-                      <Link href={`/mart/${product.id}`} className="flex h-full flex-col p-5">
-                        {product.imageUrl ? (
-                          <div className="mb-3 flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl bg-brand-light">
-                            <img
-                              src={product.imageUrl}
-                              alt={product.name}
-                              className="h-full w-full object-contain"
-                            />
-                          </div>
-                        ) : (
-                          <div className="text-4xl mb-3">{product.icon}</div>
-                        )}
-                        <h3 className="font-semibold text-ink text-sm mb-1">
-                          {product.name}
-                        </h3>
-                        <p className="text-xs text-brand-gray mb-3">{product.vendor}</p>
-                        <div className="mt-auto flex items-center justify-between">
-                          <span className="font-bold text-accent">{product.price}</span>
-                          <AddToCartButton
-                            product={product}
-                            className="text-xs font-semibold bg-brand-red-primary text-white px-3 py-2 rounded-full hover:bg-brand-red-secondary transition-colors"
-                          />
-                        </div>
-                      </Link>
-                    </div>
+                    <MartProductCard key={product.id} product={product} />
                   ))}
                 </div>
               ) : (

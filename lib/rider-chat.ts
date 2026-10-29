@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
+import { findManager } from '@/lib/area-managers';
+import { areaName, managerSenderName } from '@/lib/area-managers-config';
 import { chatDispatchPoint, isRiderEligibleForChat } from '@/lib/rider-dispatch';
 import { getRiderRatings } from '@/lib/rider-orders';
 import { RECHARGE_TITLE, deliveryChargeForChat, riderHold } from '@/lib/rider-wallet-config';
@@ -12,7 +14,9 @@ import {
   MAX_CHAT_VOICE_BYTES,
   MAX_CHAT_VOICE_SECONDS,
   MAX_RIDER_CHAT_MESSAGE_LENGTH,
+  SHARED_LOCATION_BODY,
 } from '@/lib/rider-chat-types';
+import { MAX_PLACE_LABEL_LENGTH } from '@/lib/reverse-geocode';
 
 export { MAX_RIDER_CHAT_MESSAGE_LENGTH };
 export const SUPPORT_SENDER_NAME = 'Mangwaoo Support';
@@ -46,6 +50,8 @@ export function serializeRiderChat(chat: ChatWithPeople) {
     }),
     customerName: chat.customer.user.name,
     riderName: chat.rider?.user.name ?? null,
+    managed: chat.areaId !== null,
+    areaName: areaName(chat.areaId),
     createdAt: chat.createdAt.toISOString(),
     updatedAt: chat.updatedAt.toISOString(),
   };
@@ -131,7 +137,10 @@ export async function parseIncomingRiderChatMessage(
       return { error: 'Could not read that location.' };
     }
 
-    return { message: { type: 'LOCATION', body: 'Shared a location', latitude, longitude } };
+    // A place picked on the map comes with its address, which is what the other side reads; "my location" has none.
+    const label = typeof body.label === 'string' ? body.label.trim().slice(0, MAX_PLACE_LABEL_LENGTH) : '';
+
+    return { message: { type: 'LOCATION', body: label || SHARED_LOCATION_BODY, latitude, longitude } };
   }
 
   const text = typeof body?.body === 'string' ? body.body.trim() : '';
@@ -157,6 +166,7 @@ const CHAT_ACCESS_SELECT = {
   longitude: true,
   pickupLatitude: true,
   pickupLongitude: true,
+  areaId: true,
 } as const;
 
 export type RiderChatCore = {
@@ -168,6 +178,8 @@ export type RiderChatCore = {
   longitude: number;
   pickupLatitude: number | null;
   pickupLongitude: number | null;
+  /** The service area whose Area Sales Manager assigns the rider (null: the first rider to reply takes the order). */
+  areaId: number | null;
 };
 
 type ChatAccess =
@@ -178,6 +190,8 @@ type ChatAccess =
       senderName: string;
       /** Set for a rider who is viewing/claiming an OPEN chat. */
       riderId?: string;
+      /** Set when the caller is the Area Sales Manager of this order's area: they read and write like an admin (role ADMIN), but cannot cancel or close. */
+      manager?: true;
     };
 
 function deny(message: string, status: number): ChatAccess {
@@ -244,10 +258,12 @@ export async function resolveRiderChatAccess(chatId: string): Promise<ChatAccess
             select: { name: true, rider: { select: { id: true, isApproved: true, orderAccess: true, paymentHold: true } } },
           })
         : Promise.resolve(null);
+  const managerPromise = session.role === 'ASM' ? findManager(session.userId) : Promise.resolve(null);
 
-  const [chat, identity] = await Promise.all([
+  const [chat, identity, manager] = await Promise.all([
     prisma.riderChat.findUnique({ where: { id: chatId }, select: CHAT_ACCESS_SELECT }),
     identityPromise,
+    managerPromise,
   ]);
 
   if (!chat) {
@@ -256,6 +272,15 @@ export async function resolveRiderChatAccess(chatId: string): Promise<ChatAccess
 
   if (session.role === 'ADMIN') {
     return { chat, role: 'ADMIN', senderName: SUPPORT_SENDER_NAME };
+  }
+
+  // An Area Sales Manager sees the order chats of their own area, and no others.
+  if (session.role === 'ASM') {
+    if (!manager || chat.areaId === null || chat.areaId !== manager.areaId) {
+      return deny('Not authorized.', 403);
+    }
+
+    return { chat, role: 'ADMIN', senderName: managerSenderName(manager.name), manager: true };
   }
 
   if (session.role === 'CUSTOMER') {
@@ -279,7 +304,8 @@ export async function resolveRiderChatAccess(chatId: string): Promise<ChatAccess
       return { chat, role: 'RIDER', senderName: identity.name, riderId: rider.id };
     }
 
-    if (chat.status === 'OPEN' && !chat.riderId) {
+    // An order with an Area Sales Manager (areaId set) is not offered to riders: the manager picks one.
+    if (chat.status === 'OPEN' && !chat.riderId && chat.areaId === null) {
       const hold = riderHold(rider);
 
       if (hold) {

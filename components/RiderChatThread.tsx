@@ -1,16 +1,18 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Camera, MapPin, Mic, Navigation, Send, Trash2 } from 'lucide-react';
+import { Camera, LocateFixed, Map as MapIcon, MapPin, Mic, Navigation, Send, Trash2 } from 'lucide-react';
 import {
   MAX_CHAT_IMAGE_BYTES,
   MAX_CHAT_VOICE_BYTES,
   MAX_CHAT_VOICE_SECONDS,
   MAX_RIDER_CHAT_MESSAGE_LENGTH,
+  SHARED_LOCATION_BODY,
   type RiderChatMessage,
   type RiderChatSender,
   type RiderChatSummary,
 } from '@/lib/rider-chat-types';
+import MapPinPicker from '@/components/MapPinPicker';
 import { compressImage } from '@/lib/client-image';
 import { enableNotificationSound, playNotificationSound } from '@/lib/notification-sound';
 
@@ -74,6 +76,9 @@ function MessageContent({
   }
 
   if (message.type === 'LOCATION' && message.lat !== null && message.lng !== null) {
+    // A place picked on the map carries its address as the text; "my location" says the default words.
+    const placeLabel = message.body && message.body !== SHARED_LOCATION_BODY ? message.body : null;
+
     return (
       <>
         <a
@@ -94,9 +99,14 @@ function MessageContent({
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold">
           <span className="flex items-center gap-1">
             <MapPin className="h-3.5 w-3.5" />
-            {isOwn ? 'You shared your location' : `${message.senderName} shared a location`}
+            {placeLabel ? (isOwn ? 'You shared a place' : `${message.senderName} shared a place`) : isOwn ? 'You shared your location' : `${message.senderName} shared a location`}
           </span>
         </div>
+        {placeLabel ? (
+          <p className="mt-0.5 max-w-56 break-words text-xs" data-testid="shared-place-label">
+            {placeLabel}
+          </p>
+        ) : null}
         <div className="mt-1 flex flex-wrap gap-x-3 text-xs font-semibold">
           <a href={googleMapsUrl(message.lat, message.lng)} target="_blank" rel="noopener noreferrer" className={linkClass}>
             Open in Google Maps
@@ -142,6 +152,11 @@ export default function RiderChatThread({
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  // The menu of the pin button (my location / choose on the map) and the map window; `dropOff` is where the map opens.
+  const [isLocationMenuOpen, setIsLocationMenuOpen] = useState(false);
+  const [isMapOpen, setIsMapOpen] = useState(false);
+  const [dropOff, setDropOff] = useState<{ lat: number; lng: number } | null>(null);
+  const locationMenuRef = useRef<HTMLDivElement>(null);
   const [recordingSeconds, setRecordingSeconds] = useState<number | null>(null);
   const [error, setError] = useState('');
 
@@ -197,6 +212,7 @@ export default function RiderChatThread({
 
   const applyChat = (chat: RiderChatSummary) => {
     setChatStatus(chat.status);
+    setDropOff((current) => (current && current.lat === chat.lat && current.lng === chat.lng ? current : { lat: chat.lat, lng: chat.lng }));
     onChatUpdateRef.current?.(chat);
   };
 
@@ -293,6 +309,25 @@ export default function RiderChatThread({
       if (pollTimer !== null) window.clearInterval(pollTimer);
     };
   }, [chatId]);
+
+  useEffect(() => {
+    if (!isLocationMenuOpen) return;
+
+    const onPointerDown = (event: MouseEvent) => {
+      if (locationMenuRef.current && !locationMenuRef.current.contains(event.target as Node)) setIsLocationMenuOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsLocationMenuOpen(false);
+    };
+
+    document.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('keydown', onKey);
+
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [isLocationMenuOpen]);
 
   // Stop the mic if the thread unmounts mid-recording.
   useEffect(() => {
@@ -412,7 +447,16 @@ export default function RiderChatThread({
     }
   };
 
+  /** Sends a place: `label` is the address of a place picked on the map; without it this is the sender's own location. */
+  const sendLocation = (lat: number, lng: number, label?: string) =>
+    sendOptimistic(
+      { type: 'LOCATION', body: label || SHARED_LOCATION_BODY, lat, lng, durationSec: null, attachmentUrl: null },
+      { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'LOCATION', lat, lng, ...(label ? { label } : {}) }) }
+    );
+
   const handleShareLocation = () => {
+    setIsLocationMenuOpen(false);
+
     if (!navigator.geolocation) {
       setError('Location is not supported in this browser.');
       return;
@@ -423,12 +467,7 @@ export default function RiderChatThread({
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         setIsLocating(false);
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        await sendOptimistic(
-          { type: 'LOCATION', body: 'Shared a location', lat, lng, durationSec: null, attachmentUrl: null },
-          { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'LOCATION', lat, lng }) }
-        );
+        await sendLocation(position.coords.latitude, position.coords.longitude);
       },
       () => {
         setIsLocating(false);
@@ -587,16 +626,47 @@ export default function RiderChatThread({
           >
             <Camera className="h-5 w-5" />
           </button>
-          <button
-            type="button"
-            onClick={handleShareLocation}
-            disabled={mediaDisabled}
-            className={iconButtonClass}
-            aria-label="Share my location"
-            title="Share my location"
-          >
-            <MapPin className={`h-5 w-5 ${isLocating ? 'animate-pulse text-accent' : ''}`} />
-          </button>
+          <div ref={locationMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setIsLocationMenuOpen((open) => !open)}
+              disabled={mediaDisabled}
+              className={iconButtonClass}
+              aria-label="Send a location"
+              aria-haspopup="menu"
+              aria-expanded={isLocationMenuOpen}
+              title="Send a location"
+              data-testid="location-menu-button"
+            >
+              <MapPin className={`h-5 w-5 ${isLocating ? 'animate-pulse text-accent' : ''}`} />
+            </button>
+            {isLocationMenuOpen ? (
+              <div role="menu" className="absolute bottom-full left-0 z-20 mb-2 w-56 overflow-hidden rounded-xl border border-gray-200 bg-surface py-1 shadow-lg">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={handleShareLocation}
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink hover:bg-brand-light"
+                >
+                  <LocateFixed className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+                  My current location
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid="location-menu-map"
+                  onClick={() => {
+                    setIsLocationMenuOpen(false);
+                    setIsMapOpen(true);
+                  }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-ink hover:bg-brand-light"
+                >
+                  <MapIcon className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+                  Choose a place on the map
+                </button>
+              </div>
+            ) : null}
+          </div>
           <input
             type="text"
             value={draft}
@@ -627,6 +697,19 @@ export default function RiderChatThread({
           )}
         </form>
       )}
+
+      {isMapOpen ? (
+        <MapPinPicker
+          title="Send a place"
+          confirmLabel="Send this place"
+          start={dropOff}
+          onClose={() => setIsMapOpen(false)}
+          onPick={(location) => {
+            setIsMapOpen(false);
+            void sendLocation(location.lat, location.lng, location.label);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

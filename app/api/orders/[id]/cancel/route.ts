@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
 import { getSellerUserIds, notifyAfterResponse } from '@/lib/notify';
 import { orderRef } from '@/lib/order-number';
+import { statusStamp } from '@/lib/order-tracking';
 import { SELLER_PAGES } from '@/lib/notification-types';
 import { releaseCouponIfUnused } from '@/lib/coupons';
 import { releaseLoyaltyIfUnused } from '@/lib/loyalty-card';
@@ -39,7 +40,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // The status guard keeps stock from being restored twice if the seller cancels at the same moment.
     const result = await tx.order.updateMany({
       where: { id, status: { in: [...CANCELLABLE_STATUSES] } },
-      data: { status: 'CANCELLED' },
+      data: { status: 'CANCELLED', ...statusStamp('CANCELLED') },
     });
     if (result.count === 0) return false;
 

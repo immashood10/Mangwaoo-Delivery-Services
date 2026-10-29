@@ -22,6 +22,7 @@ export default function AdminRiderChats({ initialFilter = 'all', todayStartIso }
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isClosing, setIsClosing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isReleasing, setIsReleasing] = useState(false);
   const [actionError, setActionError] = useState('');
 
   useEffect(() => {
@@ -70,6 +71,34 @@ export default function AdminRiderChats({ initialFilter = 'all', todayStartIso }
       }
     } finally {
       setIsClosing(false);
+    }
+  };
+
+  // An order waiting for its area manager is handed to the riders instead (the first to reply takes it).
+  const handleRelease = async () => {
+    if (!selectedChat || isReleasing) return;
+
+    setIsReleasing(true);
+    setActionError('');
+
+    try {
+      const response = await fetch(`/api/admin/rider-chats/${selectedChat.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'release' }),
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setActionError(data?.error ?? 'Could not hand this order to the riders. Please try again.');
+        return;
+      }
+
+      setChats((prev) => prev.map((chat) => (chat.id === selectedChat.id ? { ...chat, managed: false, areaName: null } : chat)));
+    } catch {
+      setActionError('Could not reach the server. Please try again.');
+    } finally {
+      setIsReleasing(false);
     }
   };
 
@@ -149,6 +178,7 @@ export default function AdminRiderChats({ initialFilter = 'all', todayStartIso }
                   </span>
                 </div>
                 {chat.riderName ? <p className="text-xs text-brand-gray">Rider: {chat.riderName}</p> : null}
+                {chat.managed ? <p className="text-xs text-brand-gray">Area manager: {chat.areaName}</p> : null}
                 {chat.lastMessage ? <p className="mt-1 line-clamp-2 text-xs text-ink">{chat.lastMessage}</p> : null}
                 {chat.pickupText ? (
                   <p className="mt-1 flex items-center gap-1 truncate text-[11px] text-brand-gray">
@@ -191,6 +221,17 @@ export default function AdminRiderChats({ initialFilter = 'all', todayStartIso }
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                {selectedChat.status === 'OPEN' && selectedChat.managed && (
+                  <button
+                    type="button"
+                    onClick={handleRelease}
+                    disabled={isReleasing}
+                    title={`Waiting for the ${selectedChat.areaName ?? 'area'} manager to pick a rider. Hand it to the riders instead: the first to reply takes it.`}
+                    className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-ink hover:border-accent hover:text-accent disabled:opacity-60"
+                  >
+                    {isReleasing ? 'Sending…' : 'Send to riders'}
+                  </button>
+                )}
                 {selectedChat.status !== 'CLOSED' && (
                   <button
                     type="button"

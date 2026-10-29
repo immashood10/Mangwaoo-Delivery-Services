@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Bike, CheckCircle2, Flag, MapPin, Send, X } from 'lucide-react';
+import { Bike, CheckCircle2, Flag, Map as MapIcon, MapPin, Send, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import ConfirmDialog from './ConfirmDialog';
 import RiderChatThread from './RiderChatThread';
 import RiderRatingForm from './RiderRatingForm';
 import LocationPicker, { type PickedLocation } from './LocationPicker';
+import MapPinPicker from './MapPinPicker';
 import RouteSummary from './RouteSummary';
 import { RiderRatingLabel } from './StarRating';
 import type { RiderChatSummary } from '@/lib/rider-chat-types';
@@ -49,9 +50,11 @@ function ChatStatusBanner({ chat, onReceived }: { chat: RiderChatSummary; onRece
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
         <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
       </span>
-      {chat.nearbyRiderCount
-        ? `Finding the nearest rider… ${chat.nearbyRiderCount} ${chat.nearbyRiderCount === 1 ? 'rider' : 'riders'} nearby`
-        : 'Finding a rider… our team will reply shortly'}
+      {chat.managed
+        ? `Your order is with our ${chat.areaName ?? 'area'} team. A rider will be assigned shortly.`
+        : chat.nearbyRiderCount
+          ? `Finding the nearest rider… ${chat.nearbyRiderCount} ${chat.nearbyRiderCount === 1 ? 'rider' : 'riders'} nearby`
+          : 'Finding a rider… our team will reply shortly'}
     </div>
   );
 }
@@ -62,6 +65,7 @@ export default function OrderChat({
   onRequestAddress,
   pickup,
   onPickupChange,
+  onAddressPicked,
 }: {
   onClose: () => void;
   address: DeliveryAddress | null;
@@ -69,8 +73,11 @@ export default function OrderChat({
   /** Pickup point is held by the parent so it survives a trip to change the delivery address. */
   pickup: PickedLocation | null;
   onPickupChange: (pickup: PickedLocation | null) => void;
+  /** The customer chose another drop-off place on the map: the parent makes it the delivery address. Without it the map button is not shown. */
+  onAddressPicked?: (location: PickedLocation) => void;
 }) {
   const { user } = useAuth();
+  const [isDropOffMapOpen, setIsDropOffMapOpen] = useState(false);
   const isCustomer = user?.role === 'CUSTOMER';
 
   const [chat, setChat] = useState<RiderChatSummary | null>(null);
@@ -233,7 +240,7 @@ export default function OrderChat({
             setNotice('');
             setError('This order chat has been removed. If the order was cancelled you will see it in your notifications. You can start a new order below.');
           }}
-          placeholder="Message your rider…"
+          placeholder={chat.status === 'ACTIVE' ? 'Message your rider…' : 'Type a message…'}
         />
       </>
     );
@@ -242,7 +249,7 @@ export default function OrderChat({
       <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
         <MapPin className="h-10 w-10 text-accent" />
         <p className="text-sm text-ink">
-          Select your delivery address first so we can connect you with the nearest rider.
+          Select your delivery address first so we can send a rider to you.
         </p>
         <button
           type="button"
@@ -261,7 +268,13 @@ export default function OrderChat({
             <MapPin className="h-4 w-4 text-success" />
             Pickup location
           </p>
-          <LocationPicker value={pickup} onChange={onPickupChange} placeholder="Where should the rider pick it up?" />
+          <LocationPicker
+            value={pickup}
+            onChange={onPickupChange}
+            placeholder="Where should the rider pick it up?"
+            mapTitle="Choose the pickup place"
+            mapStart={address ? { lat: address.lat, lng: address.lng } : null}
+          />
         </div>
 
         <div>
@@ -271,13 +284,25 @@ export default function OrderChat({
           </p>
           <div className="rounded-xl bg-brand-light p-3 text-xs text-ink">
             <p className="line-clamp-2">{address.label}</p>
-            <button
-              type="button"
-              onClick={onRequestAddress}
-              className="mt-1 font-semibold text-accent hover:underline"
-            >
-              Change address
-            </button>
+            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+              <button
+                type="button"
+                onClick={onRequestAddress}
+                className="font-semibold text-accent hover:underline"
+              >
+                Change address
+              </button>
+              {onAddressPicked ? (
+                <button
+                  type="button"
+                  onClick={() => setIsDropOffMapOpen(true)}
+                  className="inline-flex items-center gap-1 font-semibold text-accent hover:underline"
+                >
+                  <MapIcon className="h-3.5 w-3.5" />
+                  Choose on map
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -292,7 +317,7 @@ export default function OrderChat({
           />
         </label>
 
-        <p className="text-xs text-brand-gray">Your message goes to the nearest available rider. The first rider to reply takes your order.</p>
+        <p className="text-xs text-brand-gray">Tell us what to buy and where to pick it up. We will send a rider as soon as we can.</p>
 
         <button
           type="submit"
@@ -300,7 +325,7 @@ export default function OrderChat({
           className="flex items-center justify-center gap-2 rounded-full bg-[#9b0000] px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-red-200 hover:bg-[#840000] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Send className="h-4 w-4" />
-          {isStarting ? 'Sending…' : 'Send to nearest rider'}
+          {isStarting ? 'Sending…' : 'Send order'}
         </button>
       </form>
     );
@@ -308,11 +333,11 @@ export default function OrderChat({
 
   return createPortal(
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 backdrop-blur-sm p-4 sm:items-center">
-      <div className="flex h-[34rem] max-h-[90vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl">
+      <div data-testid="order-chat" className="flex h-[34rem] max-h-[90vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl">
         <div className="flex items-center justify-between gap-2 border-b border-gray-100 p-4">
           <div className="min-w-0">
             <p className="text-sm font-bold text-ink">Order with Mangwaoo</p>
-            <p className="text-xs text-brand-gray">Chat directly with a rider near you</p>
+            <p className="text-xs text-brand-gray">Tell us what you need and we will send a rider</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {chat && chat.status !== 'CLOSED' && (
@@ -354,6 +379,17 @@ export default function OrderChat({
         {content}
       </div>
 
+      {isDropOffMapOpen && address && onAddressPicked ? (
+        <MapPinPicker
+          title="Choose the drop-off place"
+          start={{ lat: address.lat, lng: address.lng }}
+          onClose={() => setIsDropOffMapOpen(false)}
+          onPick={(location) => {
+            setIsDropOffMapOpen(false);
+            onAddressPicked(location);
+          }}
+        />
+      ) : null}
       {confirming === 'cancel' ? (
         <ConfirmDialog
           title="End chat?"

@@ -397,6 +397,7 @@ export default function SellOnMangwaoo() {
                         onChange={setShopLocation}
                         placeholder="Search your shop, area or street"
                         changeLabel="Change restaurant location"
+                        mapTitle="Pin your restaurant on the map"
                       />
                       <p className="mt-1.5 text-xs text-brand-gray">
                         Customers near you see your restaurant first when they search for food. You can add or change this

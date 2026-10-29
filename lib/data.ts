@@ -247,6 +247,14 @@ export const MART_CATEGORIES = [
     description: 'Bikes and other vehicles posted by sellers.',
     icon: '🏍️',
   },
+  {
+    id: 11,
+    // The Sports option of the top menu (/sports) opens this category; keep the name in step with SPORTS_CATEGORY (lib/sports.ts)
+    // and the `Category` row the sports_category migration adds.
+    name: 'Sports',
+    description: 'Cricket, football, badminton, gym and fitness gear from local sellers.',
+    icon: '🏏',
+  },
 ];
 
 export const GULPLAZA_CATEGORIES = [

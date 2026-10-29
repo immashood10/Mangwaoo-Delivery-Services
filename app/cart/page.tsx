@@ -287,6 +287,8 @@ export default function CartPage() {
                   value={dropoff}
                   onChange={setDropoffOverride}
                   placeholder="Search your area or street"
+                  changeLabel="Change delivery location"
+                  mapTitle="Choose your delivery place"
                 />
               </div>
 

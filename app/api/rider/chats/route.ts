@@ -19,7 +19,8 @@ export async function GET() {
 
   const [online, open, active] = await Promise.all([
     getOnlineRiders(),
-    prisma.riderChat.findMany({ where: { status: 'OPEN' }, include: { ...RIDER_CHAT_INCLUDE, messages: { orderBy: { createdAt: 'desc' }, take: 1 } } }),
+    // Orders with an area manager (areaId set) are not offered to riders: the manager picks one, and the order then shows up in `active` below.
+    prisma.riderChat.findMany({ where: { status: 'OPEN', areaId: null }, include: { ...RIDER_CHAT_INCLUDE, messages: { orderBy: { createdAt: 'desc' }, take: 1 } } }),
     prisma.riderChat.findMany({ where: { riderId: rider.id, status: 'ACTIVE' }, include: { ...RIDER_CHAT_INCLUDE, messages: { orderBy: { createdAt: 'desc' }, take: 1 } } }),
   ]);
   const requests = open.flatMap((chat) => {

@@ -6,6 +6,8 @@ import { FINISHED_STATUSES } from '@/lib/seller-types';
 import { releaseCouponIfUnused } from '@/lib/coupons';
 import { ensureLoyaltyInvitation, releaseLoyaltyIfUnused } from '@/lib/loyalty-card';
 import { notifyAfterResponse } from '@/lib/notify';
+import { orderRef } from '@/lib/order-number';
+import { statusNotice, statusStamp } from '@/lib/order-tracking';
 import { awardOrderPoints, type OrderKindKey } from '@/lib/points';
 
 // What a seller can do with an order at each step. Cancelling is possible until it is out for delivery.
@@ -24,6 +26,23 @@ function readMarketplace(value: unknown) {
 
 function describe(status: string) {
   return status.toLowerCase().replace(/_/g, ' ');
+}
+
+/**
+ * The customer is told at each step (the bell and a push, both opening the tracking page); a problem here never undoes the change.
+ * Delivery has no notice here: the points and the rider's "Order delivered" tell them.
+ */
+function announceStatus(kind: 'mart' | 'gulplaza', order: { id: string; orderNumber: number; customer: { userId: string } }, status: string, storeName: string) {
+  const notice = statusNotice({
+    status,
+    kind,
+    ref: orderRef(kind, order.orderNumber),
+    storeName,
+    orderId: order.id,
+    customerUserId: order.customer.userId,
+  });
+
+  if (notice) notifyAfterResponse(async () => notice);
 }
 
 /**
@@ -95,7 +114,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     NextResponse.json({ error: 'This order was just updated. Please refresh.' }, { status: 409 });
 
   if (marketplace === 'MART') {
-    const order = await prisma.order.findFirst({ where: { id, sellerId: seller.id }, include: { items: true } });
+    const order = await prisma.order.findFirst({ where: { id, sellerId: seller.id }, include: { items: true, customer: { select: { userId: true } } } });
     if (!order) return notFound();
     if (!NEXT_STATUSES[order.status]?.includes(status)) return notAllowed(order.status);
 
@@ -103,7 +122,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       // The status guard stops a double click (or the customer cancelling at the same moment) from applying twice.
       const result = await tx.order.updateMany({
         where: { id, sellerId: seller.id, status: order.status },
-        data: { status, ...(status === 'DELIVERED' ? { deliveredAt: new Date() } : {}) },
+        data: { status, ...statusStamp(status), ...(status === 'DELIVERED' ? { deliveredAt: new Date() } : {}) },
       });
       if (result.count === 0) return false;
 
@@ -120,6 +139,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     });
 
     if (!changed) return conflict();
+    announceStatus('mart', order, status, seller.businessName);
     if (status === 'CANCELLED') refreshMartCatalog();
     if (status === 'DELIVERED') {
       await awardPoints('MART', id);
@@ -129,14 +149,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ order: { id, status } });
   }
 
-  const order = await prisma.gulplazaOrder.findFirst({ where: { id, sellerId: seller.id }, include: { items: true } });
+  const order = await prisma.gulplazaOrder.findFirst({ where: { id, sellerId: seller.id }, include: { items: true, customer: { select: { userId: true } } } });
   if (!order) return notFound();
   if (!NEXT_STATUSES[order.status]?.includes(status)) return notAllowed(order.status);
 
   const changed = await prisma.$transaction(async (tx) => {
     const result = await tx.gulplazaOrder.updateMany({
       where: { id, sellerId: seller.id, status: order.status },
-      data: { status, ...(status === 'DELIVERED' ? { deliveredAt: new Date() } : {}) },
+      data: { status, ...statusStamp(status), ...(status === 'DELIVERED' ? { deliveredAt: new Date() } : {}) },
     });
     if (result.count === 0) return false;
 
@@ -153,6 +173,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   });
 
   if (!changed) return conflict();
+  announceStatus('gulplaza', order, status, seller.businessName);
   if (status === 'CANCELLED') refreshFoodCatalog();
   if (status === 'DELIVERED') {
     await awardPoints('GULPLAZA', id);

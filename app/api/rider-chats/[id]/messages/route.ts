@@ -15,6 +15,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if ('error' in access) return access.error;
 
   const since = request.nextUrl.searchParams.get('since');
+  // Riders nearby only matter for an order riders can take; one with an area manager waits for the manager to pick a rider.
+  const isOpenToRiders = access.chat.status === 'OPEN' && access.chat.areaId === null;
 
   const [messages, chat, onlineRiders] = await Promise.all([
     prisma.riderChatMessage.findMany({
@@ -25,7 +27,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       orderBy: { createdAt: 'asc' },
     }),
     getRiderChatSummary(id),
-    access.chat.status === 'OPEN' ? getOnlineRiders() : Promise.resolve([]),
+    isOpenToRiders ? getOnlineRiders() : Promise.resolve([]),
   ]);
 
   if (!chat) {
@@ -33,10 +35,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   // Lets the customer see "N riders nearby" while waiting for someone to pick it up.
-  const nearbyRiderCount =
-    access.chat.status === 'OPEN'
-      ? ridersForLocation(chatDispatchPoint(access.chat), onlineRiders).length
-      : 0;
+  const nearbyRiderCount = isOpenToRiders ? ridersForLocation(chatDispatchPoint(access.chat), onlineRiders).length : 0;
 
   return NextResponse.json({
     chat: { ...chat, nearbyRiderCount },

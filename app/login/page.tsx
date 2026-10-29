@@ -67,7 +67,7 @@ function LoginForm() {
         return;
       }
 
-      await finishLogin();
+      await finishLogin(data.user?.role);
     } catch {
       setFormError('Could not reach the server. Please try again.');
     } finally {
@@ -75,10 +75,11 @@ function LoginForm() {
     }
   };
 
-  const finishLogin = async () => {
+  const finishLogin = async (role?: string) => {
     await refresh();
     const next = searchParams.get('next');
-    router.push(next && next.startsWith('/') ? next : '/');
+    // An Area Sales Manager has no use for the shop: they land on their own screen.
+    router.push(next && next.startsWith('/') ? next : role === 'ASM' ? '/asm' : '/');
     router.refresh();
   };
 
@@ -105,7 +106,7 @@ function LoginForm() {
               verifyLabel="Verify and log in"
               backLabel="Back to log in"
               onBack={() => setVerification(null)}
-              onVerified={finishLogin}
+              onVerified={() => finishLogin()}
             />
           ) : (
             <>

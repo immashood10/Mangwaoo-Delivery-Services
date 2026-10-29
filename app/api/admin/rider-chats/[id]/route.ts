@@ -1,7 +1,36 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
+import { releaseChatToRiders } from '@/lib/area-managers';
 import { ORDER_RECORD_CHAT_SELECT, orderSnapshot, reconcileOrderRecords, recordRiderOrder } from '@/lib/rider-orders';
+
+/**
+ * `{ action: 'release' }`: an order that is waiting for its area manager to pick a rider is handed to the riders instead (the
+ * first rider to reply takes it), for example when the manager is not answering. Admin only.
+ */
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getSession();
+
+  if (!session || session.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'You must be logged in as an admin to do this.' }, { status: 401 });
+  }
+
+  const body = await request.json().catch(() => null);
+
+  if (body?.action !== 'release') {
+    return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
+  }
+
+  const { id } = await params;
+  const outcome = await releaseChatToRiders(id);
+
+  if (outcome === 'missing') return NextResponse.json({ error: 'Chat not found.' }, { status: 404 });
+  if (outcome === 'not-waiting') {
+    return NextResponse.json({ error: 'Only an order that is waiting for its area manager can be handed to the riders.' }, { status: 409 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
 
 /**
  * Permanently deletes an order chat and all of its messages. Admin only. If a rider had taken the order, the rider's

@@ -20,7 +20,7 @@ function getSecretKey() {
 
 export type SessionPayload = {
   userId: string;
-  role: 'CUSTOMER' | 'SELLER' | 'RIDER' | 'ADMIN';
+  role: 'CUSTOMER' | 'SELLER' | 'RIDER' | 'ADMIN' | 'ASM';
   /** When the cookie was issued (seconds since 1970); added by the token itself. */
   iat?: number;
 };

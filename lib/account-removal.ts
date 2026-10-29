@@ -1,10 +1,12 @@
 import type { Prisma } from '@/lib/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
+import { releaseUncoveredAreaChats } from '@/lib/area-managers';
 import { releaseCouponIfUnused } from '@/lib/coupons';
 import { closeCustomerLoyaltyCard, releaseLoyaltyIfUnused } from '@/lib/loyalty-card';
 import { invalidateBanSnapshot } from '@/lib/bans';
 import { refreshFoodCatalog, refreshMartCatalog, refreshStories } from '@/lib/catalog-cache';
 import { orderRef } from '@/lib/order-number';
+import { statusStamp } from '@/lib/order-tracking';
 import { closeCustomerPoints } from '@/lib/points';
 import { SELLER_PAGES } from '@/lib/notification-types';
 import { ORDER_RECORD_CHAT_SELECT, orderSnapshot, recordRiderOrder } from '@/lib/rider-orders';
@@ -51,7 +53,7 @@ async function cancelOpenOrders(tx: Prisma.TransactionClient, owner: OrderOwner,
 
   for (const order of martOrders) {
     // The status guard keeps this from running twice if the order moves on at the same moment.
-    const changed = await tx.order.updateMany({ where: { id: order.id, status: { in: [...OPEN_ORDER_STATUSES] } }, data: { status: 'CANCELLED' } });
+    const changed = await tx.order.updateMany({ where: { id: order.id, status: { in: [...OPEN_ORDER_STATUSES] } }, data: { status: 'CANCELLED', ...statusStamp('CANCELLED') } });
     if (changed.count === 0) continue;
 
     for (const item of order.items) {
@@ -65,7 +67,7 @@ async function cancelOpenOrders(tx: Prisma.TransactionClient, owner: OrderOwner,
   }
 
   for (const order of foodOrders) {
-    const changed = await tx.gulplazaOrder.updateMany({ where: { id: order.id, status: { in: [...OPEN_ORDER_STATUSES] } }, data: { status: 'CANCELLED' } });
+    const changed = await tx.gulplazaOrder.updateMany({ where: { id: order.id, status: { in: [...OPEN_ORDER_STATUSES] } }, data: { status: 'CANCELLED', ...statusStamp('CANCELLED') } });
     if (changed.count === 0) continue;
 
     for (const item of order.items) {
@@ -94,6 +96,7 @@ export async function removeAccount(userId: string, adminId: string): Promise<Re
       customer: { select: { id: true } },
       seller: { select: { id: true } },
       rider: { select: { id: true } },
+      areaManager: { select: { areaId: true } },
     },
   });
 
@@ -153,6 +156,13 @@ export async function removeAccount(userId: string, adminId: string): Promise<Re
       await tx.rider.update({ where: { id: riderId }, data: { isApproved: false, isAvailable: false, lastSeenAt: null } });
       // Chats this rider was handling go back to waiting for another rider.
       await tx.riderChat.updateMany({ where: { riderId, status: 'ACTIVE' }, data: { status: 'OPEN', riderId: null, claimedAt: null } });
+    }
+
+    if (user.areaManager) {
+      // The manager's post ends. An area left without a manager sends its running order chats back to "first rider to reply",
+      // so no customer waits for a manager who is not there.
+      await tx.areaManager.delete({ where: { userId } });
+      await releaseUncoveredAreaChats(tx, user.areaManager.areaId);
     }
 
     // Personal data goes. (One-off delivery addresses stay: the orders they belong to are other people's records.)

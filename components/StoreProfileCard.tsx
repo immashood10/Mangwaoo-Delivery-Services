@@ -240,6 +240,7 @@ export default function StoreProfileCard({
                 onChange={setPin}
                 placeholder="Search your shop, area or street"
                 changeLabel="Change restaurant location"
+                mapTitle="Pin your restaurant on the map"
               />
               <p className="mt-1.5 text-xs text-brand-gray">
                 Customers searching for food see the restaurants nearest to their delivery address first.

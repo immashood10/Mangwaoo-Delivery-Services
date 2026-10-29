@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { managedAreaFor, notifyAreaManagers } from '@/lib/area-managers';
 import { billedDistanceKm } from '@/lib/delivery';
 import { distanceInKm } from '@/lib/geo';
 import { ADMIN_PAGES } from '@/lib/notification-types';
@@ -29,6 +30,12 @@ export async function startOrContinueOrderChat(input: {
   text: string;
   deliveryCharge: number | null;
   distanceKm?: number | null;
+  /**
+   * The customer typed this order in the Chat window (not a checkout): when their area has an Area Sales Manager the chat
+   * goes to that manager, who picks the rider, instead of to the first rider who replies. Only a NEW chat is routed; one that
+   * is already live keeps the way it started.
+   */
+  viaManager?: boolean;
 }) {
   const { customer, deliveryCharge } = input;
   const messageData = { senderRole: 'CUSTOMER' as const, senderName: customer.name, body: input.text };
@@ -63,6 +70,8 @@ export async function startOrContinueOrderChat(input: {
   }
 
   // New chat: two sequential inserts (the DB is remote, so no extra re-read — the summary is built from what we already know).
+  // The manager of the customer's area (if there is one) is found first: that is the chat's `areaId`.
+  const areaId = input.viaManager ? await managedAreaFor({ lat: input.lat, lng: input.lng }) : null;
   const chat = await prisma.riderChat.create({
     data: {
       customerId: customer.id,
@@ -74,6 +83,7 @@ export async function startOrContinueOrderChat(input: {
       pickupText: input.pickupText,
       deliveryCharge,
       deliveryDistanceKm: distanceKm,
+      areaId,
     },
   });
   await prisma.riderChatMessage.create({ data: { chatId: chat.id, ...messageData } });
@@ -85,6 +95,14 @@ export async function startOrContinueOrderChat(input: {
     href: ADMIN_PAGES.chats,
     refId: `chat:${chat.id}`,
   }));
+
+  if (areaId !== null) {
+    notifyAreaManagers(areaId, {
+      title: 'New order waiting for a rider',
+      message: `${customer.name} sent an order - pickup: ${input.pickupText.slice(0, 60)}. Pick a rider for it.`,
+      refId: `asm-chat:${chat.id}`,
+    });
+  }
 
   return {
     chat: serializeRiderChat({ ...chat, customer: { user: { name: customer.name, phone: null } }, rider: null }),

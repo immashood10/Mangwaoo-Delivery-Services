@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { listLiveOrderLinks } from '@/lib/order-tracking';
 import { getRiderChatSummary } from '@/lib/rider-chat';
 import FindingRider from '@/components/FindingRider';
 
@@ -26,11 +27,11 @@ export default async function FindingRiderPage({ params }: { params: Promise<{ i
     notFound();
   }
 
-  const summary = await getRiderChatSummary(id);
+  const [summary, liveOrders] = await Promise.all([getRiderChatSummary(id), listLiveOrderLinks(customer.id)]);
 
   if (!summary) {
     notFound();
   }
 
-  return <FindingRider initialChat={summary} />;
+  return <FindingRider initialChat={summary} liveOrders={liveOrders} />;
 }

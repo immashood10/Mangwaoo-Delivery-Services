@@ -19,6 +19,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const access = await resolveRiderChatAccess(id);
   if ('error' in access) return access.error;
 
+  // Finishing an order is for the rider who delivered it, the customer who got it, or an admin: not for the area manager.
+  if (access.manager) {
+    return NextResponse.json({ error: 'The rider or the customer finishes an order.' }, { status: 403 });
+  }
+
   // Riders can only close chats they have claimed, not open requests.
   if (access.role === 'RIDER' && access.chat.riderId !== access.riderId) {
     return NextResponse.json({ error: 'Reply first to take this order.' }, { status: 403 });

@@ -3,20 +3,31 @@ import type { NextConfig } from "next";
 const isProduction = process.env.NODE_ENV === "production";
 
 // Where the site may load things from. Everything is our own origin, except the map embedded in the address picker
-// (Google Maps) and the address search (OpenStreetMap's Nominatim). Photos are served by our own routes or sent as
-// data: URLs; voice notes play from blob: URLs.
+// (Google Maps), the address search (OpenStreetMap's Nominatim) and the picture of the live tracking map (map tiles, below).
+// Photos are served by our own routes or sent as data: URLs; voice notes play from blob: URLs.
 // Firebase phone verification (only when it is the chosen provider): Google's reCAPTCHA check and Firebase's sign-in API.
 const firebasePhone = process.env.PHONE_VERIFICATION_PROVIDER === "firebase";
 const recaptcha = firebasePhone ? " https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/" : "";
 const firebaseApis = firebasePhone ? " https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com" : "";
 const firebaseFrames = firebasePhone ? " https://www.google.com/recaptcha/ https://recaptcha.google.com" : "";
 
+// The live tracking map's tiles (components/LiveMap.tsx) come from a tile server: OpenStreetMap's by default. This must name the
+// same server as lib/map-config.ts; NEXT_PUBLIC_MAP_TILE_URL switches both to another provider (placeholders {z} {x} {y}, no {s}).
+const mapTileUrl = process.env.NEXT_PUBLIC_MAP_TILE_URL || "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+let mapTileOrigin = "https://tile.openstreetmap.org";
+
+try {
+  mapTileOrigin = new URL(mapTileUrl.replace("{z}", "0").replace("{x}", "0").replace("{y}", "0")).origin;
+} catch {
+  // An address that can't be read: the default server stays allowed.
+}
+
 const contentSecurityPolicy = [
   "default-src 'self'",
   // Next.js puts small inline scripts in every page, so 'unsafe-inline' is needed; nothing from other sites runs.
   `script-src 'self' 'unsafe-inline'${isProduction ? "" : " 'unsafe-eval'"}${recaptcha}`,
   "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob:${firebasePhone ? " https://www.gstatic.com" : ""}`,
+  `img-src 'self' data: blob: ${mapTileOrigin}${firebasePhone ? " https://www.gstatic.com" : ""}`,
   "media-src 'self' data: blob:",
   "font-src 'self' data:",
   `connect-src 'self' https://nominatim.openstreetmap.org${firebaseApis}`,

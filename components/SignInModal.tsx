@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Mail, Lock, Eye, EyeOff, X, Smartphone } from 'lucide-react';
 import WhatsAppCodeForm from '@/components/WhatsAppCodeForm';
 import { useAuth } from '@/lib/auth-context';
@@ -47,6 +48,7 @@ export default function SignInModal({
   onClose: () => void;
 }) {
   const { refresh } = useAuth();
+  const router = useRouter();
   // Set when the password was right but the WhatsApp number was never confirmed: the code screen takes over.
   const [verification, setVerification] = useState<PhoneVerificationInfo | null>(null);
   const [formData, setFormData] = useState({ email: '', password: '', remember: false });
@@ -93,6 +95,9 @@ export default function SignInModal({
 
       await refresh();
       onClose();
+
+      // An Area Sales Manager has no use for the shop: they go to their own screen.
+      if (data.user?.role === 'ASM') router.push('/asm');
     } catch {
       setFormError('Could not reach the server. Please try again.');
     } finally {

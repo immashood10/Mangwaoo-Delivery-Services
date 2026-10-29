@@ -5,11 +5,11 @@ import { invalidateBanSnapshot } from '@/lib/bans';
 import { passwordProblem } from '@/lib/password-policy';
 import { enforceRateLimits } from '@/lib/rate-limit';
 
-/** A logged-in customer changes their password; the current one must be confirmed first. */
+/** A logged-in customer (or an area manager, whose password the super admin first set) changes their password; the current one must be confirmed first. */
 export async function POST(request: NextRequest) {
   const session = await getSession();
 
-  if (!session || session.role !== 'CUSTOMER') {
+  if (!session || (session.role !== 'CUSTOMER' && session.role !== 'ASM')) {
     return NextResponse.json({ error: 'Please log in to change your password.' }, { status: 401 });
   }
 

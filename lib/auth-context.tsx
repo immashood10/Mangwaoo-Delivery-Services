@@ -8,7 +8,7 @@ import type { AccountNotice } from '@/lib/ban-duration';
 export type AuthUser = {
   id: string;
   name: string;
-  role: 'CUSTOMER' | 'SELLER' | 'RIDER' | 'ADMIN';
+  role: 'CUSTOMER' | 'SELLER' | 'RIDER' | 'ADMIN' | 'ASM';
 };
 
 type AuthContextValue = {

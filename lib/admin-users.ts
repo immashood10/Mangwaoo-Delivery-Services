@@ -14,8 +14,9 @@ import {
 // The lists behind the admin dashboard's cards (Admin > Users). Each view is exactly the set of accounts its card
 // counts, so the number on the card and the number of rows here are the same.
 
-// Accounts that finished signing up (confirmed their WhatsApp number), were not deleted, and are not admins.
-const LIVE_ACCOUNTS: Prisma.UserWhereInput = { deletedAt: null, phoneVerifiedAt: { not: null }, role: { not: 'ADMIN' } };
+// Accounts that finished signing up (confirmed their WhatsApp number), were not deleted, and are not admins or area managers
+// (those are made and removed on the super admin's Area Managers page).
+const LIVE_ACCOUNTS: Prisma.UserWhereInput = { deletedAt: null, phoneVerifiedAt: { not: null }, role: { notIn: ['ADMIN', 'ASM'] } };
 
 function viewFilter(view: UserView, now: Date): Prisma.UserWhereInput {
   const onlineSince = new Date(now.getTime() - RIDER_ONLINE_WINDOW_MS);

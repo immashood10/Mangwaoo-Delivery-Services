@@ -262,7 +262,8 @@ function SavedAddresses({ initialAddresses }: { initialAddresses: SettingsAddres
   );
 }
 
-function PasswordForm() {
+/** Also used on the area manager's account page. */
+export function PasswordForm() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');

@@ -11,6 +11,8 @@ export type CancelOutcome =
       hadRider: boolean;
       customer: { userId: string; name: string };
       rider: { userId: string; name: string } | null;
+      /** The service area whose manager looked after this order (null: it had none), so the manager can be told. */
+      areaId: number | null;
     };
 
 /**
@@ -37,6 +39,7 @@ export async function cancelOrderChat(chatId: string, by: 'RIDER' | 'CUSTOMER'):
         where: { id: chatId },
         select: {
           ...ORDER_RECORD_CHAT_SELECT,
+          areaId: true,
           rider: { select: { userId: true, user: { select: { name: true } } } },
         },
       });
@@ -56,6 +59,7 @@ export async function cancelOrderChat(chatId: string, by: 'RIDER' | 'CUSTOMER'):
         hadRider: chat.riderId !== null,
         customer: { userId: chat.customer.userId, name: chat.customer.user.name },
         rider: chat.rider ? { userId: chat.rider.userId, name: chat.rider.user.name } : null,
+        areaId: chat.areaId,
       } as const;
     },
     { timeout: 20000, maxWait: 10000 }

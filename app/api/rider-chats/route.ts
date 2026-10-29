@@ -93,6 +93,8 @@ export async function POST(request: NextRequest) {
     pickupText,
     text,
     deliveryCharge: null,
+    // The Chat window: the manager of the customer's area (if any) picks the rider.
+    viaManager: true,
   });
 
   return NextResponse.json({ chat }, created ? { status: 201 } : undefined);

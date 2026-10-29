@@ -333,7 +333,7 @@ function OrderActions({
 
 /** New requests, or the rider's accepted chats: the list on the left and the order chat on the right. */
 export function RiderOrders({ mode }: { mode: 'requests' | 'chats' }) {
-  const { rider, wallet, requests, chats, dropChat } = useRider();
+  const { rider, wallet, rules, requests, chats, dropChat } = useRider();
   const [selectedChat, setSelectedChat] = useState<RiderChatSummary | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [notice, setNotice] = useState('');
@@ -460,7 +460,11 @@ export function RiderOrders({ mode }: { mode: 'requests' | 'chats' }) {
         <ConfirmDialog
           title="End chat?"
           message="Are you sure you want to end this chat?"
-          note="Order will be cancelled and chats will disappear."
+          note={
+            rules.bonusEnabled && isMine
+              ? 'Order will be cancelled and chats will disappear. A cancelled order earns no delivery bonus.'
+              : 'Order will be cancelled and chats will disappear.'
+          }
           onConfirm={cancelChat}
           onCancel={() => setConfirmEnd(false)}
         />

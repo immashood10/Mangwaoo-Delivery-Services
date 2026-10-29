@@ -114,7 +114,8 @@ export async function getSuperAdminData(rangeDays: SuperRange) {
     prisma.order.groupBy({ by: ['sellerId'], where: NOT_CANCELLED, _sum: { totalAmount: true, discountAmount: true }, _count: true }),
     prisma.gulplazaOrder.groupBy({ by: ['sellerId'], where: NOT_CANCELLED, _sum: { totalAmount: true, discountAmount: true, deliveryFee: true }, _count: true }),
     prisma.user.findMany({
-      where: { ...LIVE_ACCOUNT, role: { not: 'ADMIN' } },
+      // Registrations are customers, sellers and riders; area managers are made by the super admin (Admin > Area Managers).
+      where: { ...LIVE_ACCOUNT, role: { notIn: ['ADMIN', 'ASM'] } },
       orderBy: { createdAt: 'desc' },
       take: 5,
       select: { id: true, name: true, email: true, role: true, createdAt: true, seller: { select: { isApproved: true } }, rider: { select: { isApproved: true } } },

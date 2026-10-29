@@ -21,6 +21,7 @@ import {
   ShoppingCart,
   Star,
   Store,
+  UserCog,
   Users,
   Wallet,
   X,
@@ -47,15 +48,18 @@ const ADMIN_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: '/admin/discounts', label: 'Discount', icon: BadgePercent },
 ];
 
-// Only the "superadmin" account sees this one (the page itself checks too).
-const SUPER_LINK = { href: '/admin/super', label: 'Super Overview', icon: Crown };
+// Only the "superadmin" account sees these (the pages themselves check too): the overview, and the Area Sales Managers it makes.
+const SUPER_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: '/admin/super', label: 'Super Overview', icon: Crown },
+  { href: '/admin/area-managers', label: 'Area Managers', icon: UserCog },
+];
 
 function isActive(pathname: string, href: string) {
   return href === '/admin' ? pathname === '/admin' : pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export function adminPageTitle(pathname: string) {
-  return [SUPER_LINK, ...ADMIN_LINKS].find((link) => isActive(pathname, link.href))?.label ?? 'Admin';
+  return [...SUPER_LINKS, ...ADMIN_LINKS].find((link) => isActive(pathname, link.href))?.label ?? 'Admin';
 }
 
 function SidebarContent({ adminName, isSuperAdmin, onNavigate }: { adminName: string; isSuperAdmin: boolean; onNavigate?: () => void }) {
@@ -94,7 +98,7 @@ function SidebarContent({ adminName, isSuperAdmin, onNavigate }: { adminName: st
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-4">
-        {(isSuperAdmin ? [SUPER_LINK, ...ADMIN_LINKS] : ADMIN_LINKS).map(({ href, label, icon: Icon }) => {
+        {(isSuperAdmin ? [...SUPER_LINKS, ...ADMIN_LINKS] : ADMIN_LINKS).map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);
           const unseen = counts[href] ?? 0;
           return (

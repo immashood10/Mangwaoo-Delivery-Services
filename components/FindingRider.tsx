@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Bike, CheckCircle2, PackageSearch } from 'lucide-react';
+import { Bike, CheckCircle2, ChevronRight, Navigation, PackageSearch } from 'lucide-react';
 import RiderChatThread from './RiderChatThread';
 import RiderRatingForm from './RiderRatingForm';
 import RouteSummary from './RouteSummary';
 import StarRating, { RiderRatingLabel } from './StarRating';
+import { trackingPath } from '@/lib/order-number';
+import { TRACK_STATUS_LABEL, type TrackStatus } from '@/lib/order-tracking-config';
 import type { RiderChatSummary } from '@/lib/rider-chat-types';
 
 /** Radar-style "looking for a rider" animation. */
@@ -23,7 +25,10 @@ function Radar() {
   );
 }
 
-export default function FindingRider({ initialChat }: { initialChat: RiderChatSummary }) {
+/** An order of this customer that is still going, with where to follow it live. */
+export type LiveOrderLink = { ref: string; status: TrackStatus; storeName: string };
+
+export default function FindingRider({ initialChat, liveOrders = [] }: { initialChat: RiderChatSummary; liveOrders?: LiveOrderLink[] }) {
   const [chat, setChat] = useState(initialChat);
   const [isRemoved, setIsRemoved] = useState(false);
 
@@ -51,11 +56,17 @@ export default function FindingRider({ initialChat }: { initialChat: RiderChatSu
             <Radar />
             <h1 className="mt-4 text-2xl font-bold text-ink">Finding your rider…</h1>
             <p className="mt-1 text-brand-gray">
-              {chat.nearbyRiderCount
-                ? `${chat.nearbyRiderCount} ${chat.nearbyRiderCount === 1 ? 'rider is' : 'riders are'} nearby and can see your order.`
-                : 'We’re looking for a rider near you. Our team will reply shortly if nobody is online.'}
+              {chat.managed
+                ? `Your order is with our ${chat.areaName ?? 'area'} team, who are picking a rider for you.`
+                : chat.nearbyRiderCount
+                  ? `${chat.nearbyRiderCount} ${chat.nearbyRiderCount === 1 ? 'rider is' : 'riders are'} nearby and can see your order.`
+                  : 'We’re looking for a rider near you. Our team will reply shortly if nobody is online.'}
             </p>
-            <p className="mt-1 text-sm text-brand-gray">Keep this page open — the first rider to accept will appear here.</p>
+            <p className="mt-1 text-sm text-brand-gray">
+              {chat.managed
+                ? 'Keep this page open — your rider will appear here as soon as one is assigned.'
+                : 'Keep this page open — the first rider to accept will appear here.'}
+            </p>
           </>
         ) : isClosed ? (
           <>
@@ -93,6 +104,30 @@ export default function FindingRider({ initialChat }: { initialChat: RiderChatSu
         ) : null
       ) : null}
 
+      {/* Where each order of theirs that is still going can be followed live. */}
+      {liveOrders.length > 0 ? (
+        <section className="mb-6 space-y-2" aria-label="Track your order">
+          {liveOrders.map((order) => (
+            <Link
+              key={order.ref}
+              href={trackingPath(order.ref)}
+              className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3 shadow-soft transition hover:ring-2 hover:ring-brand-red-primary/30"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-red-primary/10 text-accent">
+                <Navigation className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-bold text-ink">Track order {order.ref}</span>
+                <span className="block truncate text-xs text-brand-gray">
+                  {order.storeName} · {TRACK_STATUS_LABEL[order.status]}
+                </span>
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-brand-gray" aria-hidden="true" />
+            </Link>
+          ))}
+        </section>
+      ) : null}
+
       <div className="overflow-hidden rounded-2xl bg-surface shadow-soft">
         <RouteSummary chat={chat} className="border-b border-gray-100 bg-gray-50 px-4 py-3" />
         <div className="h-[28rem]">
@@ -102,7 +137,7 @@ export default function FindingRider({ initialChat }: { initialChat: RiderChatSu
             currentRole="CUSTOMER"
             onChatUpdate={setChat}
             onMissing={() => setIsRemoved(true)}
-            placeholder="Message your rider…"
+            placeholder={chat.status === 'ACTIVE' ? 'Message your rider…' : 'Type a message…'}
           />
         </div>
       </div>

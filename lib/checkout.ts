@@ -5,7 +5,7 @@ import { type Coordinates } from '@/lib/geo';
 import { sendWhatsAppNotification } from '@/lib/whatsapp';
 import { refreshFoodCatalog, refreshMartCatalog } from '@/lib/catalog-cache';
 import { getSellerUserIds, notifyAdminsAfterResponse, notifyAfterResponse } from '@/lib/notify';
-import { orderRef } from '@/lib/order-number';
+import { orderRef, trackingPath } from '@/lib/order-number';
 import { ADMIN_PAGES, SELLER_PAGES } from '@/lib/notification-types';
 import { normalizeCouponCode, type CouponScope } from '@/lib/coupons';
 import { MART_PRODUCTS } from '@/lib/data';
@@ -603,13 +603,14 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
     });
   });
 
-  // The customer gets the order number(s) at once, to quote to the seller or the rider.
+  // The customer gets the order number(s) at once, to quote to the seller or the rider. One order opens its live tracking page;
+  // several open My Account, where each has its own Track button.
   notifyAfterResponse(async () => ({
     userId: input.customer.userId,
     type: 'ORDER' as const,
     title: placed.length > 1 ? 'Orders placed' : 'Order placed',
-    message: `Your order number${placed.length > 1 ? 's are' : ' is'} ${placed.map((order) => order.ref).join(', ')}. You can follow it in My Account.`,
-    href: '/account',
+    message: `Your order number${placed.length > 1 ? 's are' : ' is'} ${placed.map((order) => order.ref).join(', ')}. ${placed.length > 1 ? 'You can follow them in My Account.' : 'Tap to follow it live.'}`,
+    href: placed.length > 1 ? '/account' : trackingPath(placed[0].ref),
     refId: `placed:${placed[0].id}`,
   }));
 

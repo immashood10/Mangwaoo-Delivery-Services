@@ -4,9 +4,10 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { User, MapPin, Banknote, Smartphone, XCircle, PackageSearch, History as HistoryIcon, MessageSquare, Star, ChevronRight, Gift, CreditCard } from 'lucide-react';
+import { User, MapPin, Banknote, Smartphone, XCircle, PackageSearch, History as HistoryIcon, MessageSquare, Star, ChevronRight, Gift, CreditCard, Navigation } from 'lucide-react';
 import MessagesInbox from './MessagesInbox';
 import type { LoyaltyCardStatusKey } from '@/lib/loyalty-card-config';
+import { trackingPath } from '@/lib/order-number';
 
 type OrderItem = {
   id: string;
@@ -173,8 +174,21 @@ function OrderCard({ order, onCancelled }: { order: Order; onCancelled: () => vo
         </p>
       ) : null}
 
-      {CANCELLABLE_STATUSES.includes(order.status) && (
-        <div className="mt-3 border-t border-gray-100 pt-3">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-3">
+        {HISTORY_STATUSES.includes(order.status) ? (
+          <Link href={trackingPath(order.ref)} className="text-xs font-semibold text-accent hover:underline">
+            View details
+          </Link>
+        ) : (
+          <Link
+            href={trackingPath(order.ref)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-brand-red-primary px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-red-secondary"
+          >
+            <Navigation className="w-3.5 h-3.5" />
+            Track order
+          </Link>
+        )}
+        {CANCELLABLE_STATUSES.includes(order.status) && (
           <button
             type="button"
             onClick={handleCancel}
@@ -184,8 +198,8 @@ function OrderCard({ order, onCancelled }: { order: Order; onCancelled: () => vo
             <XCircle className="w-3.5 h-3.5" />
             {isCancelling ? 'Cancelling…' : 'Cancel order'}
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

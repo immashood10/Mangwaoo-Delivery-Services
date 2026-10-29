@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { notifyAreaManagers } from '@/lib/area-managers';
 import { ADMIN_PAGES } from '@/lib/notification-types';
 import { notifyAdminsAfterResponse, notifyAfterResponse } from '@/lib/notify';
 import { resolveRiderChatAccess } from '@/lib/rider-chat';
@@ -13,6 +14,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const { id } = await params;
   const access = await resolveRiderChatAccess(id);
   if ('error' in access) return access.error;
+
+  if (access.manager) {
+    return NextResponse.json({ error: 'An area manager assigns the rider; the customer or an admin cancels an order.' }, { status: 403 });
+  }
 
   if (access.role === 'ADMIN') {
     return NextResponse.json({ error: 'Admins remove order chats with Delete in Admin > Order Chats.' }, { status: 403 });
@@ -31,6 +36,18 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
   if (result.kind === 'completed') {
     return NextResponse.json({ error: 'This order was already completed, so it can no longer be cancelled.' }, { status: 409 });
+  }
+
+  // The area manager who was handling the order hears about it too (a customer who changes their mind, or a rider who backs out).
+  if (result.areaId !== null) {
+    notifyAreaManagers(result.areaId, {
+      title: 'Order cancelled',
+      message:
+        access.role === 'RIDER' && result.rider
+          ? `${result.rider.name} cancelled the order of ${result.customer.name}.`
+          : `${result.customer.name} cancelled the order${result.rider ? ` (it was with ${result.rider.name})` : ''}.`,
+      refId: `asm-cancel:${id}`,
+    });
   }
 
   // Whoever did not press the button hears about it.

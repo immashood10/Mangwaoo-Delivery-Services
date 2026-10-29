@@ -39,6 +39,12 @@ export const ADMIN_PAGES = {
   ads: '/admin/ads',
 } as const;
 
+/** Area manager (ASM) pages that notifications point at (plain paths, so opening the page marks them seen). */
+export const ASM_PAGES = {
+  orders: '/asm',
+  riders: '/asm/riders',
+} as const;
+
 export const SELLER_PAGES = {
   dashboard: '/seller/dashboard',
   sales: '/seller/sales',
