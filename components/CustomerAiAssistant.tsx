@@ -45,7 +45,9 @@ export default function CustomerAiAssistant() {
   ]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }), [messages, busy, pending]);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, busy, pending]);
 
   if (DASHBOARD_ROOTS.some((root) => pathname === root || pathname.startsWith(`${root}/`))) return null;
 
