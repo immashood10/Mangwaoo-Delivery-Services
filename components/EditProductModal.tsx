@@ -6,7 +6,9 @@ import { ImagePlus, X } from 'lucide-react';
 import SizeFields from './SizeFields';
 import VehicleDetailsFields from './VehicleDetailsFields';
 import PortionFields, { portionRowsFrom, portionsFromRows, type PortionRow } from './seller/PortionFields';
+import FoodMetadataFields from './seller/FoodMetadataFields';
 import type { Portion } from '@/lib/food-portions';
+import type { FoodDishTag, FoodSpiceLevelKey } from '@/lib/food-ai-metadata';
 import {
   emptySizeDetails,
   getSizeOptions,
@@ -37,6 +39,8 @@ type EditableProduct = {
   sizes?: SizeDetails | null;
   /** Food dishes sold by weight only: the sizes (250 g, 500 g, 1 kg ...) with a price each. */
   portions?: Portion[];
+  spiceLevel?: FoodSpiceLevelKey | null;
+  dishTags?: FoodDishTag[];
 };
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
@@ -80,6 +84,8 @@ export default function EditProductModal({
   const [sizes, setSizes] = useState<SizeDetails>(() => product.sizes ?? emptySizeDetails());
   const [byWeight, setByWeight] = useState(() => enablePortions && (product.portions?.length ?? 0) > 0);
   const [portionRows, setPortionRows] = useState<PortionRow[]>(() => portionRowsFrom(product.portions ?? []));
+  const [spiceLevel, setSpiceLevel] = useState<FoodSpiceLevelKey | null>(product.spiceLevel ?? null);
+  const [dishTags, setDishTags] = useState<FoodDishTag[]>(product.dishTags ?? []);
   const [images, setImages] = useState<string[]>(product.images);
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -164,6 +170,7 @@ export default function EditProductModal({
           // A dish sold by weight is priced by its sizes (the server takes the lowest as the dish's own price).
           ...(enablePortions && byWeight ? {} : { price: parseFloat(form.price) }),
           ...(enablePortions ? { portions: byWeight ? portionsFromRows(portionRows) : [] } : {}),
+          ...(enablePortions ? { spiceLevel, dishTags } : {}),
           ...(hideStock ? {} : { stock: parseInt(form.stock, 10) }),
           ...(isVehicleAd ? { attributes: vehicle } : {}),
           ...(isSizedAd ? { attributes: sizes } : {}),
@@ -284,6 +291,8 @@ export default function EditProductModal({
           ) : null}
 
           {enablePortions ? (
+            <>
+            <FoodMetadataFields idPrefix="edit-food" spiceLevel={spiceLevel} dishTags={dishTags} onSpiceChange={setSpiceLevel} onTagsChange={setDishTags} />
             <PortionFields
               enabled={byWeight}
               onEnabledChange={setByWeight}
@@ -291,6 +300,7 @@ export default function EditProductModal({
               onRowsChange={setPortionRows}
               idPrefix="edit-portion"
             />
+            </>
           ) : null}
 
           <div className="grid grid-cols-2 gap-4">

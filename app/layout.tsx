@@ -9,6 +9,7 @@ import { CartProvider } from '@/lib/cart-context';
 import { AuthProvider } from '@/lib/auth-context';
 import { FavouritesProvider } from '@/lib/favourites-context';
 import { DeliveryAddressProvider } from '@/lib/delivery-address-context';
+import CustomerAiAssistant from '@/components/CustomerAiAssistant';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -66,6 +67,7 @@ export default function RootLayout({
                   <Footer />
                 </HideOnDashboardRoutes>
                 <ScrollToTop />
+                <CustomerAiAssistant />
               </DeliveryAddressProvider>
             </FavouritesProvider>
           </CartProvider>

@@ -8,7 +8,9 @@ import SizeFields from '@/components/SizeFields';
 import VehicleDetailsFields from '@/components/VehicleDetailsFields';
 import { SELLER_PAGES } from '@/lib/notification-types';
 import PortionFields, { portionsFromRows, type PortionRow } from './PortionFields';
+import FoodMetadataFields from './FoodMetadataFields';
 import type { Marketplace, SellerCategory } from '@/lib/seller-types';
+import type { FoodDishTag, FoodSpiceLevelKey } from '@/lib/food-ai-metadata';
 import {
   emptySizeDetails,
   getSizeOptions,
@@ -51,6 +53,8 @@ export default function PostProductForm({
   // A food dish can be sold by weight (250 g, 500 g, 1 kg ...) with a price per size instead of one price.
   const [byWeight, setByWeight] = useState(false);
   const [portionRows, setPortionRows] = useState<PortionRow[]>([]);
+  const [spiceLevel, setSpiceLevel] = useState<FoodSpiceLevelKey | null>(null);
+  const [dishTags, setDishTags] = useState<FoodDishTag[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [formError, setFormError] = useState('');
   const [postedName, setPostedName] = useState('');
@@ -139,6 +143,7 @@ export default function PostProductForm({
           ...(!isMart && byWeight ? { portions: portionsFromRows(portionRows) } : { price: parseFloat(form.price) }),
           // A vehicle ad is a single item, so it has no stock count to enter; food has none at all.
           ...(isMart ? { stock: isVehicleAd ? 1 : parseInt(form.stock, 10) } : {}),
+          ...(!isMart ? { spiceLevel, dishTags } : {}),
           images: imagePreviews,
           ...(isVehicleAd ? { attributes: vehicle } : {}),
           ...(isSizedAd ? { attributes: sizes } : {}),
@@ -158,6 +163,8 @@ export default function PostProductForm({
       setSizes(emptySizeDetails());
       setByWeight(false);
       setPortionRows([]);
+      setSpiceLevel(null);
+      setDishTags([]);
       setImagePreviews([]);
       router.refresh();
     } catch {
@@ -281,6 +288,8 @@ export default function PostProductForm({
       ) : null}
 
       {isMart ? null : (
+        <>
+        <FoodMetadataFields idPrefix="post-food" spiceLevel={spiceLevel} dishTags={dishTags} onSpiceChange={setSpiceLevel} onTagsChange={setDishTags} />
         <PortionFields
           enabled={byWeight}
           onEnabledChange={setByWeight}
@@ -288,6 +297,7 @@ export default function PostProductForm({
           onRowsChange={setPortionRows}
           idPrefix="post-portion"
         />
+        </>
       )}
 
       <div className={isVehicleAd ? '' : 'grid grid-cols-1 gap-4 sm:grid-cols-2'}>

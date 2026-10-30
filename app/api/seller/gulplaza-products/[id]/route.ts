@@ -5,6 +5,7 @@ import { getSession } from '@/lib/auth';
 import { refreshFoodCatalog } from '@/lib/catalog-cache';
 import { Prisma } from '@/lib/generated/prisma/client';
 import { lowestPortionPrice, parsePortionsInput, readPortions } from '@/lib/food-portions';
+import { parseFoodMetadata } from '@/lib/food-ai-metadata';
 
 async function resolveOwnedProduct(id: string) {
   const session = await getSession();
@@ -55,6 +56,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   const sendsSizes = body !== null && typeof body === 'object' && Object.hasOwn(body, 'portions');
+  const sendsFoodMetadata = body !== null && typeof body === 'object' && (Object.hasOwn(body, 'spiceLevel') || Object.hasOwn(body, 'dishTags'));
+  const foodMetadata = sendsFoodMetadata
+    ? parseFoodMetadata(body?.spiceLevel ?? resolved.product.spiceLevel, body?.dishTags ?? resolved.product.dishTags)
+    : null;
+  if (foodMetadata && 'error' in foodMetadata) return NextResponse.json({ error: foodMetadata.error }, { status: 400 });
   const keptPortions = sendsSizes ? sizes.portions : readPortions(resolved.product.portions);
   const typedPrice = typeof body?.price === 'number' ? body.price : parseFloat(body?.price);
   // A dish sold by weight is priced by its sizes: its own price is the lowest of them.
@@ -86,6 +92,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       price,
       images,
       ...(sendsSizes ? { portions: keptPortions.length > 0 ? keptPortions : Prisma.DbNull } : {}),
+      ...(foodMetadata && !('error' in foodMetadata) ? { spiceLevel: foodMetadata.spiceLevel, dishTags: foodMetadata.dishTags } : {}),
     },
   });
   refreshFoodCatalog();

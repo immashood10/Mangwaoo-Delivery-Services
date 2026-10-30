@@ -7,6 +7,7 @@ import { FOOD_DELIVERY_RADIUS_KM, foodReach } from '@/lib/delivery';
 import { dishPriceLabel, readPortions } from '@/lib/food-portions';
 import { isRealLocation, parseCoordinates, type Coordinates } from '@/lib/geo';
 import { getGulplazaProducts } from '@/lib/products';
+import FoodRecommendations from '@/components/FoodRecommendations';
 
 const CATEGORY_ICONS: Record<string, string> = Object.fromEntries(
   GULPLAZA_CATEGORIES.map((category) => [category.name, category.icon])
@@ -152,6 +153,8 @@ export default async function GulPlaza({
           </p>
         </section>
       )}
+
+      {!query && !selectedCategory ? <FoodRecommendations /> : null}
 
       {/* Products */}
       <section id="shop" className="py-16 md:py-24 bg-brand-light scroll-mt-20">

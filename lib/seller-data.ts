@@ -56,6 +56,8 @@ export async function getSellerProducts(seller: CurrentSeller): Promise<SellerPr
       attributes: null,
       sizes: null,
       portions: readPortions(product.portions),
+      spiceLevel: product.spiceLevel,
+      dishTags: product.dishTags as import('@/lib/food-ai-metadata').FoodDishTag[],
     }));
   }
 
@@ -78,6 +80,8 @@ export async function getSellerProducts(seller: CurrentSeller): Promise<SellerPr
     attributes: parseVehicleDetails(product.attributes),
     sizes: parseSizeDetails(product.attributes),
     portions: [],
+    spiceLevel: null,
+    dishTags: [],
   }));
 }
 

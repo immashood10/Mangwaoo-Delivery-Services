@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { isRasterImageDataUrl } from '@/lib/data-url-image';
 import { getSession } from '@/lib/auth';
 import { refreshFoodCatalog } from '@/lib/catalog-cache';
+import { parseFoodMetadata } from '@/lib/food-ai-metadata';
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -31,6 +32,8 @@ export async function POST(request: NextRequest) {
   const description = typeof body?.description === 'string' ? body.description.trim() : '';
   const categoryId = typeof body?.categoryId === 'string' ? body.categoryId : '';
   const images = Array.isArray(body?.images) ? body.images.filter((url: unknown) => typeof url === 'string') : [];
+  const foodMetadata = parseFoodMetadata(body?.spiceLevel ?? null, body?.dishTags ?? []);
+  if ('error' in foodMetadata) return NextResponse.json({ error: foodMetadata.error }, { status: 400 });
 
   // A dish sold by weight (250 g, 500 g, 1 kg ...) has a price per size; the dish's own price is then the lowest of them.
   const sizes = parsePortionsInput(body?.portions);
@@ -66,6 +69,8 @@ export async function POST(request: NextRequest) {
       description: description || null,
       price,
       portions: portions.length > 0 ? portions : undefined,
+      spiceLevel: foodMetadata.spiceLevel,
+      dishTags: foodMetadata.dishTags,
       stock: FOOD_UNLIMITED_STOCK,
       images,
       categoryId,

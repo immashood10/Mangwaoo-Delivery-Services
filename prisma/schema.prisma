@@ -960,6 +960,9 @@ model GulplazaProduct {
   /// (read and checked through lib/food-portions.ts). Null = a dish with one price. `price` then holds the lowest size's
   /// price, so every list can say "From PKR ...".
   portions    Json?
+  /// Optional food metadata used by the customer menu search and recommendations. Unknown existing dishes stay unclassified.
+  spiceLevel FoodSpiceLevel?
+  dishTags   String[] @default([])
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
 
@@ -969,6 +972,12 @@ model GulplazaProduct {
   category   GulplazaCategory @relation(fields: [categoryId], references: [id])
 
   orderItems GulplazaOrderItem[]
+}
+
+enum FoodSpiceLevel {
+  MILD
+  MEDIUM
+  HOT
 }
 
 model GulplazaOrder {

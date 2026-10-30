@@ -3,6 +3,7 @@
 import type { Portion } from '@/lib/food-portions';
 import type { SizeDetails } from '@/lib/size-options';
 import type { VehicleDetails } from '@/lib/vehicle-details';
+import type { FoodDishTag, FoodSpiceLevelKey } from '@/lib/food-ai-metadata';
 
 export type Marketplace = 'MART' | 'GULPLAZA';
 
@@ -24,6 +25,9 @@ export type SellerProduct = {
   sizes: SizeDetails | null;
   /** Food dishes sold by weight (250 g, 500 g, 1 kg ...) with a price each; empty = a dish with one price. */
   portions: Portion[];
+  /** Food listing metadata; null/empty for old unclassified dishes and non-food products. */
+  spiceLevel: FoodSpiceLevelKey | null;
+  dishTags: FoodDishTag[];
 };
 
 export type SellerOrderItem = {
