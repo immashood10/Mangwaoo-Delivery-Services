@@ -153,7 +153,7 @@ export default async function SuperOverviewPage({ searchParams }: { searchParams
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 2xl:grid-cols-6">
-        <Kpi label="Total Sales" value={pkr(data.totals.sales)} icon={Wallet} change={data.growth.sales} />
+        <Kpi label="Total Sales" value={pkr(data.totals.sales)} icon={Wallet} change={data.growth.sales} href={`/admin/super/rider-sales?range=${rangeDays}`} />
         <Kpi label="Total Orders" value={data.totals.orders.toLocaleString('en-IN')} icon={ShoppingCart} change={data.growth.orders} href="/admin/orders" />
         <Kpi label="Total Vendors" value={data.totals.vendors.toLocaleString('en-IN')} icon={Store} change={data.growth.vendors} href="/admin/users?view=sellers" />
         <Kpi label="Total Customers" value={data.totals.customers.toLocaleString('en-IN')} icon={Users} change={data.growth.customers} href="/admin/users?view=customers" />
