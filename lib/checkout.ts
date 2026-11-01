@@ -1,6 +1,6 @@
 import type { Coupon, Prisma } from '@/lib/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
-import { billedDistanceKm, deliveryFeeForDistance, foodReach } from '@/lib/delivery';
+import { billedDistanceKm, deliveryFeeForDistance, foodReach, qualifiesForFreeDelivery } from '@/lib/delivery';
 import { type Coordinates } from '@/lib/geo';
 import { sendWhatsAppNotification } from '@/lib/whatsapp';
 import { refreshFoodCatalog, refreshMartCatalog } from '@/lib/catalog-cache';
@@ -19,7 +19,7 @@ export type { CouponInfo, LoyaltyInfo, Marketplace, OrderQuote, Quote };
 // Prices a cart and turns it into orders. The browser only says WHAT is wanted (products, quantities, where to
 // deliver, which coupon); every amount comes from here, from the database:
 //   - items: the listed price of each product
-//   - food delivery: distance charge of the ride from each restaurant to the customer (lib/delivery.ts); MangwaooMart has none
+//   - food delivery: distance charge of the ride from each restaurant to the customer, free at the food subtotal threshold (lib/delivery.ts); MangwaooMart has none
 //   - coupon: a % off the items it applies to (never the delivery fee), paid by Mangwaoo, not the seller
 //   - Loyalty Card: for a customer with an active card, the random % their card drew for this order, off what the items
 //     still cost after the coupon (never the delivery fee), paid by Mangwaoo, not the seller (lib/loyalty-card.ts)
@@ -235,6 +235,7 @@ function sampleOrders(lines: CheckoutLine[], groups: Group[]): OrderQuote[] {
     sellerName: vendor,
     subtotal,
     deliveryFee: 0,
+    freeDelivery: false,
     distanceKm: null,
     deliveryNote: null,
     farAway: false,
@@ -301,20 +302,22 @@ export async function priceCheckout(input: {
     const loyaltyDiscount = loyaltyShares[index] ?? 0;
     const discount = couponDiscount + loyaltyDiscount;
     let deliveryFee = 0;
+    let freeDelivery = false;
     let distanceKm: number | null = null;
     let deliveryNote: OrderQuote['deliveryNote'] = null;
     let farAway = false;
 
     if (isFood) {
-      // The fee follows the distance, however far: a restaurant beyond FOOD_DELIVERY_RADIUS_KM is only flagged `farAway`
-      // (the cart tells the customer it costs more). Without both pins there is no distance, so no fee (placeOrders refuses).
+      // The fee follows the distance unless this restaurant's item subtotal qualifies for free delivery. A restaurant
+      // beyond FOOD_DELIVERY_RADIUS_KM is still orderable. Without both pins there is no distance, so no fee (placeOrders refuses).
       const reach = foodReach(input.dropoff, group.location);
 
       if (reach.status === 'NEEDS_ORIGIN') deliveryNote = 'NEEDS_DROPOFF';
       else if (reach.status === 'NO_PIN') deliveryNote = 'NO_RESTAURANT_PIN';
       else {
         distanceKm = billedDistanceKm(reach.distanceKm);
-        deliveryFee = deliveryFeeForDistance(distanceKm);
+        freeDelivery = qualifiesForFreeDelivery(group.subtotal);
+        deliveryFee = freeDelivery ? 0 : deliveryFeeForDistance(distanceKm);
         farAway = reach.status === 'FAR';
       }
     }
@@ -325,6 +328,7 @@ export async function priceCheckout(input: {
       sellerName: group.sellerName,
       subtotal: group.subtotal,
       deliveryFee,
+      freeDelivery,
       distanceKm,
       deliveryNote,
       farAway,

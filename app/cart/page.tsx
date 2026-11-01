@@ -6,7 +6,13 @@ import { useRouter } from 'next/navigation';
 import { Minus, Plus, Trash2, ShoppingCart, MessageCircle, Banknote, Smartphone, BadgePercent, X, Gift, CreditCard } from 'lucide-react';
 import { useCart } from '@/lib/cart-context';
 import { useDeliveryAddress } from '@/lib/delivery-address-context';
-import { DELIVERY_RATE_PER_KM, FOOD_DELIVERY_RADIUS_KM, MINIMUM_DELIVERY_FEE, farAwayNote } from '@/lib/delivery';
+import {
+  DELIVERY_RATE_PER_KM,
+  FOOD_DELIVERY_RADIUS_KM,
+  FREE_DELIVERY_MIN_ORDER_AMOUNT,
+  MINIMUM_DELIVERY_FEE,
+  farAwayNote,
+} from '@/lib/delivery';
 import { formatPortion, withPortionLabel } from '@/lib/food-portions';
 import type { Quote } from '@/lib/checkout-types';
 import LocationPicker, { type PickedLocation } from '@/components/LocationPicker';
@@ -101,7 +107,7 @@ export default function CartPage() {
   // Food from a restaurant whose kitchen isn't on the map has no distance, so no delivery fee, and can't be ordered.
   const blockedOrders = foodOrders.filter((order) => order.deliveryNote === 'NO_RESTAURANT_PIN');
   // Restaurants beyond the nearby radius can be ordered from; the customer is told the delivery fee is higher.
-  const farOrders = foodOrders.filter((order) => order.farAway);
+  const farOrders = foodOrders.filter((order) => order.farAway && !order.freeDelivery);
   const cartHasFood = items.some((item) => item.marketplace === 'gulplaza');
   const shownSubtotal = quote ? quote.subtotal : subtotal;
   const total = quote ? quote.total : subtotal;
@@ -506,7 +512,9 @@ export default function CartPage() {
                       {order.deliveryNote === 'NEEDS_DROPOFF' ? 'Pin your location' : "Can't deliver"}
                     </span>
                   ) : (
-                    <span className="shrink-0 font-semibold text-ink">{pkr(order.deliveryFee)}</span>
+                    <span className={`shrink-0 font-semibold ${order.freeDelivery ? 'text-success' : 'text-ink'}`}>
+                      {order.freeDelivery ? 'Free' : pkr(order.deliveryFee)}
+                    </span>
                   )}
                 </div>
               ))}
@@ -531,7 +539,7 @@ export default function CartPage() {
               ))}
               {cartHasFood ? (
                 <p className="text-xs text-gray-400">
-                  {`Delivery is charged on food only: PKR ${DELIVERY_RATE_PER_KM} per km from the restaurant to you, never less than PKR ${MINIMUM_DELIVERY_FEE}.`}
+                  {`Each restaurant's food subtotal before discounts of PKR ${FREE_DELIVERY_MIN_ORDER_AMOUNT} or more gets free delivery. Otherwise, delivery is PKR ${DELIVERY_RATE_PER_KM} per km, never less than PKR ${MINIMUM_DELIVERY_FEE}.`}
                 </p>
               ) : null}
 

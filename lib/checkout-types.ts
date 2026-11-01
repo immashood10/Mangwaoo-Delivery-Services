@@ -28,6 +28,8 @@ export type OrderQuote = {
   subtotal: number;
   /** Food only: the distance charge from the restaurant to the customer. Always 0 for MangwaooMart. */
   deliveryFee: number;
+  /** Food only: this restaurant's item subtotal qualifies for free delivery and the delivery location is known. */
+  freeDelivery: boolean;
   /** Food only: the distance the fee is for (billed to 0.1 km). */
   distanceKm: number | null;
   /**

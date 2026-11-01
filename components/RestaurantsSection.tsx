@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Bike, LocateFixed, MapPin, Store } from 'lucide-react';
 import FavouriteButton from '@/components/FavouriteButton';
 import { useDeliveryAddress } from '@/lib/delivery-address-context';
-import { FOOD_DELIVERY_RADIUS_KM, deliveryFeeForDistance } from '@/lib/delivery';
+import { FOOD_DELIVERY_RADIUS_KM, FREE_DELIVERY_MIN_ORDER_AMOUNT, deliveryFeeForDistance } from '@/lib/delivery';
 import { formatDistance, isRealLocation } from '@/lib/geo';
 import type { PriceTier, RestaurantCardData } from '@/lib/restaurant-cards';
 import { coverPath } from '@/lib/seller-cover-config';
@@ -81,7 +81,7 @@ function RestaurantCard({ restaurant, locationQuery }: { restaurant: RestaurantC
             <span className="inline-flex items-center gap-1">
               <Bike className="h-3.5 w-3.5" aria-hidden="true" />
               {restaurant.distanceKm !== null
-                ? `Delivery fee PKR ${deliveryFeeForDistance(restaurant.distanceKm)}`
+                ? `Delivery fee PKR ${deliveryFeeForDistance(restaurant.distanceKm)} · free on PKR ${FREE_DELIVERY_MIN_ORDER_AMOUNT}+`
                 : 'Delivery fee: add your address'}
             </span>
             {restaurant.distanceKm !== null ? (
