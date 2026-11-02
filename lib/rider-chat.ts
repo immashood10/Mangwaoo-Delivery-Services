@@ -53,6 +53,7 @@ export function serializeRiderChat(chat: ChatWithPeople) {
     managed: chat.areaId !== null,
     areaName: areaName(chat.areaId),
     createdAt: chat.createdAt.toISOString(),
+    claimedAt: chat.claimedAt?.toISOString() ?? null,
     updatedAt: chat.updatedAt.toISOString(),
   };
 }

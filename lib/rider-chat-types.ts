@@ -24,6 +24,8 @@ export type RiderChatSummary = {
   managed?: boolean;
   areaName?: string | null;
   createdAt: string;
+  /** When the current rider accepted the order; late-delivery rules use this as their clock start. */
+  claimedAt?: string | null;
   updatedAt: string;
   /** How customers rate this order's rider (null: nobody has rated them yet). Set where the customer meets the rider. */
   riderRating?: { average: number; count: number } | null;
