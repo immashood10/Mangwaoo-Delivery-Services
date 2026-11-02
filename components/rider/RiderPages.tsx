@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { AlertTriangle, ArrowLeft, Bike, CheckCircle2, ChevronRight, ClipboardList, Clock, Gift, Headset, Inbox, MapPin, MessagesSquare, Power, Wallet } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { RiderRatingLabel } from '@/components/StarRating';
@@ -376,12 +377,15 @@ function OrderActions({
 /** New requests, or the rider's accepted chats: the list on the left and the order chat on the right. */
 export function RiderOrders({ mode }: { mode: 'requests' | 'chats' }) {
   const { rider, wallet, rules, requests, chats, dropChat } = useRider();
-  const [selectedChat, setSelectedChat] = useState<RiderChatSummary | null>(null);
+  const searchParams = useSearchParams();
+  const callChatId = searchParams.get('chat');
+  const [selectedChatOverride, setSelectedChat] = useState<RiderChatSummary | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [notice, setNotice] = useState('');
   const [receipt, setReceipt] = useState<{ chatId: string; text: string; onHold: boolean } | null>(null);
   const isRequests = mode === 'requests';
   const items = isRequests ? requests : chats;
+  const selectedChat = selectedChatOverride ?? (mode === 'chats' && callChatId ? chats.find((chat) => chat.id === callChatId) ?? null : null);
   // Only an order this rider has taken (ACTIVE and theirs) can be completed.
   const isMine = selectedChat ? chats.some((chat) => chat.id === selectedChat.id) : false;
   // The lists refresh every few seconds, but `selectedChat` is the copy from the moment it was opened. The panel that

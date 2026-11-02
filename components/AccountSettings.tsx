@@ -6,6 +6,7 @@ import WhatsAppCodeForm from '@/components/WhatsAppCodeForm';
 import { useAuth } from '@/lib/auth-context';
 import type { PhoneVerificationInfo, VerifiedUser } from '@/lib/phone-verification-types';
 import { announceSavedAddressRemoved, deleteSavedAddress, getAddressTag, type AddressTag } from '@/lib/saved-addresses';
+import type { AudienceGender } from '@/lib/marketing-audience-config';
 
 export type SettingsAddress = { id: string; label: string; street: string };
 
@@ -54,24 +55,49 @@ async function sendJson(url: string, method: 'PATCH' | 'POST', body: unknown) {
   }
 }
 
-function ProfileForm({ initialName, initialPhone, email }: { initialName: string; initialPhone: string; email: string }) {
+function ProfileForm({
+  initialName,
+  initialPhone,
+  initialDateOfBirth,
+  initialGender,
+  maxDateOfBirth,
+  email,
+}: {
+  initialName: string;
+  initialPhone: string;
+  initialDateOfBirth: string;
+  initialGender: AudienceGender | null;
+  maxDateOfBirth: string;
+  email: string;
+}) {
   const { refresh } = useAuth();
   const [name, setName] = useState(initialName);
   const [phone, setPhone] = useState(initialPhone);
-  const [saved, setSaved] = useState({ name: initialName, phone: initialPhone });
+  const [dateOfBirth, setDateOfBirth] = useState(initialDateOfBirth);
+  const [gender, setGender] = useState<AudienceGender | ''>(initialGender ?? '');
+  const [saved, setSaved] = useState({
+    name: initialName,
+    phone: initialPhone,
+    dateOfBirth: initialDateOfBirth,
+    gender: initialGender ?? '',
+  });
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   // Set while a new number waits for the code sent to its WhatsApp; the old number stays until it is entered.
   const [verification, setVerification] = useState<PhoneVerificationInfo | null>(null);
 
-  const unchanged = name.trim() === saved.name && phone.trim() === saved.phone;
+  const unchanged =
+    name.trim() === saved.name &&
+    phone.trim() === saved.phone &&
+    dateOfBirth === saved.dateOfBirth &&
+    gender === saved.gender;
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setIsSaving(true);
     setNotice(null);
 
-    const result = await sendJson('/api/account/profile', 'PATCH', { name, phone });
+    const result = await sendJson('/api/account/profile', 'PATCH', { name, phone, dateOfBirth: dateOfBirth || null, gender: gender || null });
     setIsSaving(false);
 
     if (!result.ok) {
@@ -80,8 +106,16 @@ function ProfileForm({ initialName, initialPhone, email }: { initialName: string
     }
 
     const user = result.data.user as { name: string; phone: string };
+    const profile = result.data.profile as { dateOfBirth: string | null; gender: AudienceGender | null };
     setName(user.name);
-    setSaved({ name: user.name, phone: user.phone });
+    setDateOfBirth(profile.dateOfBirth ?? '');
+    setGender(profile.gender ?? '');
+    setSaved({
+      name: user.name,
+      phone: user.phone,
+      dateOfBirth: profile.dateOfBirth ?? '',
+      gender: profile.gender ?? '',
+    });
     // The navbar greets the customer by name, so let it pick up the new one.
     void refresh();
 
@@ -96,7 +130,12 @@ function ProfileForm({ initialName, initialPhone, email }: { initialName: string
 
   const handleNumberConfirmed = (user: VerifiedUser) => {
     setPhone(user.phone ?? '');
-    setSaved({ name: user.name, phone: user.phone ?? '' });
+    setSaved({
+      name: user.name,
+      phone: user.phone ?? '',
+      dateOfBirth,
+      gender,
+    });
     setVerification(null);
     setNotice({ kind: 'success', text: 'Your new number is confirmed and saved.' });
   };
@@ -174,6 +213,54 @@ function ProfileForm({ initialName, initialPhone, email }: { initialName: string
           </label>
           <input id="settings-email" type="email" value={email} readOnly className={INPUT_CLASS} />
           <p className="mt-1 text-xs text-brand-gray">Your email is your login, so it can&apos;t be changed here.</p>
+        </div>
+
+        <div className="border-t border-gray-100 pt-4">
+          <h3 className="mb-1 text-sm font-semibold text-ink">Optional ad preferences (adults 18+)</h3>
+          <p className="mb-4 text-xs text-brand-gray">
+            If you choose to share these details, Mangwaoo uses them for aggregate audience percentages and to show
+            matching paid ads. They are never shown to sellers. Leave them blank or clear them any time to opt out.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="settings-date-of-birth" className="mb-1.5 block text-sm font-semibold text-ink">
+                Date of birth
+              </label>
+              <input
+                id="settings-date-of-birth"
+                type="date"
+                value={dateOfBirth}
+                max={maxDateOfBirth}
+                onChange={(event) => {
+                  setDateOfBirth(event.target.value);
+                  if (!event.target.value) setGender('');
+                }}
+                className={INPUT_CLASS}
+              />
+              <p className="mt-1 text-xs text-brand-gray">Only 18+ profiles are included in age-based advertising.</p>
+            </div>
+            <div>
+              <label htmlFor="settings-gender" className="mb-1.5 block text-sm font-semibold text-ink">
+                Gender (optional)
+              </label>
+              <select
+                id="settings-gender"
+                value={gender}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setGender(value === 'MAN' || value === 'WOMAN' || value === 'NON_BINARY' ? value : '');
+                }}
+                disabled={!dateOfBirth}
+                className={INPUT_CLASS}
+              >
+                <option value="">Prefer not to say</option>
+                <option value="WOMAN">Woman</option>
+                <option value="MAN">Man</option>
+                <option value="NON_BINARY">Non-binary</option>
+              </select>
+              <p className="mt-1 text-xs text-brand-gray">Enter an adult date of birth first to choose this preference.</p>
+            </div>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-4">
@@ -366,17 +453,30 @@ export function PasswordForm() {
 export default function AccountSettings({
   name,
   phone,
+  dateOfBirth,
+  gender,
+  maxDateOfBirth,
   email,
   addresses,
 }: {
   name: string;
   phone: string;
+  dateOfBirth: string;
+  gender: AudienceGender | null;
+  maxDateOfBirth: string;
   email: string;
   addresses: SettingsAddress[];
 }) {
   return (
     <div className="space-y-6">
-      <ProfileForm initialName={name} initialPhone={phone} email={email} />
+      <ProfileForm
+        initialName={name}
+        initialPhone={phone}
+        initialDateOfBirth={dateOfBirth}
+        initialGender={gender}
+        maxDateOfBirth={maxDateOfBirth}
+        email={email}
+      />
       <SavedAddresses initialAddresses={addresses} />
       <PasswordForm />
     </div>

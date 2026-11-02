@@ -235,6 +235,7 @@ export default function BuyerDashboard({
   orders,
   ratePrompts = [],
   initialTab = 'orders',
+  initialConversationId,
   points = 0,
   loyalty = { status: null, canApply: false },
 }: {
@@ -242,6 +243,7 @@ export default function BuyerDashboard({
   orders: Order[];
   ratePrompts?: RatePrompt[];
   initialTab?: TabId;
+  initialConversationId?: string;
   /** The customer's Mangwaoo Points, shown next to the link to the points page. */
   points?: number;
   /** The state of the customer's Loyalty Card, shown next to the link to its page. */
@@ -347,7 +349,7 @@ export default function BuyerDashboard({
 
       {activeTab === 'messages' && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-          <MessagesInbox currentRole="CUSTOMER" />
+          <MessagesInbox currentRole="CUSTOMER" initialConversationId={initialConversationId} />
         </motion.div>
       )}
     </div>

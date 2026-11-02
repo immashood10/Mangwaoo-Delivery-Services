@@ -87,7 +87,7 @@ const getRestaurants = unstable_cache(
       FROM "Seller" s
       JOIN "GulplazaProduct" p ON p."sellerId" = s."id" AND p."isActive" = true
       JOIN "GulplazaCategory" c ON c."id" = p."categoryId"
-      WHERE s."isApproved" = true AND s."sellerType" IN ('GULPLAZA_OWNER', 'WHOLESALER')
+      WHERE s."isApproved" = true AND s."sellerType" IN ('GULPLAZA_OWNER', 'SHOP_OWNER', 'WHOLESALER')
       GROUP BY s."id"
       ORDER BY count(*) DESC, s."businessName"`;
 

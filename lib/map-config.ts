@@ -8,3 +8,6 @@
 export const MAP_TILE_URL = process.env.NEXT_PUBLIC_MAP_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 export const MAP_ATTRIBUTION = process.env.NEXT_PUBLIC_MAP_ATTRIBUTION || '© OpenStreetMap contributors';
 export const MAP_ATTRIBUTION_URL = process.env.NEXT_PUBLIC_MAP_ATTRIBUTION_URL || 'https://www.openstreetmap.org/copyright';
+
+/** Free, keyless vector map style used by the pickup/drop-off location picker. */
+export const PICKER_MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';

@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Mangwaoo",
+    "slug": "mangwaoo",
+    "scheme": "mangwaoo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": { "bundleIdentifier": "pk.mangwaoo.app", "supportsTablet": true },
+    "android": { "package": "pk.mangwaoo.app", "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"] },
+    "plugins": [["expo-location", { "locationWhenInUsePermission": "Mangwaoo uses your location to dispatch deliveries and find nearby food." }]
+    ]
+  }
+}

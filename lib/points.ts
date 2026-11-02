@@ -166,7 +166,7 @@ export type RedeemResult =
   | { ok: true; cashback: number; points: number; walletBalance: number; cost: number }
   | { ok: false; status: number; error: string };
 
-/** Spends the cost of one cashback (500 points to start with) and puts a random Rs 1 to 10 into the wallet. */
+/** Spends the cost of one cashback (500 points to start with) and puts a random Rs 1 to 200 into the wallet. */
 export async function redeemPoints(customerId: string): Promise<RedeemResult> {
   return prisma.$transaction(async (tx): Promise<RedeemResult> => {
     await lockCustomer(tx, customerId);

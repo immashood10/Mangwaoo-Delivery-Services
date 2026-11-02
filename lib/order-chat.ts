@@ -31,9 +31,8 @@ export async function startOrContinueOrderChat(input: {
   deliveryCharge: number | null;
   distanceKm?: number | null;
   /**
-   * The customer typed this order in the Chat window (not a checkout): when their area has an Area Sales Manager the chat
-   * goes to that manager, who picks the rider, instead of to the first rider who replies. Only a NEW chat is routed; one that
-   * is already live keeps the way it started.
+   * When true, a new chat for a customer whose area has an Area Sales Manager goes to that manager to pick the rider (used
+   * for Chat-window requests and Shop Owner checkout orders). Only a new chat is routed; an already-live chat keeps its route.
    */
   viaManager?: boolean;
 }) {

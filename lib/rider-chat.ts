@@ -27,7 +27,7 @@ type ChatWithPeople = RiderChat & {
 };
 
 export const RIDER_CHAT_INCLUDE = {
-  customer: { include: { user: { select: { name: true, phone: true } } } },
+  customer: { select: { user: { select: { name: true, phone: true } } } },
   rider: { include: { user: { select: { name: true, phone: true } } } },
 } as const;
 

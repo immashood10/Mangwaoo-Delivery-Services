@@ -1,7 +1,7 @@
 // Mangwaoo Points rules shared by the API routes, the customer's page and the admin page (client-safe, no database).
 //
 // How it works: every delivered order wins the customer a random number of points (1 to 100 to start with). A set number
-// of points (500 to start with) can be cashed in for a random cashback (Rs 1 to 10 to start with), which goes into the
+// of points (500 to start with) can be cashed in for a random cashback (Rs 1 to 200 to start with), which goes into the
 // customer's wallet. The customer can ask for the wallet's money to be sent to their own JazzCash or EasyPaisa account
 // whenever they like: an admin sends it by hand and marks the request paid. An admin can change every number.
 
@@ -30,7 +30,7 @@ export const DEFAULT_LOYALTY_SETTINGS: LoyaltySettingsValues = {
   pointsMax: 100,
   redeemPoints: 500,
   cashbackMin: 1,
-  cashbackMax: 10,
+  cashbackMax: 200,
   minWithdrawal: 1,
   minOrderAmount: 0,
 };
@@ -39,7 +39,7 @@ export const DEFAULT_LOYALTY_SETTINGS: LoyaltySettingsValues = {
 export const LOYALTY_LIMITS = {
   pointsMax: 10000,
   redeemPoints: 1000000,
-  cashbackMax: 1000,
+  cashbackMax: 200,
   minWithdrawal: 100000,
   minOrderAmount: 100000,
 } as const;

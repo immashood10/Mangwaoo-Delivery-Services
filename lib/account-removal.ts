@@ -130,6 +130,7 @@ export async function removeAccount(userId: string, adminId: string): Promise<Re
       await tx.cartItem.deleteMany({ where: { customerId } });
       // Nothing is sent to a removed account: waiting withdrawals are turned down and the points and wallet are written off.
       await closeCustomerPoints(tx, customerId);
+      await tx.customer.update({ where: { id: customerId }, data: { dateOfBirth: null, gender: null } });
     }
 
     if (user.seller) {

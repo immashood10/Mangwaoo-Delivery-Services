@@ -15,7 +15,7 @@ type ConversationSummary = {
 
 const LIST_POLL_INTERVAL_MS = 8000;
 
-export default function MessagesInbox({ currentRole }: { currentRole: 'CUSTOMER' | 'SELLER' }) {
+export default function MessagesInbox({ currentRole, initialConversationId }: { currentRole: 'CUSTOMER' | 'SELLER'; initialConversationId?: string }) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -29,6 +29,7 @@ export default function MessagesInbox({ currentRole }: { currentRole: 'CUSTOMER'
         if (!response.ok || !isMounted) return;
         const data = await response.json();
         setConversations(data.conversations ?? []);
+        if (initialConversationId && (data.conversations ?? []).some((conversation: ConversationSummary) => conversation.id === initialConversationId)) setSelectedId(initialConversationId);
       } catch {
         // Skip a failed poll — it'll retry on the next interval.
       }
@@ -45,7 +46,7 @@ export default function MessagesInbox({ currentRole }: { currentRole: 'CUSTOMER'
       isMounted = false;
       window.clearInterval(intervalId);
     };
-  }, []);
+  }, [initialConversationId]);
 
   const selected = conversations.find((c) => c.id === selectedId) ?? null;
   const emptyMessage =

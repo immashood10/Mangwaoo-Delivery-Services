@@ -25,7 +25,7 @@ export const getGulplazaProducts = unstable_cache(
     prisma.gulplazaProduct.findMany({
       where: {
         isActive: true,
-        seller: { isApproved: true, sellerType: { in: ['GULPLAZA_OWNER', 'WHOLESALER'] } },
+        seller: { isApproved: true, sellerType: { in: ['GULPLAZA_OWNER', 'SHOP_OWNER', 'WHOLESALER'] } },
       },
       include: { category: true, seller: true },
       orderBy: { createdAt: 'desc' },

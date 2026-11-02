@@ -55,7 +55,7 @@ export async function GET() {
   const conversations = await prisma.conversation.findMany({
     where: { sellerId: seller.id },
     include: {
-      customer: { include: { user: true } },
+      customer: { select: { user: { select: { name: true } } } },
       messages: { orderBy: { createdAt: 'desc' }, take: 1 },
     },
     orderBy: { updatedAt: 'desc' },

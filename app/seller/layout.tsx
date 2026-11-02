@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { getCurrentSeller, isFoodSeller } from '@/lib/seller-context';
+import { getCurrentSeller, isFoodSeller, isShopOwner } from '@/lib/seller-context';
 import { getSellerNotifications } from '@/lib/seller-notifications';
 import SellerShell from '@/components/seller/SellerShell';
 
@@ -30,6 +30,7 @@ export default async function SellerLayout({ children }: { children: React.React
         ownerName: seller.user.name,
         isApproved: seller.isApproved,
         isFood: isFoodSeller(seller),
+        isShopOwner: isShopOwner(seller),
         // Customers only see food restaurants within 5 km of them, which needs the kitchen on the map.
         hasLocation: seller.latitude !== null && seller.longitude !== null,
         dashboardLabel: isFoodSeller(seller) ? 'Food seller dashboard' : 'Seller dashboard',

@@ -7,11 +7,21 @@ import { SELLER_PAGES } from '@/lib/notification-types';
 import { AD_PLACEMENTS, nextAdPeriod } from '@/lib/ad-config';
 import { endAdStory, publishAdStory } from '@/lib/ad-stories';
 import { refreshStories } from '@/lib/catalog-cache';
+import { AUDIENCE_AGE_BANDS, type AudienceGender } from '@/lib/marketing-audience';
+import { isSuperAdminLogin } from '@/lib/super-admin';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_REASON_LENGTH = 200;
 // Making a story copies the product's photo, which can be a few MB over a slow link to the database.
 const STORY_TRANSACTION = { timeout: 20000, maxWait: 10000 };
+
+function isOptionalTargetAge(value: unknown): value is number | null {
+  return value === null || (typeof value === 'number' && Number.isInteger(value) && value >= 18 && value <= 120);
+}
+
+function isTargetGender(value: unknown): value is AudienceGender | null {
+  return value === null || value === 'MAN' || value === 'WOMAN' || value === 'NON_BINARY';
+}
 
 // Admin review of a paid ad: approve it (it runs for its period, from now), reject it, end a running one early,
 // or put an ended / declined one back on (it runs for its period from now, like a fresh approval). A Story ad also
@@ -28,8 +38,53 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const action = body?.action;
   const reason = typeof body?.reason === 'string' ? body.reason.trim().slice(0, MAX_REASON_LENGTH) : '';
 
+  if (action === 'audience') {
+    const admin = await prisma.user.findUnique({ where: { id: session.userId }, select: { email: true } });
+    if (!isSuperAdminLogin(admin?.email)) {
+      return NextResponse.json({ error: 'Only the super admin can set ad audiences.' }, { status: 403 });
+    }
+
+    const targetAgeMin: unknown = body?.targetAgeMin;
+    const targetAgeMax: unknown = body?.targetAgeMax;
+    const targetGender: unknown = body?.targetGender;
+
+    if (
+      !isTargetGender(targetGender) ||
+      !isOptionalTargetAge(targetAgeMin) ||
+      !isOptionalTargetAge(targetAgeMax) ||
+      !(
+        (targetAgeMin === null && targetAgeMax === null) ||
+        AUDIENCE_AGE_BANDS.some((band) => band.min === targetAgeMin && band.max === targetAgeMax)
+      )
+    ) {
+      return NextResponse.json({ error: 'Choose an adult age range and a valid gender audience.' }, { status: 400 });
+    }
+
+    const now = new Date();
+    const updated = await prisma.productAd.updateMany({
+      where: {
+        id,
+        deletedAt: null,
+        OR: [{ status: 'PENDING' }, { status: 'ACTIVE', endsAt: { gt: now } }],
+      },
+      data: { targetAgeMin, targetAgeMax, targetGender },
+    });
+
+    if (updated.count === 0) {
+      const exists = await prisma.productAd.findFirst({ where: { id, deletedAt: null }, select: { id: true } });
+      return exists
+        ? NextResponse.json({ error: 'Only a pending or currently running ad can be targeted.' }, { status: 409 })
+        : NextResponse.json({ error: 'Ad request not found.' }, { status: 404 });
+    }
+
+    revalidatePath('/');
+    revalidatePath('/mart');
+    refreshStories();
+    return NextResponse.json({ ad: { id, targetAgeMin, targetAgeMax, targetGender } });
+  }
+
   if (action !== 'approve' && action !== 'reject' && action !== 'end' && action !== 'restore') {
-    return NextResponse.json({ error: 'Choose approve, reject, end or restore.' }, { status: 400 });
+    return NextResponse.json({ error: 'Choose approve, reject, end, restore or audience.' }, { status: 400 });
   }
 
   // A request an admin deleted from the list is gone as far as the admin is concerned.

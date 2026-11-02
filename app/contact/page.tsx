@@ -281,7 +281,7 @@ function ContactForm() {
               },
               {
                 q: 'How long does delivery usually take?',
-                a: 'Most deliveries are completed within 30-60 minutes, depending on the order and location.',
+                a: 'Most deliveries arrive within 30-40 minutes after a rider is assigned, depending on the order and location.',
               },
               {
                 q: 'How can I place an order?',

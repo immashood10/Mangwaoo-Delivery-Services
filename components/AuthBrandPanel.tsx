@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { BRAND, STATS } from '@/lib/data';
 
 const HIGHLIGHTS = [
-  { icon: Zap, text: 'Orders delivered in 30-60 minutes' },
+  { icon: Zap, text: 'Orders delivered in 30-40 minutes after rider assignment' },
   { icon: ShieldCheck, text: 'Verified vendors and delivery partners' },
   { icon: Clock, text: 'Open 12 PM to 1 AM, every day' },
 ];

@@ -1,0 +1,1 @@
+ALTER TYPE "SellerType" ADD VALUE 'SHOP_OWNER';

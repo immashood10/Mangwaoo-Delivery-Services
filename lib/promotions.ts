@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@/lib/generated/prisma/client';
 import { CARD_COLUMNS, toAdCards, type AdRow } from '@/lib/ads';
 import { adState, type AdPlacementKey, type AdState, type AdStatusKey } from '@/lib/ad-config';
+import type { AudienceGender, MarketingAudience } from '@/lib/marketing-audience';
 
 // "now" for ad windows is taken inside the database, in UTC, so it lines up with the timestamps Prisma stores.
 const DB_NOW = Prisma.sql`(now() AT TIME ZONE 'UTC')`;
@@ -10,17 +11,27 @@ const DB_NOW = Prisma.sql`(now() AT TIME ZONE 'UTC')`;
  * Ads that are running right now for a placement, in random order so every advertiser gets a turn.
  * Ads whose product was removed or sold out are skipped for as long as that stays true.
  */
-export async function getRunningAds(placement: AdPlacementKey, limit: number, categoryName?: string | null) {
+export async function getRunningAds(
+  placement: AdPlacementKey,
+  limit: number,
+  categoryName?: string | null,
+  audience?: MarketingAudience | null
+) {
   // Ads are an extra: if looking them up fails, the page still shows everything else.
   try {
-    return await queryRunningAds(placement, limit, categoryName);
+    return await queryRunningAds(placement, limit, categoryName, audience);
   } catch (error) {
     console.error('Could not load running ads:', error);
     return [];
   }
 }
 
-async function queryRunningAds(placement: AdPlacementKey, limit: number, categoryName?: string | null) {
+async function queryRunningAds(
+  placement: AdPlacementKey,
+  limit: number,
+  categoryName?: string | null,
+  audience?: MarketingAudience | null
+) {
   const rows = await prisma.$queryRaw<AdRow[]>`
     SELECT ${CARD_COLUMNS}
     FROM "ProductAd" a
@@ -33,6 +44,15 @@ async function queryRunningAds(placement: AdPlacementKey, limit: number, categor
       AND a."endsAt" > ${DB_NOW}
       AND p."isActive" = true
       AND p."stock" > 0
+      AND (
+        a."targetAgeMin" IS NULL OR (
+          ${audience?.age ?? null}::integer >= a."targetAgeMin"
+          AND (a."targetAgeMax" IS NULL OR ${audience?.age ?? null}::integer <= a."targetAgeMax")
+        )
+      )
+      AND (
+        a."targetGender" IS NULL OR ${audience?.gender ?? null}::"CustomerGender" = a."targetGender"
+      )
       ${categoryName ? Prisma.sql`AND c."name" = ${categoryName}` : Prisma.empty}
     ORDER BY random()
     LIMIT ${limit}`;
@@ -55,6 +75,9 @@ export type AdRequestRow = {
   createdAt: string;
   productId: string;
   productName: string;
+  targetAgeMin: number | null;
+  targetAgeMax: number | null;
+  targetGender: AudienceGender | null;
   /** How many people watched a Story ad's story; null for the other kinds of ad. */
   storyViews: number | null;
   /** Admin view only. */
@@ -91,6 +114,9 @@ function toRow(ad: AdWithProduct, now: number): AdRequestRow {
     createdAt: ad.createdAt.toISOString(),
     productId: ad.productId,
     productName: ad.product.name,
+    targetAgeMin: ad.targetAgeMin,
+    targetAgeMax: ad.targetAgeMax,
+    targetGender: ad.targetGender,
     storyViews: ad.placement === 'STORY' ? (ad.story?._count.views ?? 0) : null,
   };
 }

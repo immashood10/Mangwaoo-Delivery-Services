@@ -44,6 +44,9 @@ export type SellerOrder = {
   marketplace: Marketplace;
   status: string;
   totalAmount: number;
+  /** Mangwaoo's fee on this food order; zero for MangwaooMart orders. */
+  platformCommissionAmount: number;
+  platformCommissionPercent: number;
   createdAt: string;
   customerName: string;
   address: string;

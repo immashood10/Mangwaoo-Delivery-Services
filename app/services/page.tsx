@@ -55,7 +55,7 @@ export default function Services() {
                       {[
                         {
                           title: 'Fast Delivery',
-                          desc: 'Usually within 30-60 minutes',
+                          desc: 'Usually within 30-40 minutes after a rider is assigned',
                         },
                         {
                           title: 'Verified Providers',

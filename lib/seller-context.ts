@@ -25,7 +25,20 @@ export async function requireSeller() {
   return seller;
 }
 
-/** Food businesses (GulPlaza owners and wholesalers) have their own catalog, orders and carts. */
+/** Shop Owners manage their catalogue; Mangwaoo manages their orders and customer fulfilment details. */
+export async function requireSellerOrderAccess() {
+  const seller = await requireSeller();
+
+  if (isShopOwner(seller)) redirect('/seller/products');
+
+  return seller;
+}
+
+/** Food businesses use the Food catalogue; Shop Owner fulfilment is managed by Mangwaoo. */
 export function isFoodSeller(seller: { sellerType: string }) {
-  return seller.sellerType === 'GULPLAZA_OWNER' || seller.sellerType === 'WHOLESALER';
+  return seller.sellerType === 'GULPLAZA_OWNER' || seller.sellerType === 'SHOP_OWNER' || seller.sellerType === 'WHOLESALER';
+}
+
+export function isShopOwner(seller: { sellerType: string }) {
+  return seller.sellerType === 'SHOP_OWNER';
 }

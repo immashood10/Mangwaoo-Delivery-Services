@@ -7,6 +7,9 @@ import MartProductCard from '@/components/MartProductCard';
 import SidebarAdCard from '@/components/SidebarAdCard';
 import { getMartProducts } from '@/lib/products';
 import { getRunningAds } from '@/lib/promotions';
+import { getCurrentMarketingAudience } from '@/lib/marketing-audience';
+
+export const dynamic = 'force-dynamic';
 
 const CATEGORY_ICONS: Record<string, string> = Object.fromEntries(
   MART_CATEGORIES.map((category) => [category.name, category.icon])
@@ -29,11 +32,11 @@ export default async function MangwaooMart({
   const query = q?.trim().toLowerCase() ?? '';
   const selectedCategory = category?.trim() || null;
 
-  // Paid ads load alongside the catalog. The Featured row is left out of search results.
-  const [sellerProducts, sidebarAds, featuredAds] = await Promise.all([
-    getMartProducts(),
-    getRunningAds('SIDEBAR', 3),
-    query ? Promise.resolve([]) : getRunningAds('MAIN_PAGE', 4, selectedCategory),
+  // Audience-targeted ads are request-specific; product data remains cached in its catalog helper.
+  const [sellerProducts, audience] = await Promise.all([getMartProducts(), getCurrentMarketingAudience()]);
+  const [sidebarAds, featuredAds] = await Promise.all([
+    getRunningAds('SIDEBAR', 3, undefined, audience),
+    query ? Promise.resolve([]) : getRunningAds('MAIN_PAGE', 4, selectedCategory, audience),
   ]);
 
   const allProducts = [

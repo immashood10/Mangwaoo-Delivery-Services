@@ -58,6 +58,7 @@ type ShellProfile = {
   ownerName: string;
   isApproved: boolean;
   isFood: boolean;
+  isShopOwner: boolean;
   /** The kitchen / shop is pinned on the map (food sellers without a pin aren't shown to customers). */
   hasLocation: boolean;
   /** Shown under the logo, e.g. "Seller dashboard" or "Food seller dashboard". */
@@ -120,7 +121,7 @@ function SidebarContent({ profile, onNavigate }: { profile: ShellProfile; onNavi
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-4" aria-label="Seller dashboard">
-        {SELLER_LINKS.filter((link) => !(link.martOnly && profile.isFood)).map(({ href, label, icon: Icon }) => {
+        {SELLER_LINKS.filter((link) => !(link.martOnly && profile.isFood) && !(profile.isShopOwner && ['/seller/dashboard', '/seller/sales', '/seller/customers', '/seller/all-orders', '/seller/reports', '/seller/orders', '/seller/completed', '/seller/stats', '/seller/cart'].includes(link.href))).map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);
           const unread = counts[href] ?? 0;
 

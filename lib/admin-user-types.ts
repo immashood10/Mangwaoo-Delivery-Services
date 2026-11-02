@@ -1,6 +1,6 @@
 // What the admin "Users" screens share between the server page and the browser. No database code in here.
 
-export const FOOD_SELLER_TYPES = ['GULPLAZA_OWNER', 'WHOLESALER'] as const;
+export const FOOD_SELLER_TYPES = ['GULPLAZA_OWNER', 'SHOP_OWNER', 'WHOLESALER'] as const;
 
 export const USER_VIEWS = ['customers', 'riders', 'riders-online', 'riders-pending', 'sellers', 'sellers-pending', 'banned'] as const;
 export type UserView = (typeof USER_VIEWS)[number];

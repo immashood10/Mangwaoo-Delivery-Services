@@ -15,6 +15,7 @@ import {
   type TrackStep,
   type TrackStatus,
 } from '@/lib/order-tracking-config';
+import { DELIVERY_ETA_MAX_MINUTES, DELIVERY_ETA_MINUTES } from '@/lib/rider-wallet-config';
 
 const PAYMENT_LABELS: Record<string, string> = {
   CASH_ON_DELIVERY: 'Cash on Delivery',
@@ -338,6 +339,9 @@ export default function OrderTracker({ initial }: { initial: OrderTracking }) {
                   <RiderRatingLabel rating={rider.rating} />
                   {rider.vehicle ? <span className="text-xs capitalize text-brand-gray">· {rider.vehicle}</span> : null}
                 </div>
+                <p className="mt-1 text-xs text-brand-gray">
+                  Expected delivery: {DELIVERY_ETA_MINUTES}–{DELIVERY_ETA_MAX_MINUTES} minutes after assignment.
+                </p>
               </div>
               {rider.chatId ? (
                 <Link

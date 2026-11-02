@@ -81,7 +81,7 @@ async function getDashboardData() {
       orderBy: { createdAt: 'desc' },
       take: RECENT_WAITING_CHATS,
       include: {
-        customer: { include: { user: { select: { name: true } } } },
+        customer: { select: { user: { select: { name: true } } } },
         messages: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
     }),

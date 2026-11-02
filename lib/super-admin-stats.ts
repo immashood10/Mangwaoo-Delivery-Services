@@ -88,9 +88,11 @@ export async function getSuperAdminData(rangeDays: SuperRange) {
     foodBySeller,
     recentUsers,
     commission,
+    commissionByRider,
     owed,
     disputes,
     bonuses,
+    foodPlatformFees,
   ] = await Promise.all([
     salesBetween(new Date(0), nowDate),
     salesBetween(weekAgo, nowDate),
@@ -121,10 +123,12 @@ export async function getSuperAdminData(rangeDays: SuperRange) {
       select: { id: true, name: true, email: true, role: true, createdAt: true, seller: { select: { isApproved: true } }, rider: { select: { isApproved: true } } },
     }),
     prisma.riderLedgerEntry.aggregate({ where: { type: 'COMMISSION' }, _sum: { amount: true } }),
+    prisma.riderLedgerEntry.groupBy({ by: ['riderId'], where: { type: 'COMMISSION' }, _sum: { amount: true } }),
     prisma.rider.aggregate({ where: { walletBalance: { lt: 0 }, user: { deletedAt: null } }, _sum: { walletBalance: true } }),
     prisma.riderOrderRecord.count({ where: { complaint: { not: null }, complaintResolvedAt: null } }),
     // What the riders' delivery bonuses have cost Mangwaoo (positive money lines on the riders' side)
     prisma.riderLedgerEntry.aggregate({ where: { type: 'BONUS' }, _sum: { amount: true } }),
+    prisma.gulplazaOrder.aggregate({ where: { status: 'DELIVERED' }, _sum: { platformCommissionAmount: true } }),
   ]);
 
   // Daily sales for the chart (Karachi days)
@@ -181,6 +185,11 @@ export async function getSuperAdminData(rangeDays: SuperRange) {
   const nameById = new Map(topSellers.map((seller) => [seller.id, seller.businessName]));
 
   const products = martProducts + foodProducts;
+  const commissionRiderIds = commissionByRider.map((row) => row.riderId);
+  const commissionRiders = commissionRiderIds.length
+    ? await prisma.rider.findMany({ where: { id: { in: commissionRiderIds } }, select: { id: true, user: { select: { name: true } } } })
+    : [];
+  const riderNameById = new Map(commissionRiders.map((rider) => [rider.id, rider.user.name]));
 
   return {
     rangeDays,
@@ -215,8 +224,13 @@ export async function getSuperAdminData(rangeDays: SuperRange) {
     system: {
       // What Mangwaoo earned: the commission taken from riders (stored as negative money lines on the riders' side)
       revenue: Math.abs(commission._sum.amount ?? 0),
+      commissionByRider: commissionByRider
+        .map((row) => ({ id: row.riderId, name: riderNameById.get(row.riderId) ?? 'Rider', amount: Math.abs(row._sum.amount ?? 0) }))
+        .filter((row) => row.amount > 0)
+        .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name)),
       owedByRiders: Math.abs(owed._sum.walletBalance ?? 0),
       bonusesPaid: bonuses._sum.amount ?? 0,
+      foodPlatformFees: foodPlatformFees._sum.platformCommissionAmount ?? 0,
       openComplaints: disputes,
     },
   };

@@ -4,7 +4,7 @@ import { redeemPoints } from '@/lib/points';
 import { getPointsCustomer } from '@/lib/points-request';
 
 /**
- * Cashes in Mangwaoo Points: the cost of one cashback (500 points to start with) is spent and a random Rs 1 to 10 goes into
+ * Cashes in Mangwaoo Points: the cost of one cashback (500 points to start with) is spent and a random Rs 1 to 200 goes into
  * the customer's wallet. The draw is made here, on the server, never in the browser.
  */
 export async function POST() {

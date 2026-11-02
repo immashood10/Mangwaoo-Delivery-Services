@@ -8,17 +8,18 @@ import FeaturedRow from '@/components/FeaturedRow';
 import CartBar from '@/components/CartBar';
 import { getMartProducts } from '@/lib/products';
 import { getRunningAds } from '@/lib/promotions';
+import { getCurrentMarketingAudience } from '@/lib/marketing-audience';
 
 const CATEGORY_ICONS: Record<string, string> = Object.fromEntries(
   MART_CATEGORIES.map((category) => [category.name, category.icon])
 );
 
-// Regenerates the static page (not just the underlying data cache) on this
-// interval so newly listed products actually reach the rendered HTML.
-export const revalidate = 300;
+// Ad audience matching depends on the signed-in customer, so this page must render per request.
+export const dynamic = 'force-dynamic';
 
 export default async function Home() {
-  const [allProducts, featuredAds] = await Promise.all([getMartProducts(), getRunningAds('MAIN_PAGE', 4)]);
+  const [allProducts, audience] = await Promise.all([getMartProducts(), getCurrentMarketingAudience()]);
+  const featuredAds = await getRunningAds('MAIN_PAGE', 4, undefined, audience);
   const sellerProducts = allProducts.slice(0, 12);
 
   const products = [

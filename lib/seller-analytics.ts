@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { KARACHI_UTC_OFFSET_MS, startOfKarachiDay } from '@/lib/admin-stats';
 import { withPortionLabel } from '@/lib/food-portions';
 import { orderRef } from '@/lib/order-number';
-import { isFoodSeller, type CurrentSeller } from '@/lib/seller-context';
+import { isFoodSeller, isShopOwner, type CurrentSeller } from '@/lib/seller-context';
 
 // Numbers for the seller's Dashboard, Sales, Customers, Orders and Reports pages. One query per marketplace loads the
 // seller's orders (newest first, at most MAX_ORDERS) and everything else is worked out here, so the pages agree with
@@ -27,6 +27,8 @@ export type AnalyticsOrder = {
 };
 
 export async function loadSellerOrders(seller: CurrentSeller): Promise<AnalyticsOrder[]> {
+  if (isShopOwner(seller)) return [];
+
   const orderBy = { createdAt: 'desc' } as const;
   const where = { sellerId: seller.id };
 
@@ -37,7 +39,7 @@ export async function loadSellerOrders(seller: CurrentSeller): Promise<Analytics
       take: MAX_ORDERS,
       include: {
         items: { include: { product: { select: { name: true, category: { select: { name: true } } } } } },
-        customer: { include: { user: { select: { name: true } } } },
+        customer: { select: { user: { select: { name: true } } } },
         payment: { select: { method: true } },
       },
     });
@@ -62,7 +64,7 @@ export async function loadSellerOrders(seller: CurrentSeller): Promise<Analytics
     take: MAX_ORDERS,
     include: {
       items: { include: { product: { select: { name: true, category: { select: { name: true } } } } } },
-      customer: { include: { user: { select: { name: true } } } },
+      customer: { select: { user: { select: { name: true } } } },
       payment: { select: { method: true } },
     },
   });

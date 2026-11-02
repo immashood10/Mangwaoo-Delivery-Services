@@ -53,13 +53,14 @@ type ResolvedLine = { productId: string; name: string; price: number; quantity: 
 type Group = {
   marketplace: Marketplace;
   sellerId: string;
+  sellerType: string;
   sellerName: string;
   location: Coordinates | null;
   lines: ResolvedLine[];
   subtotal: number;
 };
 
-const FOOD_SELLER_TYPES = ['GULPLAZA_OWNER', 'WHOLESALER'] as const;
+const FOOD_SELLER_TYPES = ['GULPLAZA_OWNER', 'SHOP_OWNER', 'WHOLESALER'] as const;
 
 // ── Coupons ─────────────────────────────────────────────────
 
@@ -148,7 +149,7 @@ async function resolveGroups(lines: CheckoutLine[]) {
             portions: true,
             stock: true,
             sellerId: true,
-            seller: { select: { businessName: true, latitude: true, longitude: true } },
+            seller: { select: { businessName: true, latitude: true, longitude: true, sellerType: true } },
           },
         })
       : [],
@@ -186,12 +187,13 @@ async function resolveGroups(lines: CheckoutLine[]) {
     }
 
     const key = `${line.marketplace}:${product.sellerId}`;
-    const seller = product.seller as { businessName: string; latitude?: number | null; longitude?: number | null };
+    const seller = product.seller as { businessName: string; latitude?: number | null; longitude?: number | null; sellerType?: string };
     const group =
       groups.get(key) ??
       ({
         marketplace: line.marketplace,
         sellerId: product.sellerId,
+        sellerType: seller.sellerType ?? 'MART',
         sellerName: seller.businessName,
         location:
           line.marketplace === 'gulplaza' && seller.latitude != null && seller.longitude != null
@@ -513,6 +515,17 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
         },
       });
 
+      // Save the delivery form to the customer's account for their next checkout. This is in the order transaction,
+      // so details are only remembered after a successful order and never rely on browser storage.
+      await tx.customer.update({
+        where: { id: input.customer.id },
+        data: {
+          deliveryFullName: input.fullName,
+          deliveryContactNumber: input.contactNumber,
+          deliveryAddress: input.completeAddress,
+        },
+      });
+
       const created: PlacedOrder[] = [];
 
       for (const [index, group] of groups.entries()) {
@@ -561,7 +574,15 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
           group.marketplace === 'mart'
             ? await tx.order.create({ data: { ...common, items: { create: itemRows }, payment } })
             : await tx.gulplazaOrder.create({
-                data: { ...common, deliveryFee: orderQuote.deliveryFee, items: { create: foodItemRows }, payment },
+                data: {
+                  ...common,
+                  deliveryFee: orderQuote.deliveryFee,
+                  // Homemade and food shop owners pay 10% of food sales; delivery and wholesale orders are excluded.
+                  platformCommissionAmount: group.sellerType === 'WHOLESALER' ? 0 : Math.ceil(group.subtotal * 0.1),
+                  platformCommissionPercent: group.sellerType === 'WHOLESALER' ? 0 : 10,
+                  items: { create: foodItemRows },
+                  payment,
+                },
               });
 
         created.push({ id: order.id, ref: orderRef(group.marketplace, order.orderNumber), sellerId: group.sellerId, marketplace: group.marketplace });
@@ -588,7 +609,7 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
 
   // Tell each seller they have a new order to handle.
   notifyAfterResponse(async () => {
-    const sellerUserIds = await getSellerUserIds(placed.map((order) => order.sellerId));
+    const sellerUserIds = await getSellerUserIds(placed.map((order) => order.sellerId), { excludeShopOwners: true });
 
     return placed.flatMap((order, index) => {
       const userId = sellerUserIds.get(order.sellerId);

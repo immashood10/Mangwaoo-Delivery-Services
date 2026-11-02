@@ -4,15 +4,21 @@ import { getSession } from '@/lib/auth';
 import { getVisitorId } from '@/lib/visitor';
 import { STORIES_TAG } from '@/lib/catalog-cache';
 import type { StoryItem } from '@/lib/story-types';
+import { getCurrentMarketingAudience, matchesMarketingAudience, type MarketingAudience } from '@/lib/marketing-audience';
 
 // Stories the admin puts on the website logo. Everything lives in the database: the stories, the photos
 // (bytes in Story.data, served by /api/stories/[id]/image) and who watched what (StoryView).
 
 type ActiveStory = Omit<StoryItem, 'seen'>;
+type CachedActiveStory = ActiveStory & {
+  targetAgeMin: number | null;
+  targetAgeMax: number | null;
+  targetGender: 'MAN' | 'WOMAN' | 'NON_BINARY' | null;
+};
 
 // Every page load asks for the stories, so the list is cached; posting or removing a story expires it at once.
 const getCachedActiveStories = unstable_cache(
-  async (): Promise<ActiveStory[]> => {
+  async (): Promise<CachedActiveStory[]> => {
     const rows = await prisma.story.findMany({
       where: {
         expiresAt: { gt: new Date() },
@@ -29,13 +35,23 @@ const getCachedActiveStories = unstable_cache(
         href: true,
         createdAt: true,
         expiresAt: true,
-        ad: { select: { seller: { select: { businessName: true } } } },
+        ad: {
+          select: {
+            targetAgeMin: true,
+            targetAgeMax: true,
+            targetGender: true,
+            seller: { select: { businessName: true } },
+          },
+        },
       },
     });
 
     return rows.map(({ ad, ...row }) => ({
       ...row,
       sponsor: ad?.seller.businessName ?? null,
+      targetAgeMin: ad?.targetAgeMin ?? null,
+      targetAgeMax: ad?.targetAgeMax ?? null,
+      targetGender: ad?.targetGender ?? null,
       createdAt: row.createdAt.toISOString(),
       expiresAt: row.expiresAt.toISOString(),
     }));
@@ -44,12 +60,23 @@ const getCachedActiveStories = unstable_cache(
   { revalidate: 60, tags: [STORIES_TAG] }
 );
 
-/** The stories that are up right now, oldest first. A cached copy can be a little old, so expiry is checked again here. */
-export async function getActiveStories() {
+/** Stories are personalized after loading the shared list so a targeted ad never enters another viewer's response. */
+export async function getActiveStories(audience: MarketingAudience | null = null): Promise<ActiveStory[]> {
   const stories = await getCachedActiveStories();
   const now = Date.now();
 
-  return stories.filter((story) => Date.parse(story.expiresAt) > now);
+  return stories
+    .filter((story) => Date.parse(story.expiresAt) > now && matchesMarketingAudience(story, audience))
+    .map((story) => ({
+      id: story.id,
+      kind: story.kind,
+      caption: story.caption,
+      background: story.background,
+      href: story.href,
+      createdAt: story.createdAt,
+      expiresAt: story.expiresAt,
+      sponsor: story.sponsor,
+    }));
 }
 
 /** Who is asking: "u:<user id>" for a logged-in account, "v:<visitor id>" for a browser with a visitor cookie, otherwise null. */
@@ -63,7 +90,8 @@ export async function getViewerKey() {
 
 /** The live stories, each marked with whether the person asking has already watched it. */
 export async function getStoriesForViewer(): Promise<StoryItem[]> {
-  const [stories, viewerKey] = await Promise.all([getActiveStories(), getViewerKey()]);
+  const [audience, viewerKey] = await Promise.all([getCurrentMarketingAudience(), getViewerKey()]);
+  const stories = await getActiveStories(audience);
 
   if (stories.length === 0 || !viewerKey) {
     return stories.map((story) => ({ ...story, seen: false }));

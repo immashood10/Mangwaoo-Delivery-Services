@@ -133,7 +133,7 @@ export default function OrdersList({ orders, mode }: { orders: SellerOrder[]; mo
   }
 
   const delivered = visibleOrders.filter((order) => order.status === 'DELIVERED');
-  const earned = delivered.reduce((sum, order) => sum + order.totalAmount, 0);
+  const earned = delivered.reduce((sum, order) => sum + order.totalAmount - order.platformCommissionAmount, 0);
 
   return (
     <div className="space-y-4">
@@ -144,7 +144,7 @@ export default function OrdersList({ orders, mode }: { orders: SellerOrder[]; mo
             <p className="text-xl font-bold text-ink">{delivered.length}</p>
           </div>
           <div className="rounded-2xl bg-surface p-4 shadow-soft">
-            <p className="text-xs text-brand-gray">Earned from delivered orders</p>
+            <p className="text-xs text-brand-gray">Earned after Mangwaoo platform fee</p>
             <p className="text-xl font-bold text-accent">PKR {earned.toLocaleString()}</p>
           </div>
           <div className="rounded-2xl bg-surface p-4 shadow-soft">
@@ -219,6 +219,12 @@ export default function OrdersList({ orders, mode }: { orders: SellerOrder[]; mo
               </span>
               <span className="font-bold text-accent">PKR {order.totalAmount.toLocaleString()}</span>
             </div>
+            {order.marketplace === 'GULPLAZA' && order.platformCommissionPercent > 0 ? (
+              <div className="mt-2 flex items-center justify-between text-xs text-brand-gray">
+                <span>Mangwaoo platform fee if delivered ({order.platformCommissionPercent}%)</span>
+                <span>PKR {order.platformCommissionAmount.toLocaleString()} · Your share PKR {(order.totalAmount - order.platformCommissionAmount).toLocaleString()}</span>
+              </div>
+            ) : null}
 
             {mode === 'incoming' ? (
               <div className="mt-4 flex flex-wrap items-center gap-2">

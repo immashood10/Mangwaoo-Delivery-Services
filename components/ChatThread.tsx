@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
 import { enableNotificationSound, playNotificationSound } from '@/lib/notification-sound';
 import { SUPPORT_NAME } from '@/lib/support-types';
+import { useChatTyping } from '@/lib/use-chat-typing';
+import InAppCall from '@/components/InAppCall';
 
 type Message = {
   id: string;
@@ -31,6 +33,7 @@ export default function ChatThread({
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState('');
+  const { typingPeople, notifyTyping, stopTyping } = useChatTyping(`/api/conversations/${conversationId}/typing`);
   const messagesRef = useRef<Message[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -94,6 +97,7 @@ export default function ChatThread({
     event.preventDefault();
     const text = draft.trim();
     if (!text || isSending) return;
+    stopTyping();
 
     setIsSending(true);
     setError('');
@@ -156,16 +160,19 @@ export default function ChatThread({
             );
           })
         )}
+        {typingPeople.length ? <p className="px-1 text-xs italic text-brand-gray">{typingPeople.map((person) => person.senderName).join(', ')} {typingPeople.length === 1 ? 'is' : 'are'} typing…</p> : null}
         <div ref={bottomRef} />
       </div>
 
+      <InAppCall kind="CONVERSATION" targetId={conversationId} />
       {error ? <p className="px-4 text-xs text-danger">{error}</p> : null}
 
       <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-gray-100 p-3">
         <input
           type="text"
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => { setDraft(event.target.value); if (event.target.value.trim()) notifyTyping(); else stopTyping(); }}
+          onBlur={stopTyping}
           placeholder={placeholder}
           maxLength={2000}
           className="flex-1 rounded-full border border-gray-300 px-4 py-2 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"

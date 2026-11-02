@@ -76,9 +76,9 @@ export function notifyAdminsAfterResponse(build: () => Promise<AdminNotifyInput 
 }
 
 /** Maps seller ids to the user account that owns each one. */
-export async function getSellerUserIds(sellerIds: string[]) {
+export async function getSellerUserIds(sellerIds: string[], options: { excludeShopOwners?: boolean } = {}) {
   const sellers = await prisma.seller.findMany({
-    where: { id: { in: [...new Set(sellerIds)] } },
+    where: { id: { in: [...new Set(sellerIds)] }, ...(options.excludeShopOwners ? { sellerType: { not: 'SHOP_OWNER' } } : {}) },
     select: { id: true, userId: true },
   });
 

@@ -43,7 +43,7 @@ async function queryDishes(intent: FoodSearchIntent) {
     where: {
       isActive: true,
       stock: { gt: 0 },
-      seller: { isApproved: true, sellerType: { in: ['GULPLAZA_OWNER', 'WHOLESALER'] }, user: { isActive: true } },
+      seller: { isApproved: true, sellerType: { in: ['GULPLAZA_OWNER', 'SHOP_OWNER', 'WHOLESALER'] }, user: { isActive: true } },
       ...(intent.maxPrice !== null ? { price: { lte: intent.maxPrice } } : {}),
       ...(intent.spice.length ? { spiceLevel: { in: intent.spice } } : {}),
       ...(intent.tags.length ? { dishTags: { hasEvery: intent.tags } } : {}),
@@ -132,7 +132,7 @@ export async function getFoodRecommendations(input: { customerId?: string; origi
 
   const ids = byProduct.map((row) => row.productId);
   const products = await prisma.gulplazaProduct.findMany({
-    where: { isActive: true, stock: { gt: 0 }, seller: { isApproved: true, sellerType: { in: ['GULPLAZA_OWNER', 'WHOLESALER'] }, user: { isActive: true } } },
+    where: { isActive: true, stock: { gt: 0 }, seller: { isApproved: true, sellerType: { in: ['GULPLAZA_OWNER', 'SHOP_OWNER', 'WHOLESALER'] }, user: { isActive: true } } },
     orderBy: { createdAt: 'desc' },
     take: 80,
     select: {

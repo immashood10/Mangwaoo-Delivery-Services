@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { CheckCircle2, Copy, Megaphone, RotateCcw, Trash2, XCircle } from 'lucide-react';
 import { AD_PLACEMENTS, formatAdDays } from '@/lib/ad-config';
 import type { AdRequestRow } from '@/lib/promotions';
+import AdAudienceSettings from '@/components/AdAudienceSettings';
+import type { MarketingAudienceSummary } from '@/lib/marketing-audience-config';
 
 // Fixed time zone so the server render and the browser agree on the date.
 const formatDateTime = (iso: string) =>
@@ -44,7 +46,15 @@ function RequestFacts({ ad }: { ad: AdRequestRow }) {
 }
 
 /** Review queue for paid ads: check the payment, approve or decline, and end running ads early. */
-export default function AdminAdRequests({ ads }: { ads: AdRequestRow[] }) {
+export default function AdminAdRequests({
+  ads,
+  isSuperAdmin,
+  audienceSummary,
+}: {
+  ads: AdRequestRow[];
+  isSuperAdmin: boolean;
+  audienceSummary: MarketingAudienceSummary | null;
+}) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
@@ -190,6 +200,8 @@ export default function AdminAdRequests({ ads }: { ads: AdRequestRow[] }) {
                   </div>
                 </div>
 
+                {isSuperAdmin && audienceSummary ? <AdAudienceSettings ad={ad} summary={audienceSummary} /> : null}
+
                 {rejectingId === ad.id ? (
                   <div className="mt-4 space-y-2">
                     <label htmlFor={`reason-${ad.id}`} className="block text-sm font-semibold text-ink">
@@ -262,31 +274,34 @@ export default function AdminAdRequests({ ads }: { ads: AdRequestRow[] }) {
         ) : (
           <ul className="space-y-3">
             {live.map((ad) => (
-              <li key={ad.id} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-surface p-5 shadow-soft">
-                <RequestFacts ad={ad} />
-                <div className="flex items-center gap-3">
-                  <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-success">
-                    {ad.placement === 'STORY' && ad.endsAt ? (
-                      <>
-                        Live &middot; ends <time dateTime={ad.endsAt}>{formatDateTime(ad.endsAt)}</time>
-                      </>
-                    ) : (
-                      <>
-                        Live &middot; {ad.daysLeft} {ad.daysLeft === 1 ? 'day' : 'days'} left
-                      </>
-                    )}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm(`End the ad for "${ad.productName}" now?`)) void act(ad, 'end');
-                    }}
-                    disabled={busyId === ad.id}
-                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-ink hover:border-red-600 hover:text-danger disabled:opacity-60"
-                  >
-                    End now
-                  </button>
+              <li key={ad.id} className="rounded-2xl bg-surface p-5 shadow-soft">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <RequestFacts ad={ad} />
+                  <div className="flex items-center gap-3">
+                    <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-success">
+                      {ad.placement === 'STORY' && ad.endsAt ? (
+                        <>
+                          Live &middot; ends <time dateTime={ad.endsAt}>{formatDateTime(ad.endsAt)}</time>
+                        </>
+                      ) : (
+                        <>
+                          Live &middot; {ad.daysLeft} {ad.daysLeft === 1 ? 'day' : 'days'} left
+                        </>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`End the ad for "${ad.productName}" now?`)) void act(ad, 'end');
+                      }}
+                      disabled={busyId === ad.id}
+                      className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-ink hover:border-red-600 hover:text-danger disabled:opacity-60"
+                    >
+                      End now
+                    </button>
+                  </div>
                 </div>
+                {isSuperAdmin && audienceSummary ? <AdAudienceSettings ad={ad} summary={audienceSummary} /> : null}
               </li>
             ))}
           </ul>

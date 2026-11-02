@@ -2,14 +2,19 @@ import type { NextConfig } from "next";
 
 const isProduction = process.env.NODE_ENV === "production";
 
-// Where the site may load things from. Everything is our own origin, except the map embedded in the address picker
-// (Google Maps), the address search (OpenStreetMap's Nominatim) and the picture of the live tracking map (map tiles, below).
+// Where the site may load things from. Google Maps serves the picker and live tracking maps; Nominatim still powers address search.
 // Photos are served by our own routes or sent as data: URLs; voice notes play from blob: URLs.
 // Firebase phone verification (only when it is the chosen provider): Google's reCAPTCHA check and Firebase's sign-in API.
 const firebasePhone = process.env.PHONE_VERIFICATION_PROVIDER === "firebase";
 const recaptcha = firebasePhone ? " https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/" : "";
 const firebaseApis = firebasePhone ? " https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com" : "";
 const firebaseFrames = firebasePhone ? " https://www.google.com/recaptcha/ https://recaptcha.google.com" : "";
+let liveKitOrigin = "";
+try {
+  liveKitOrigin = process.env.LIVEKIT_URL ? ` ${new URL(process.env.LIVEKIT_URL).origin}` : "";
+} catch {
+  // An invalid LiveKit URL is reported by the call API; it adds no CSP source.
+}
 
 // The live tracking map's tiles (components/LiveMap.tsx) come from a tile server: OpenStreetMap's by default. This must name the
 // same server as lib/map-config.ts; NEXT_PUBLIC_MAP_TILE_URL switches both to another provider (placeholders {z} {x} {y}, no {s}).
@@ -25,12 +30,12 @@ try {
 const contentSecurityPolicy = [
   "default-src 'self'",
   // Next.js puts small inline scripts in every page, so 'unsafe-inline' is needed; nothing from other sites runs.
-  `script-src 'self' 'unsafe-inline'${isProduction ? "" : " 'unsafe-eval'"}${recaptcha}`,
-  "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob: ${mapTileOrigin}${firebasePhone ? " https://www.gstatic.com" : ""}`,
+  `script-src 'self' 'unsafe-inline' https://*.googleapis.com https://*.gstatic.com https://*.google.com${isProduction ? "" : " 'unsafe-eval'"}${recaptcha}`,
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  `img-src 'self' data: blob: ${mapTileOrigin} https://tiles.openfreemap.org https://*.googleapis.com https://*.gstatic.com https://*.google.com${firebasePhone ? " https://www.gstatic.com" : ""}`,
   "media-src 'self' data: blob:",
-  "font-src 'self' data:",
-  `connect-src 'self' https://nominatim.openstreetmap.org${firebaseApis}`,
+  "font-src 'self' data: https://fonts.gstatic.com",
+  `connect-src 'self' https://nominatim.openstreetmap.org https://tiles.openfreemap.org https://*.googleapis.com https://*.gstatic.com https://*.google.com${firebaseApis}${liveKitOrigin}`,
   `frame-src https://maps.google.com https://www.google.com${firebaseFrames}`,
   "worker-src 'self' blob:",
   "object-src 'none'",

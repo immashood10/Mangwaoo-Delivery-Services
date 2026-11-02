@@ -349,7 +349,7 @@ export async function listManagerChats(areaId: number): Promise<ManagerChatRow[]
     orderBy: { updatedAt: 'desc' },
     take: MANAGER_CHAT_LIMIT,
     include: {
-      customer: { include: { user: { select: { name: true } } } },
+      customer: { select: { user: { select: { name: true } } } },
       rider: { include: { user: { select: { name: true } } } },
       messages: { orderBy: { createdAt: 'desc' }, take: 1 },
     },

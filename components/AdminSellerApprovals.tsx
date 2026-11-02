@@ -19,6 +19,7 @@ type SellerRow = {
 const SELLER_TYPE_LABELS: Record<string, string> = {
   MART: 'MangwaooMart',
   GULPLAZA_OWNER: 'Food Business Owner',
+  SHOP_OWNER: 'Shop Owner',
   WHOLESALER: 'Food Business Owner',
 };
 

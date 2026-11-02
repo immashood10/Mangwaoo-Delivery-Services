@@ -15,6 +15,8 @@ import {
 import MapPinPicker from '@/components/MapPinPicker';
 import { compressImage } from '@/lib/client-image';
 import { enableNotificationSound, playNotificationSound } from '@/lib/notification-sound';
+import { useChatTyping } from '@/lib/use-chat-typing';
+import InAppCall from '@/components/InAppCall';
 
 // Used only if the live stream can't connect (e.g. a proxy that blocks SSE).
 const FALLBACK_POLL_MS = 3000;
@@ -159,6 +161,7 @@ export default function RiderChatThread({
   const locationMenuRef = useRef<HTMLDivElement>(null);
   const [recordingSeconds, setRecordingSeconds] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const { typingPeople, notifyTyping, stopTyping } = useChatTyping(`/api/rider-chats/${chatId}/typing`);
 
   const messagesRef = useRef<ThreadMessage[]>([]);
   // The ids already shown, and whether the first load is done: that is how a message that has just arrived is told from
@@ -402,6 +405,7 @@ export default function RiderChatThread({
     const text = draft.trim();
     if (!text) return;
 
+    stopTyping();
     setDraft('');
     const ok = await sendOptimistic(
       { type: 'TEXT', body: text, lat: null, lng: null, durationSec: null, attachmentUrl: null },
@@ -588,8 +592,10 @@ export default function RiderChatThread({
             );
           })
         )}
+        {typingPeople.length ? <p className="px-1 text-xs italic text-brand-gray">{typingPeople.map((person) => person.senderName).join(', ')} {typingPeople.length === 1 ? 'is' : 'are'} typing…</p> : null}
       </div>
 
+      {(currentRole === 'CUSTOMER' || currentRole === 'RIDER') && chatStatus === 'ACTIVE' ? <InAppCall kind="RIDER_CHAT" targetId={chatId} /> : null}
       {error ? <p className="px-4 pb-1 text-xs text-danger">{error}</p> : null}
 
       {isClosed ? (
@@ -670,7 +676,8 @@ export default function RiderChatThread({
           <input
             type="text"
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => { setDraft(event.target.value); if (event.target.value.trim()) notifyTyping(); else stopTyping(); }}
+            onBlur={stopTyping}
             placeholder={isUploading ? 'Sending…' : placeholder}
             maxLength={MAX_RIDER_CHAT_MESSAGE_LENGTH}
             className="min-w-0 flex-1 rounded-full border border-gray-300 px-4 py-2 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-red-100"

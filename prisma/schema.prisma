@@ -204,9 +204,16 @@ enum Role {
   ASM
 }
 
+enum CustomerGender {
+  MAN
+  WOMAN
+  NON_BINARY
+}
+
 enum SellerType {
   MART
   GULPLAZA_OWNER
+  SHOP_OWNER
   WHOLESALER
 }
 
@@ -215,6 +222,14 @@ model Customer {
   userId    String   @unique
   user      User     @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
+
+  /// Delivery form values from the customer's last successful checkout, loaded from the server for their next checkout.
+  deliveryFullName    String?
+  deliveryContactNumber String?
+  deliveryAddress     String?
+  /// Optional self-reported profile data; used only for aggregate adult audience reports and paid-ad matching.
+  dateOfBirth         DateTime? @db.Date
+  gender              CustomerGender?
 
   orders         Order[]
   gulplazaOrders GulplazaOrder[]
@@ -527,6 +542,10 @@ model ProductAd {
   amount          Int
   // The seller's EasyPaisa / JazzCash transaction id, checked by an admin
   paymentRef      String
+  /// Optional adult audience targeting; null values mean no restriction for that dimension.
+  targetAgeMin    Int?
+  targetAgeMax    Int?
+  targetGender    CustomerGender?
   rejectionReason String?
   // Set when an admin approves: the ad runs for a week from then
   startsAt        DateTime?
@@ -685,6 +704,21 @@ model Message {
   body           String
   isRead         Boolean      @default(false)
   createdAt      DateTime     @default(now())
+}
+
+/// Short-lived typing state for an authorized chat participant (rows expire after a few seconds).
+model ChatTypingIndicator {
+  id          String   @id @default(cuid())
+  kind        String
+  targetId    String
+  userId      String
+  senderRole  String
+  senderName  String
+  expiresAt   DateTime
+  updatedAt   DateTime @updatedAt
+
+  @@unique([kind, targetId, userId])
+  @@index([kind, targetId, expiresAt])
 }
 
 // ── Order chat: customer ↔ nearest rider (admin can join) ──
@@ -846,6 +880,93 @@ enum SenderRole {
   ADMIN
 }
 
+enum InAppCallStatus {
+  RINGING
+  ACTIVE
+  DECLINED
+  ENDED
+}
+
+enum CallRecordingStatus {
+  PENDING
+  STARTING
+  RECORDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum JerseySize {
+  XS
+  S
+  M
+  L
+  XL
+  XXL
+  XXXL
+}
+
+enum JerseyPattern {
+  SOLID
+  STRIPES
+  DIAGONAL
+  CHEVRON
+  GEOMETRIC
+  CAMO
+}
+
+enum JerseyCollar {
+  CREW
+  V_NECK
+  POLO
+}
+
+enum JerseySleeve {
+  SHORT
+  LONG
+}
+
+enum JerseyDesignStatus {
+  DRAFT
+  SUBMITTED
+}
+
+enum JerseyLogoPlacement {
+  FRONT_CHEST
+  LEFT_SLEEVE
+  RIGHT_SLEEVE
+  UPPER_BACK
+  LOWER_BACK
+}
+
+/// An in-app audio call between the two people in a seller conversation or assigned rider order chat.
+/// Each participant's consent is recorded before a room token can be issued; all media is recorded by LiveKit Egress.
+model InAppCall {
+  id                    String               @id @default(cuid())
+  kind                  String
+  targetId              String
+  roomName              String               @unique
+  callerUserId          String
+  receiverUserId        String
+  callerName            String
+  receiverName          String
+  callerConsentedAt     DateTime
+  receiverConsentedAt   DateTime?
+  status                InAppCallStatus      @default(RINGING)
+  recordingStatus       CallRecordingStatus  @default(PENDING)
+  egressId              String?              @unique
+  recordingObjectKey    String?
+  startedAt             DateTime?
+  disconnectedAt        DateTime?
+  endedAt               DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  @@index([kind, targetId, status, createdAt])
+  @@index([callerUserId, status, createdAt])
+  @@index([receiverUserId, status, createdAt])
+}
+
 // A signed-in customer's cart. This is the cart of record (nothing is kept in the browser): it is loaded
 // after login and replaced wholesale on every change (see /api/cart). Because it is in the database,
 // a seller also sees "pending — still in cart" demand for their products even before (or instead of)
@@ -991,8 +1112,11 @@ model GulplazaOrder {
   /// The number customers and sellers see (MW-F10001); starts at 10001, never reused.
   orderNumber  Int         @unique @default(autoincrement())
   status       OrderStatus @default(PENDING)
-  /// The dishes only (what the seller earns). The customer pays this minus `discountAmount` plus `deliveryFee`.
+  /// The dishes only before Mangwaoo's platform fee. The customer pays this minus `discountAmount` plus `deliveryFee`.
   totalAmount  Decimal
+  /// Mangwaoo's 10% food-platform fee, rounded up to whole PKR and assessed only on delivery (not deliveryFee).
+  platformCommissionAmount Int       @default(0)
+  platformCommissionPercent Int      @default(0)
   /// Fuel cost of the ride from the restaurant to the customer (see lib/delivery.ts), paid to the rider
   deliveryFee  Decimal     @default(0)
   /// Taken off by the coupon and the Loyalty Card together (paid by Mangwaoo, not the seller); `loyaltyDiscount` is the card's part
@@ -1398,6 +1522,47 @@ model LoyaltySettings {
   /// Orders with items worth less than this win no points (PKR; 0 = every delivered order wins).
   minOrderAmount Int      @default(0)
   updatedAt      DateTime @updatedAt
+}
+
+/// A customer jersey mockup and order enquiry. The generated fabric swatch and sponsor files stay private in Postgres;
+/// only the admin dashboard reads submitted contact details and the public form can update an unguessable draft.
+model JerseyDesign {
+  id             String             @id @default(cuid())
+  status         JerseyDesignStatus @default(DRAFT)
+  customerName   String
+  phone          String
+  playerName     String
+  jerseyNumber   Int
+  teamName       String
+  size           JerseySize
+  primaryColor   String
+  secondaryColor String
+  pattern        JerseyPattern
+  collar         JerseyCollar
+  sleeve         JerseySleeve
+  baseImage      Bytes
+  baseImageType  String
+  generatedAt    DateTime           @default(now())
+  submittedAt    DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  logos          JerseySponsorLogo[]
+
+  @@index([status, createdAt])
+}
+
+model JerseySponsorLogo {
+  id          String              @id @default(cuid())
+  designId    String
+  design      JerseyDesign        @relation(fields: [designId], references: [id], onDelete: Cascade)
+  sponsorName String
+  placement   JerseyLogoPlacement
+  mimeType    String
+  size        Int
+  data        Bytes
+  createdAt   DateTime            @default(now())
+
+  @@index([designId, createdAt])
 }
 
 // ── Loyalty Card (see lib/loyalty-card.ts) ──────────────────

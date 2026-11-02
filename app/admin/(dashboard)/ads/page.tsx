@@ -1,8 +1,12 @@
 import { redirect } from 'next/navigation';
 import { Megaphone } from 'lucide-react';
 import { getSession } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 import { getAllAdRequests } from '@/lib/promotions';
+import { getMarketingAudienceSummary } from '@/lib/marketing-audience';
+import { isSuperAdminLogin } from '@/lib/super-admin';
 import AdminAdRequests from '@/components/AdminAdRequests';
+import AdminMarketingAudience from '@/components/AdminMarketingAudience';
 import AutoRefresh from '@/components/AutoRefresh';
 
 export const metadata = {
@@ -16,7 +20,12 @@ export default async function AdminAdsPage() {
     redirect('/admin/login');
   }
 
-  const ads = await getAllAdRequests();
+  const [ads, admin] = await Promise.all([
+    getAllAdRequests(),
+    prisma.user.findUnique({ where: { id: session.userId }, select: { email: true } }),
+  ]);
+  const isSuperAdmin = isSuperAdminLogin(admin?.email);
+  const audienceSummary = isSuperAdmin ? await getMarketingAudienceSummary() : null;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
@@ -32,7 +41,8 @@ export default async function AdminAdsPage() {
         you approve it.
       </p>
 
-      <AdminAdRequests ads={ads} />
+      {audienceSummary ? <AdminMarketingAudience summary={audienceSummary} /> : null}
+      <AdminAdRequests ads={ads} isSuperAdmin={isSuperAdmin} audienceSummary={audienceSummary} />
     </div>
   );
 }

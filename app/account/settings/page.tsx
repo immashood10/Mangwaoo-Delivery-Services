@@ -4,6 +4,7 @@ import { ArrowLeft, Settings } from 'lucide-react';
 import AccountSettings from '@/components/AccountSettings';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { latestAdultBirthDate } from '@/lib/marketing-audience';
 
 export default async function AccountSettingsPage() {
   const session = await getSession();
@@ -15,7 +16,12 @@ export default async function AccountSettingsPage() {
   const [user, addresses] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.userId },
-      select: { name: true, email: true, phone: true },
+      select: {
+        name: true,
+        email: true,
+        phone: true,
+        customer: { select: { dateOfBirth: true, gender: true } },
+      },
     }),
     prisma.address.findMany({
       where: { userId: session.userId, isSaved: true },
@@ -48,6 +54,9 @@ export default async function AccountSettingsPage() {
       <AccountSettings
         name={user.name}
         phone={user.phone ?? ''}
+        dateOfBirth={user.customer?.dateOfBirth?.toISOString().slice(0, 10) ?? ''}
+        gender={user.customer?.gender ?? null}
+        maxDateOfBirth={latestAdultBirthDate()}
         email={user.email}
         addresses={addresses.map((address) => ({
           id: address.id,
