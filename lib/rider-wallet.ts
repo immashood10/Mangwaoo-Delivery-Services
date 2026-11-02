@@ -1,4 +1,5 @@
 import type { Prisma } from '@/lib/generated/prisma/client';
+import { randomInt } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { billedDistanceKm } from '@/lib/delivery';
 import { distanceInKm } from '@/lib/geo';
@@ -10,6 +11,8 @@ import {
   DEFAULT_ORDERS_ON_CREDIT,
   commissionFor,
   deliveryChargeForChat,
+  riderCancellationFineRange,
+  riderPayoutPolicy,
   type RiderOrderAccess,
 } from '@/lib/rider-wallet-config';
 
@@ -55,7 +58,7 @@ export type WalletChange = {
 async function recomputeWallet(tx: Tx, riderId: string, options: { relax?: boolean } = {}): Promise<WalletChange> {
   const [sums] = await tx.$queryRaw<{ balance: number; credits: number }[]>`
     SELECT COALESCE(SUM("amount"), 0)::int AS "balance",
-           COALESCE(SUM("amount") FILTER (WHERE "type" <> 'COMMISSION'), 0)::int AS "credits"
+           COALESCE(SUM("amount") FILTER (WHERE "type"::text NOT IN ('COMMISSION', 'FINE')), 0)::int AS "credits"
     FROM "RiderLedgerEntry" WHERE "riderId" = ${riderId}`;
 
   // Commission lines oldest first; a line is unpaid while the commission up to it adds up to more than what was paid.
@@ -113,6 +116,9 @@ export type CommissionResult = {
   commission: number;
   baseFee: number;
   percent: number;
+  elapsedMinutes: number;
+  bonusEligible: boolean;
+  cancellationFine: { amount: number; consecutiveCancellations: number } | null;
   change: WalletChange | null;
 };
 
@@ -142,6 +148,8 @@ export type CloseResult = {
  * The order's line in the rider's history (lib/rider-orders.ts) is written in the same transaction: delivered, or
  * closed by Mangwaoo. A delivered order also pays the rider a random delivery bonus (a BONUS line, lib/rider-bonus.ts),
  * judged by the distance of the ride: it is positive money, set off against the commission, and exactly once like it.
+ * If the rider has cancellations since their last delivery, the first completed delivery also applies one cancellation
+ * fine (higher range at three or more cancellations) and resets their streak in this transaction.
  */
 export async function closeOrderChat(chatId: string, options: { charge: boolean }): Promise<CloseResult> {
   const { charge } = options;
@@ -189,7 +197,12 @@ export async function closeOrderChat(chatId: string, options: { charge: boolean 
 
     await lockRider(tx, snapshot.riderId);
 
+    const { riderCancelStreak } = await tx.rider.findUniqueOrThrow({
+      where: { id: snapshot.riderId },
+      select: { riderCancelStreak: true },
+    });
     const settings = await getWalletSettings(tx);
+    const payoutPolicy = riderPayoutPolicy(Date.now() - (chat.claimedAt ?? chat.createdAt).getTime(), settings.commissionPercent);
     const baseFee = deliveryChargeForChat({
       deliveryCharge: chat.deliveryCharge,
       lat: chat.latitude,
@@ -197,15 +210,26 @@ export async function closeOrderChat(chatId: string, options: { charge: boolean 
       pickupLat: chat.pickupLatitude,
       pickupLng: chat.pickupLongitude,
     });
-    const commission = Math.max(0, commissionFor(baseFee, settings.commissionPercent));
+    const commission = Math.max(0, commissionFor(baseFee, payoutPolicy.commissionPercent));
     const result = {
       riderId: snapshot.riderId,
       riderUserId: chat.rider.userId,
       riderName: chat.rider.user.name,
       commission,
       baseFee,
-      percent: settings.commissionPercent,
+      percent: payoutPolicy.commissionPercent,
+      elapsedMinutes: payoutPolicy.elapsedMinutes,
+      bonusEligible: payoutPolicy.bonusEligible,
     };
+    const fineRange = riderCancellationFineRange(riderCancelStreak);
+    const cancellationFine = fineRange
+      ? {
+          amount: randomInt(fineRange.min, fineRange.max + 1),
+          consecutiveCancellations: fineRange.consecutiveCancellations,
+        }
+      : null;
+
+    await tx.rider.update({ where: { id: snapshot.riderId }, data: { riderCancelStreak: 0 } });
 
     // The delivery bonus: a random amount by the distance of the ride (the one the chat remembers, or pickup → drop-off for a
     // request with a pickup point; unknown counts as the first tier). One per order: this transaction is the only one that
@@ -216,7 +240,8 @@ export async function closeOrderChat(chatId: string, options: { charge: boolean 
       (chat.pickupLatitude !== null && chat.pickupLongitude !== null
         ? billedDistanceKm(distanceInKm({ lat: chat.pickupLatitude, lng: chat.pickupLongitude }, { lat: chat.latitude, lng: chat.longitude }))
         : null);
-    const bonus: BonusResult | null = bonusSettings.enabled ? { ...drawBonus(distanceKm, bonusSettings), distanceKm } : null;
+    const bonus: BonusResult | null =
+      bonusSettings.enabled && payoutPolicy.bonusEligible ? { ...drawBonus(distanceKm, bonusSettings), distanceKm } : null;
 
     if (commission > 0) {
       await tx.riderLedgerEntry.create({
@@ -226,7 +251,7 @@ export async function closeOrderChat(chatId: string, options: { charge: boolean 
           amount: -commission,
           baseAmount: baseFee,
           chatId,
-          note: `${settings.commissionPercent}% of Rs ${baseFee.toLocaleString('en-PK')} delivery charge · order for ${snapshot.customerName}`,
+          note: `${payoutPolicy.commissionPercent}% of Rs ${baseFee.toLocaleString('en-PK')} delivery charge after ${payoutPolicy.elapsedMinutes} min · order for ${snapshot.customerName}`,
         },
       });
     }
@@ -243,6 +268,18 @@ export async function closeOrderChat(chatId: string, options: { charge: boolean 
       });
     }
 
+    if (cancellationFine) {
+      await tx.riderLedgerEntry.create({
+        data: {
+          riderId: snapshot.riderId,
+          type: 'FINE',
+          amount: -cancellationFine.amount,
+          fineChatId: chatId,
+          note: `Rs ${cancellationFine.amount} fine after ${cancellationFine.consecutiveCancellations} consecutive rider cancellation${cancellationFine.consecutiveCancellations === 1 ? '' : 's'} · next delivery for ${snapshot.customerName}`,
+        },
+      });
+    }
+
     await recordRiderOrder(tx, snapshot, { status: 'DELIVERED', deliveryCharge: baseFee, commission, bonus: bonus?.amount ?? null });
 
     // A cart checkout can create multiple seller orders under one rider chat. Completing that delivery also completes
@@ -252,12 +289,12 @@ export async function closeOrderChat(chatId: string, options: { charge: boolean 
     await tx.order.updateMany({ where: { riderChatId: chatId, status: { not: 'CANCELLED' } }, data: { status: 'DELIVERED', deliveredAt: new Date() } });
     await tx.gulplazaOrder.updateMany({ where: { riderChatId: chatId, status: { not: 'CANCELLED' } }, data: { status: 'DELIVERED', deliveredAt: new Date() } });
 
-    // A line was written (a commission, a bonus or both): the rider's numbers and the payment hold follow it.
-    const change = commission > 0 || bonus ? await recomputeWallet(tx, snapshot.riderId) : null;
+    // A commission, bonus or cancellation fine changes the balance and may change the payment hold.
+    const change = commission > 0 || bonus || cancellationFine ? await recomputeWallet(tx, snapshot.riderId) : null;
 
     return {
       found: true,
-      commission: { ...result, change },
+      commission: { ...result, cancellationFine, change },
       bonus,
       finished,
       deliveredOrders: [...mart.map((order) => ({ kind: 'MART' as const, id: order.id })), ...food.map((order) => ({ kind: 'GULPLAZA' as const, id: order.id }))],

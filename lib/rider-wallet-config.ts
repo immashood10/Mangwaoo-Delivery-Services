@@ -5,7 +5,8 @@
 // sending money to Mangwaoo and an admin adds it (TOP_UP). A rider may have a few finished orders unpaid
 // (“orders on credit”, 5 to start with); once that many are unpaid the rider is not eligible for the next order until
 // the commission is paid. An admin can block a rider, but cannot bypass an unpaid-payment hold. A rider also gets a random delivery
-// bonus for every order they complete (a BONUS line, positive money: lib/rider-bonus-config.ts), which counts like a payment.
+// bonus for every timely completed order (a BONUS line, positive money: lib/rider-bonus-config.ts), which counts like a payment.
+// Rider-initiated cancellations accrue a streak; one random FINE debit is applied on the next completed delivery.
 
 import { deliveryFeeForDistance } from '@/lib/delivery';
 import { distanceInKm } from '@/lib/geo';
@@ -13,6 +14,15 @@ import { distanceInKm } from '@/lib/geo';
 export const DEFAULT_COMMISSION_PERCENT = 30;
 export const DEFAULT_ORDERS_ON_CREDIT = 5;
 export const MAX_ORDERS_ON_CREDIT = 100;
+export const DELIVERY_ETA_MINUTES = 30;
+export const DELIVERY_ETA_MAX_MINUTES = 40;
+export const RIDER_BONUS_DEADLINE_MINUTES = 40;
+export const LATE_COMMISSION_START_MINUTES = 50;
+export const VERY_LATE_COMMISSION_MINUTES = 90;
+export const RIDER_CANCEL_FINE_MIN_PKR = 1;
+export const RIDER_CANCEL_FINE_MAX_PKR = 20;
+export const RIDER_CANCEL_STREAK_FINE_MAX_PKR = 50;
+export const RIDER_CANCEL_STREAK_THRESHOLD = 3;
 
 export const MIN_TOP_UP_PKR = 50;
 export const MAX_TOP_UP_PKR = 100000;
@@ -24,7 +34,7 @@ export const MAX_ADJUSTMENT_PKR = 1000000;
 export const RIDER_TOP_UP_METHODS = ['EasyPaisa', 'JazzCash', 'Bank transfer'] as const;
 
 export type RiderOrderAccess = 'AUTO' | 'ALLOWED' | 'BLOCKED';
-export type RiderLedgerKind = 'COMMISSION' | 'TOP_UP' | 'ADJUSTMENT' | 'BONUS';
+export type RiderLedgerKind = 'COMMISSION' | 'TOP_UP' | 'ADJUSTMENT' | 'BONUS' | 'FINE';
 export type RiderTopUpState = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 /** Why a rider can't receive the next order: unpaid commission, or an admin blocked them. null = eligible. */
@@ -49,6 +59,38 @@ export function riderHold(rider: { orderAccess: RiderOrderAccess; paymentHold: b
 export function commissionFor(fee: number, percent: number) {
   // The tiny allowance keeps floating point (e.g. 30 % of 70 = 21.000000000000004) from rounding a whole rupee up.
   return Math.ceil((fee * percent) / 100 - 1e-9);
+}
+
+/** Commission and bonus eligibility are based on time since this rider accepted the order. */
+export function riderPayoutPolicy(elapsedMs: number, baseCommissionPercent: number) {
+  const elapsed = Number.isFinite(elapsedMs) ? Math.max(0, elapsedMs) : 0;
+  const minute = 60 * 1000;
+  let commissionPercent = baseCommissionPercent;
+
+  if (elapsed > VERY_LATE_COMMISSION_MINUTES * minute) {
+    commissionPercent = 100;
+  } else if (elapsed === VERY_LATE_COMMISSION_MINUTES * minute) {
+    commissionPercent = 50;
+  } else if (elapsed >= LATE_COMMISSION_START_MINUTES * minute) {
+    commissionPercent = 35;
+  }
+
+  return {
+    elapsedMinutes: Math.ceil(elapsed / minute),
+    commissionPercent,
+    bonusEligible: elapsed <= RIDER_BONUS_DEADLINE_MINUTES * minute,
+  };
+}
+
+/** Fine range for the pending rider-cancellation streak; zero means no fine is due. */
+export function riderCancellationFineRange(streak: number) {
+  if (!Number.isInteger(streak) || streak < 1) return null;
+
+  return {
+    min: RIDER_CANCEL_FINE_MIN_PKR,
+    max: streak >= RIDER_CANCEL_STREAK_THRESHOLD ? RIDER_CANCEL_STREAK_FINE_MAX_PKR : RIDER_CANCEL_FINE_MAX_PKR,
+    consecutiveCancellations: Math.min(streak, RIDER_CANCEL_STREAK_THRESHOLD),
+  };
 }
 
 /**

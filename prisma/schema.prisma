@@ -329,6 +329,8 @@ model Rider {
   paymentHold   Boolean          @default(false)
   /// An admin's decision on whether the rider may receive the next order (AUTO = the wallet rule decides).
   orderAccess   RiderOrderAccess @default(AUTO)
+  /// Consecutive rider-initiated cancellations since their last successfully completed delivery (capped at 3).
+  riderCancelStreak Int           @default(0)
 
   ledger RiderLedgerEntry[]
   topUps RiderTopUp[]
@@ -349,6 +351,8 @@ enum RiderLedgerType {
   /// A random bonus Mangwaoo pays for a delivered order (see lib/rider-bonus.ts). Positive money on the rider's side, so it is
   /// set off against the commission the rider owes, like a payment.
   BONUS
+  /// A one-time cancellation fine deducted from a rider's next completed delivery.
+  FINE
 }
 
 enum RiderTopUpStatus {
@@ -357,7 +361,7 @@ enum RiderTopUpStatus {
   REJECTED
 }
 
-/// One line of a rider's wallet. `amount` is in PKR from the rider's side: a top-up is positive, a commission negative.
+/// One line of a rider's wallet. `amount` is in PKR from the rider's side: a top-up/bonus is positive, commission/fine negative.
 model RiderLedgerEntry {
   id         String          @id @default(cuid())
   riderId    String
@@ -373,6 +377,8 @@ model RiderLedgerEntry {
   topUpId    String?         @unique
   /// BONUS: the order chat the bonus was paid for. A plain id like `chatId`; unique = one bonus per order.
   bonusChatId String?        @unique
+  /// FINE: the next completed order where a pending rider-cancellation fine was applied.
+  fineChatId   String?        @unique
   note       String?
   createdAt  DateTime        @default(now())
 

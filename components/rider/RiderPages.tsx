@@ -12,7 +12,21 @@ import RiderFacePhotoCard from '@/components/rider/RiderFacePhotoCard';
 import { holdMessage, useRider } from '@/components/rider/RiderShell';
 import type { RiderChatSummary } from '@/lib/rider-chat-types';
 import type { RiderHistoryResponse } from '@/lib/rider-history-types';
-import { commissionFor, formatPkr, rechargeMessage } from '@/lib/rider-wallet-config';
+import {
+  RIDER_CANCEL_FINE_MAX_PKR,
+  RIDER_CANCEL_FINE_MIN_PKR,
+  RIDER_CANCEL_STREAK_FINE_MAX_PKR,
+  RIDER_CANCEL_STREAK_THRESHOLD,
+  DELIVERY_ETA_MAX_MINUTES,
+  DELIVERY_ETA_MINUTES,
+  RIDER_BONUS_DEADLINE_MINUTES,
+  VERY_LATE_COMMISSION_MINUTES,
+  LATE_COMMISSION_START_MINUTES,
+  commissionFor,
+  formatPkr,
+  rechargeMessage,
+  riderPayoutPolicy,
+} from '@/lib/rider-wallet-config';
 
 function PendingApproval() {
   return (
@@ -228,10 +242,21 @@ function OrderActions({
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  const [now, setNow] = useState(0);
 
   // The charge comes with the order (the server worked it out); this is only for showing it.
   const charge = chat.deliveryCharge;
-  const commission = charge > 0 ? commissionFor(charge, rules.commissionPercent) : 0;
+  const assignedAt = Date.parse(chat.claimedAt ?? chat.createdAt);
+  const payoutPolicy = riderPayoutPolicy(now > 0 ? now - assignedAt : 0, rules.commissionPercent);
+  const commission = charge > 0 ? commissionFor(charge, payoutPolicy.commissionPercent) : 0;
+
+  useEffect(() => {
+    const updateTime = () => setNow(Date.now());
+    updateTime();
+    const timer = window.setInterval(updateTime, 10000);
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -252,8 +277,15 @@ function OrderActions({
         (data?.commission
           ? `Order completed. ${formatPkr(data.commission.amount)} (${data.commission.percent}% of ${formatPkr(data.commission.baseFee)}) was added to what you owe Mangwaoo.`
           : 'Order completed.') +
-          (data?.bonus ? ` You earned a ${formatPkr(data.bonus.amount)} bonus, added to your account.` : ''),
-        Boolean(data?.commission?.onHold)
+          (data?.bonus
+            ? ` You earned a ${formatPkr(data.bonus.amount)} bonus, added to your account.`
+            : data?.deliveryPolicy?.bonusEligible === false
+              ? ` No delivery bonus was paid because this order took ${data.deliveryPolicy.elapsedMinutes} minutes after assignment.`
+              : '') +
+          (data?.cancellationFine
+            ? ` A ${formatPkr(data.cancellationFine.amount)} cancellation fine was added to what you owe Mangwaoo.`
+            : ''),
+        Boolean(data?.commission?.onHold || data?.cancellationFine?.onHold)
       );
     } catch {
       setError('Could not reach the server. Please try again.');
@@ -298,14 +330,23 @@ function OrderActions({
           </div>
           <p className="mt-1.5 text-xs text-brand-gray">
             {charge > 0
-              ? `Mangwaoo keeps ${rules.commissionPercent}%${commission > 0 ? `: ${formatPkr(commission)} on this order` : ''}, which is added to your account.`
-              : 'This order has no delivery charge, so nothing is added to your account.'}
+              ? `Mangwaoo keeps ${payoutPolicy.commissionPercent}%${commission > 0 ? `: ${formatPkr(commission)} on this order` : ''}, which is added to your account.`
+              : 'This order has no delivery charge, so no commission is added to your account.'}
+          </p>
+          <p className="mt-1.5 text-xs text-brand-gray">
+            Expected delivery is {DELIVERY_ETA_MINUTES}–{DELIVERY_ETA_MAX_MINUTES} minutes after assignment. At {LATE_COMMISSION_START_MINUTES} minutes Mangwaoo&apos;s share becomes 35%; at exactly {VERY_LATE_COMMISSION_MINUTES} minutes it becomes 50%, and after that the full delivery charge goes to Mangwaoo.
           </p>
           {rules.bonusEnabled ? (
-            <p className="mt-1.5 flex items-start gap-1.5 text-xs font-semibold text-success">
-              <Gift className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              You also get a surprise bonus for this order, added to your account when you complete it.
-            </p>
+            payoutPolicy.bonusEligible ? (
+              <p className="mt-1.5 flex items-start gap-1.5 text-xs font-semibold text-success">
+                <Gift className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                You get a surprise bonus if you complete this order within {RIDER_BONUS_DEADLINE_MINUTES} minutes of assignment.
+              </p>
+            ) : (
+              <p className="mt-1.5 text-xs font-semibold text-warning">
+                This order is past {RIDER_BONUS_DEADLINE_MINUTES} minutes from assignment, so no delivery bonus will be paid.
+              </p>
+            )
           ) : null}
 
           {error ? (
@@ -462,8 +503,10 @@ export function RiderOrders({ mode }: { mode: 'requests' | 'chats' }) {
           title="End chat?"
           message="Are you sure you want to end this chat?"
           note={
-            rules.bonusEnabled && isMine
-              ? 'Order will be cancelled and chats will disappear. A cancelled order earns no delivery bonus.'
+            isMine
+              ? `Order will be cancelled and chats will disappear. Your next completed order will get a one-time Rs ${RIDER_CANCEL_FINE_MIN_PKR}–${RIDER_CANCEL_FINE_MAX_PKR} cancellation fine; after ${RIDER_CANCEL_STREAK_THRESHOLD} consecutive cancellations, the range is Rs ${RIDER_CANCEL_FINE_MIN_PKR}–${RIDER_CANCEL_STREAK_FINE_MAX_PKR}.${
+                  rules.bonusEnabled ? ' A cancelled order earns no delivery bonus.' : ''
+                }`
               : 'Order will be cancelled and chats will disappear.'
           }
           onConfirm={cancelChat}

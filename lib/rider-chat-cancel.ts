@@ -47,6 +47,19 @@ export async function cancelOrderChat(chatId: string, by: 'RIDER' | 'CUSTOMER'):
       if (!chat) return { kind: 'missing' } as const;
 
       const snapshot = orderSnapshot(chat);
+
+      if (by === 'RIDER' && snapshot) {
+        const [rider] = await tx.$queryRaw<{ riderCancelStreak: number }[]>`
+          SELECT "riderCancelStreak" FROM "Rider" WHERE "id" = ${snapshot.riderId} FOR UPDATE`;
+
+        if (rider) {
+          await tx.rider.update({
+            where: { id: snapshot.riderId },
+            data: { riderCancelStreak: Math.min(rider.riderCancelStreak + 1, 3) },
+          });
+        }
+      }
+
       if (snapshot) await recordRiderOrder(tx, snapshot, { status: 'CANCELLED', cancelledBy: by });
 
       // Messages first, then their attachments, then the chat (the same order the admin's "Delete" uses).

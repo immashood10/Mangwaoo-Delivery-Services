@@ -6,6 +6,13 @@ import { compressImage } from '@/lib/client-image';
 import {
   MAX_TOP_UP_PKR,
   MIN_TOP_UP_PKR,
+  LATE_COMMISSION_START_MINUTES,
+  RIDER_BONUS_DEADLINE_MINUTES,
+  RIDER_CANCEL_FINE_MAX_PKR,
+  RIDER_CANCEL_FINE_MIN_PKR,
+  RIDER_CANCEL_STREAK_FINE_MAX_PKR,
+  RIDER_CANCEL_STREAK_THRESHOLD,
+  VERY_LATE_COMMISSION_MINUTES,
   RECHARGE_TITLE,
   RIDER_TOP_UP_METHODS,
   formatPkr,
@@ -47,6 +54,7 @@ const ENTRY_LABELS: Record<RiderLedgerKind, string> = {
   TOP_UP: 'Payment received',
   ADJUSTMENT: 'Adjustment',
   BONUS: 'Delivery bonus',
+  FINE: 'Cancellation fine',
 };
 
 const INPUT_CLASS =
@@ -268,11 +276,12 @@ export default function RiderWallet() {
         <h2 className="text-lg font-bold text-ink">How it works</h2>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-brand-gray">
           <li>
-            Every order you complete adds Mangwaoo&apos;s {wallet.commissionPercent}% of the delivery charge to what you owe.
+            The clock starts when you accept an order. Mangwaoo&apos;s base share is {wallet.commissionPercent}%; after {LATE_COMMISSION_START_MINUTES} minutes it becomes 35%, at exactly {VERY_LATE_COMMISSION_MINUTES} minutes it becomes 50%, and after that the full delivery charge goes to Mangwaoo.
           </li>
           {wallet.bonusEnabled ? (
-            <li>Every order you complete also earns you a surprise bonus. It is added to your account, so it counts against what you owe. An order you cancel earns no bonus.</li>
+            <li>A surprise bonus is added to your account only if you complete the order within {RIDER_BONUS_DEADLINE_MINUTES} minutes of accepting it. Late or cancelled orders earn no bonus.</li>
           ) : null}
+          <li>A rider cancellation adds a one-time random Rs {RIDER_CANCEL_FINE_MIN_PKR}–{RIDER_CANCEL_FINE_MAX_PKR} fine to your next completed order. After {RIDER_CANCEL_STREAK_THRESHOLD} consecutive rider cancellations, that fine range becomes Rs {RIDER_CANCEL_FINE_MIN_PKR}–{RIDER_CANCEL_STREAK_FINE_MAX_PKR}.</li>
           <li>You can have {wallet.ordersOnCredit} finished orders unpaid. After that, recharge your account to receive the next order.</li>
           <li>Pay by {payment.method}, send us the transaction ID (and a screenshot of the payment) below, and Mangwaoo adds the money to your account.</li>
         </ul>

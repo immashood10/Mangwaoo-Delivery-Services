@@ -12,8 +12,8 @@ import { awardOrderPoints } from '@/lib/points';
  * percentage of comes from the order itself (the chat's delivery charge, see `deliveryChargeForChat`); nothing the rider
  * sends is read. An admin's "Close" only closes the chat (no commission: use Rider Wallets > Adjust if one is due).
  * "End chat" is NOT this: it cancels the order and deletes the chat (`/cancel`).
- * The same moment pays the rider a random delivery bonus by the distance of the ride (lib/rider-bonus.ts): the rider's answer
- * carries it and the rider's bell tells them, whichever side pressed the button; the customer is not shown it.
+ * The same moment pays the rider a random distance-based bonus only when completed within 40 minutes of assignment
+ * (lib/rider-bonus.ts) and applies any pending cancellation fine; neither is shown to the customer.
  */
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -68,6 +68,20 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     }));
   }
 
+  const cancellationFine = result?.cancellationFine;
+  if (cancellationFine && result?.change && finished) {
+    const { amount, consecutiveCancellations } = cancellationFine;
+
+    notifyAfterResponse(async () => ({
+      userId: result.riderUserId,
+      type: 'ACCOUNT' as const,
+      title: 'Cancellation fine applied',
+      message: `${formatPkr(amount)} was deducted from your next completed delivery after ${consecutiveCancellations} consecutive rider cancellation${consecutiveCancellations === 1 ? '' : 's'}.`,
+      href: '/rider/wallet',
+      refId: `rider-cancel-fine:${id}`,
+    }));
+  }
+
   // A bonus that covers what the rider owed ends their payment hold.
   if (result?.change?.endedHold) {
     notifyAfterResponse(async () => ({
@@ -111,6 +125,24 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
             percent: result.percent,
             balance: result.change?.balance ?? null,
             onHold: result.change ? result.change.paymentHold : false,
+          },
+        }
+      : {}),
+    ...(result && access.role === 'RIDER'
+      ? {
+          deliveryPolicy: {
+            elapsedMinutes: result.elapsedMinutes,
+            percent: result.percent,
+            bonusEligible: result.bonusEligible,
+          },
+        }
+      : {}),
+    ...(result?.cancellationFine && access.role === 'RIDER'
+      ? {
+          cancellationFine: {
+            ...result.cancellationFine,
+            balance: result.change?.balance ?? null,
+            onHold: result.change?.paymentHold ?? false,
           },
         }
       : {}),

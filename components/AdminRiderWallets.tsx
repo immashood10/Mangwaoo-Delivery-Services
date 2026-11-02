@@ -72,7 +72,13 @@ const LABEL_CLASS = 'mb-1.5 block text-sm font-semibold text-ink';
 const BUTTON_CLASS =
   'inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-ink hover:border-accent hover:text-accent disabled:opacity-60';
 
-const ENTRY_LABELS: Record<RiderLedgerKind, string> = { COMMISSION: 'Order commission', TOP_UP: 'Payment received', ADJUSTMENT: 'Adjustment', BONUS: 'Delivery bonus' };
+const ENTRY_LABELS: Record<RiderLedgerKind, string> = {
+  COMMISSION: 'Order commission',
+  TOP_UP: 'Payment received',
+  ADJUSTMENT: 'Adjustment',
+  BONUS: 'Delivery bonus',
+  FINE: 'Cancellation fine',
+};
 
 /** The three tiers of the delivery bonus as the form lists them: which settings each one reads. */
 const BONUS_TIERS = [
@@ -593,7 +599,7 @@ export default function AdminRiderWallets({ riders, pending, settings, bonus }: 
         <form onSubmit={saveRule} className="mt-3 grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
           <div>
             <label htmlFor="rule-percent" className={LABEL_CLASS}>
-              Mangwaoo&apos;s share of each delivery charge (%)
+              Base Mangwaoo share of delivery charge (%)
             </label>
             <input id="rule-percent" type="number" min={1} max={100} step={1} value={percent} onChange={(event) => setPercent(event.target.value)} className={INPUT_CLASS} required />
           </div>
@@ -613,7 +619,7 @@ export default function AdminRiderWallets({ riders, pending, settings, bonus }: 
         </form>
         <p className="mt-2 text-xs text-brand-gray">
           After that many unpaid orders a rider can&apos;t go online or take the next order until they have paid everything they owe. Orders already finished keep the
-          commission they were charged. Set 0 to ask for payment before every next order.
+          commission they were charged. This is the base share before late-delivery rules: after 50 minutes Mangwaoo keeps 35%, at exactly 90 minutes it keeps 50%, and after 90 minutes it keeps the full delivery charge; bonuses stop after 40 minutes. Rider cancellations add a Rs 1–20 fine to the next completed order, or Rs 1–50 after 3 consecutive cancellations. Set 0 to ask for payment before every next order.
         </p>
       </section>
 
@@ -623,9 +629,9 @@ export default function AdminRiderWallets({ riders, pending, settings, bonus }: 
           Delivery bonus
         </h2>
         <p className="mt-1 text-sm text-brand-gray">
-          A rider who completes an order gets a random bonus, added to their wallet (so it counts against what they owe). The farther the order, the bigger it can be.
+          A rider who completes an order within 40 minutes of assignment gets a random bonus, added to their wallet (so it counts against what they owe). The farther the order, the bigger it can be.
           Mangwaoo pays it. An order whose distance is not known (MangwaooMart only) counts as a short one.
-          Only a completed order pays a bonus: a rider who cancels an order, or whose customer cancels it, gets none.
+          Only a completed order within the 40-minute limit pays a bonus: a late or cancelled order gets none.
         </p>
         <form onSubmit={saveBonus} className="mt-3 space-y-4">
           <label className="flex cursor-pointer items-center gap-3">
