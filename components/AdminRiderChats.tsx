@@ -9,6 +9,8 @@ import type { RiderChatStatus, RiderChatSummary } from '@/lib/rider-chat-types';
 
 const POLL_INTERVAL_MS = 8000;
 
+type AdminRiderChat = RiderChatSummary & { orderRefs: string[] };
+
 const STATUS_STYLES: Record<RiderChatStatus, { label: string; className: string }> = {
   OPEN: { label: 'Waiting for rider', className: 'bg-amber-50 text-warning' },
   ACTIVE: { label: 'With rider', className: 'bg-green-50 text-success' },
@@ -16,7 +18,7 @@ const STATUS_STYLES: Record<RiderChatStatus, { label: string; className: string 
 };
 
 export default function AdminRiderChats({ initialFilter = 'all', todayStartIso }: { initialFilter?: ChatFilter; todayStartIso: string }) {
-  const [chats, setChats] = useState<RiderChatSummary[]>([]);
+  const [chats, setChats] = useState<AdminRiderChat[]>([]);
   const [filter, setFilter] = useState<ChatFilter>(initialFilter);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -177,6 +179,11 @@ export default function AdminRiderChats({ initialFilter = 'all', todayStartIso }
                     {status.label}
                   </span>
                 </div>
+                {chat.orderRefs.length ? (
+                  <p className="mt-1 truncate text-xs font-semibold text-accent">
+                    Order ID{chat.orderRefs.length === 1 ? '' : 's'}: {chat.orderRefs.join(', ')}
+                  </p>
+                ) : null}
                 {chat.riderName ? <p className="text-xs text-brand-gray">Rider: {chat.riderName}</p> : null}
                 {chat.managed ? <p className="text-xs text-brand-gray">Area manager: {chat.areaName}</p> : null}
                 {chat.lastMessage ? <p className="mt-1 line-clamp-2 text-xs text-ink">{chat.lastMessage}</p> : null}
@@ -218,6 +225,11 @@ export default function AdminRiderChats({ initialFilter = 'all', todayStartIso }
                     {selectedChat.customerName}
                     {selectedChat.riderName ? ` ↔ ${selectedChat.riderName}` : ''}
                   </p>
+                  {selectedChat.orderRefs.length ? (
+                    <p className="mt-1 break-words text-xs font-semibold text-accent">
+                      Order ID{selectedChat.orderRefs.length === 1 ? '' : 's'}: {selectedChat.orderRefs.join(', ')}
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
