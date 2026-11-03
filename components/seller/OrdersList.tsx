@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Banknote, MapPin, Smartphone, Trash2 } from 'lucide-react';
+import { foodIconFor } from '@/lib/food-icons';
 import { FINISHED_STATUSES, INCOMING_STATUSES, type SellerOrder } from '@/lib/seller-types';
 import { useServerRefresh } from './useServerRefresh';
 
@@ -199,8 +200,15 @@ export default function OrdersList({ orders, mode }: { orders: SellerOrder[]; mo
             <ul className="mb-3 space-y-1 text-sm text-ink">
               {order.items.map((item) => (
                 <li key={item.id} className="flex items-center justify-between gap-3">
-                  <span>
-                    {item.productName} <span className="text-brand-gray">x{item.quantity}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    {order.marketplace === 'GULPLAZA' ? (
+                      <span aria-hidden="true" className="w-6 shrink-0 text-center text-lg leading-none">
+                        {foodIconFor(item.productName)}
+                      </span>
+                    ) : null}
+                    <span className="min-w-0">
+                      {item.productName} <span className="text-brand-gray">x{item.quantity}</span>
+                    </span>
                   </span>
                   <span className="text-brand-gray">PKR {(item.price * item.quantity).toLocaleString()}</span>
                 </li>

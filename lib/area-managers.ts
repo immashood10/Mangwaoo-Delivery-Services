@@ -566,14 +566,14 @@ export async function managerUserIds(areaId: number): Promise<string[]> {
 }
 
 /** Puts a notice in the bell (and on the phone) of every manager of an area, after the response has gone out. */
-export function notifyAreaManagers(areaId: number, notice: { title: string; message: string; refId?: string }) {
+export function notifyAreaManagers(areaId: number, notice: { title: string; message: string; refId?: string; href?: string }) {
   notifyAfterResponse(async () =>
     (await managerUserIds(areaId)).map((userId) => ({
       userId,
       type: 'ORDER' as const,
       title: notice.title,
       message: notice.message,
-      href: ASM_PAGES.orders,
+      href: notice.href ?? ASM_PAGES.orders,
       refId: notice.refId,
     }))
   );

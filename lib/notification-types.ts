@@ -36,6 +36,7 @@ export const ADMIN_PAGES = {
   riderReviews: '/admin/rider-reviews',
   walletPayouts: '/admin/wallet-payouts',
   loyaltyCards: '/admin/loyalty-cards',
+  monthlyRiders: '/admin/monthly-riders',
   ads: '/admin/ads',
 } as const;
 
@@ -43,6 +44,7 @@ export const ADMIN_PAGES = {
 export const ASM_PAGES = {
   orders: '/asm',
   riders: '/asm/riders',
+  monthlyRiders: '/asm/monthly-riders',
 } as const;
 
 export const SELLER_PAGES = {

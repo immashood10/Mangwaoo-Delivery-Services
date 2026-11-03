@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ArrowLeft, Bike, LogOut, Menu, MessagesSquare, UserCog, X, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, Bike, CalendarClock, LogOut, Menu, MessagesSquare, UserCog, X, type LucideIcon } from 'lucide-react';
 import { NotificationBell, SellerNotificationsProvider } from '@/components/seller/SellerNotifications';
 import { useAuth } from '@/lib/auth-context';
 import { ASM_PAGES } from '@/lib/notification-types';
@@ -15,6 +15,7 @@ const NOTIFICATIONS_POLL_MS = 10000;
 const ASM_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: ASM_PAGES.orders, label: 'Orders', icon: MessagesSquare },
   { href: ASM_PAGES.riders, label: 'Riders', icon: Bike },
+  { href: ASM_PAGES.monthlyRiders, label: 'Monthly riders', icon: CalendarClock },
   { href: '/asm/account', label: 'My account', icon: UserCog },
 ];
 

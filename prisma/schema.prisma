@@ -253,6 +253,9 @@ model Customer {
   // ── Loyalty Card (see lib/loyalty-card.ts) ──
   loyaltyCard        LoyaltyCard?
   loyaltyRedemptions LoyaltyRedemption[]
+
+  // ── Monthly rider (see lib/monthly-rider.ts) ──
+  monthlyRiderBookings MonthlyRiderBooking[]
 }
 
 model Seller {
@@ -332,6 +335,7 @@ model Rider {
   locations         RiderLocation[]
   deliveryTrackings DeliveryTracking[]
   riderChats        RiderChat[]
+  monthlyRiderBookings MonthlyRiderBooking[]
   documents         RiderDocument[]
 
   // ── Wallet: Mangwaoo's commission on every finished order (see lib/rider-wallet.ts) ──
@@ -1642,4 +1646,64 @@ model LoyaltyCardSettings {
   /// The most one checkout can be reduced by (PKR); 0 = no limit.
   maxDiscount    Int      @default(0)
   updatedAt      DateTime @updatedAt
+}
+
+enum MonthlyRiderStatus {
+  /// The customer asked for a rider by the month; waiting for an admin or the area manager to set a price and pick the rider
+  REQUESTED
+  /// A price and a rider are set; waiting for the customer to pay and enter the transaction id
+  QUOTED
+  /// The customer says they paid; waiting for an admin to check the transaction
+  PAYMENT_SENT
+  /// Paid and confirmed: the rider is the customer's own until `endsAt`
+  ACTIVE
+  /// The month is over (or an admin ended it early)
+  ENDED
+  /// An admin turned the request down
+  REJECTED
+  /// The customer cancelled before it started
+  CANCELLED
+}
+
+/// A customer's dedicated rider for a month (see lib/monthly-rider.ts). The price is agreed per booking by an admin or the
+/// area's manager; the customer pays Mangwaoo by hand (EasyPaisa) and an admin confirms. While ACTIVE, the customer's new
+/// order chats go straight to this rider when they can take it. A partial unique index (migration) allows one running
+/// booking (REQUESTED, QUOTED, PAYMENT_SENT or ACTIVE) per customer.
+model MonthlyRiderBooking {
+  id             String             @id @default(cuid())
+  /// The number the customer, admins and managers quote (MW-MR10001), numbered by the database, never reused.
+  refNumber      Int                @unique @default(autoincrement())
+  customerId     String
+  customer       Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  status         MonthlyRiderStatus @default(REQUESTED)
+  /// The service area (SERVICE_AREAS id) the rider is wanted in: the area manager of this area may price and assign.
+  areaId         Int
+  addressText    String
+  /// The day the customer wants the month to start (Karachi calendar day) and what they need the rider for.
+  preferredStart DateTime?          @db.Date
+  notes          String?
+  /// Agreed price of the month in whole PKR, and the rider chosen for it (null while REQUESTED).
+  priceRs        Int?
+  riderId        String?
+  rider          Rider?             @relation(fields: [riderId], references: [id], onDelete: SetNull)
+  /// Who set the price and rider (a plain user id) and when.
+  quotedById     String?
+  quotedAt       DateTime?
+  paymentMethod  String?
+  transactionId  String?
+  paymentSentAt  DateTime?
+  /// ACTIVE: the month runs from startsAt to endsAt (30 days).
+  startsAt       DateTime?
+  endsAt         DateTime?
+  /// The admin who confirmed the payment or turned the request down / ended it (a plain user id), and why.
+  reviewedById   String?
+  reviewedAt     DateTime?
+  note           String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([status, createdAt])
+  @@index([areaId, status])
+  @@index([riderId, status])
+  @@index([customerId, createdAt])
 }

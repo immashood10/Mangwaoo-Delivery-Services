@@ -1,9 +1,10 @@
 import { prisma } from '@/lib/prisma';
 import { managedAreaFor, notifyAreaManagers } from '@/lib/area-managers';
+import { dedicatedRiderFor } from '@/lib/monthly-rider';
 import { billedDistanceKm } from '@/lib/delivery';
 import { distanceInKm } from '@/lib/geo';
 import { ADMIN_PAGES } from '@/lib/notification-types';
-import { notifyAdminsAfterResponse } from '@/lib/notify';
+import { notifyAdminsAfterResponse, notifyAfterResponse } from '@/lib/notify';
 import { getRiderChatSummary, serializeRiderChat } from '@/lib/rider-chat';
 
 export const MAX_ORDER_CHAT_ADDRESS_LENGTH = 300;
@@ -69,8 +70,11 @@ export async function startOrContinueOrderChat(input: {
   }
 
   // New chat: two sequential inserts (the DB is remote, so no extra re-read — the summary is built from what we already know).
-  // The manager of the customer's area (if there is one) is found first: that is the chat's `areaId`.
-  const areaId = input.viaManager ? await managedAreaFor({ lat: input.lat, lng: input.lng }) : null;
+  // A customer with an active monthly rider (who can take an order right now) skips the manager and the waiting: the chat
+  // starts ACTIVE with that rider. Otherwise the manager of the customer's area (if there is one) is found first: that is the
+  // chat's `areaId`.
+  const dedicated = await dedicatedRiderFor(customer.id);
+  const areaId = !dedicated && input.viaManager ? await managedAreaFor({ lat: input.lat, lng: input.lng }) : null;
   const chat = await prisma.riderChat.create({
     data: {
       customerId: customer.id,
@@ -83,9 +87,23 @@ export async function startOrContinueOrderChat(input: {
       deliveryCharge,
       deliveryDistanceKm: distanceKm,
       areaId,
+      ...(dedicated ? { riderId: dedicated.riderId, status: 'ACTIVE' as const, claimedAt: new Date() } : {}),
     },
   });
   await prisma.riderChatMessage.create({ data: { chatId: chat.id, ...messageData } });
+
+  if (dedicated) {
+    notifyAfterResponse(async () => ({
+      userId: dedicated.riderUserId,
+      type: 'ORDER' as const,
+      title: 'Order from your monthly customer',
+      message: `${customer.name} sent an order - pickup: ${input.pickupText.slice(0, 60)}.`,
+      href: '/rider/chats',
+      refId: `chat:${chat.id}`,
+    }));
+
+    return { chat: await getRiderChatSummary(chat.id), created: true };
+  }
 
   notifyAdminsAfterResponse(async () => ({
     type: 'MESSAGE' as const,

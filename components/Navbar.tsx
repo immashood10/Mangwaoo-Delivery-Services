@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Menu, X, MapPin, LocateFixed, Search, ShoppingCart, ChevronDown, Store, LogOut, ShieldCheck, PackageSearch, House, Briefcase, Heart, Trash2, Bike, MessagesSquare, LayoutDashboard, Settings, History, Gift, CreditCard, UserCog, type LucideIcon } from 'lucide-react';
+import { Menu, X, MapPin, LocateFixed, Search, ShoppingCart, ChevronDown, Store, LogOut, ShieldCheck, PackageSearch, House, Briefcase, Heart, Trash2, Bike, MessagesSquare, LayoutDashboard, Settings, History, Gift, CreditCard, CalendarClock, UserCog, type LucideIcon } from 'lucide-react';
 import {
   ADDRESS_TAGS,
   MAX_ADDRESS_LABEL_LENGTH,
@@ -65,6 +65,8 @@ export default function Navbar() {
   const [postalCode, setPostalCode] = useState('');
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+  /** The address text (with postal code) of the last place that was chosen rather than typed: it is not searched for again. */
+  const chosenAddressQuery = useRef('');
   const [isLocatingAddress, setIsLocatingAddress] = useState(false);
   const [addressError, setAddressError] = useState('');
   const { address: selectedAddress, setAddress: setSelectedAddress, pickerRequests } = useDeliveryAddress();
@@ -181,8 +183,10 @@ export default function Navbar() {
   }, [isUserMenuOpen]);
 
   useEffect(() => {
-    const shouldSearch = isAddressModalOpen && addressQuery.trim().length >= 3;
     const searchQuery = postalCode.trim() ? `${addressQuery}, ${postalCode}` : addressQuery;
+    // An address that was just chosen (a suggestion, "Locate me", a spot on the map) is already known: searching for its own
+    // text again only slows things down and pops the suggestion list open over the map.
+    const shouldSearch = isAddressModalOpen && addressQuery.trim().length >= 3 && searchQuery !== chosenAddressQuery.current;
     const controller = new AbortController();
 
     const timeoutId = window.setTimeout(async () => {
@@ -246,6 +250,7 @@ export default function Navbar() {
   ];
 
   const handleSelectAddressSuggestion = (suggestion: AddressSuggestion) => {
+    chosenAddressQuery.current = suggestion.postalCode.trim() ? `${suggestion.label}, ${suggestion.postalCode}` : suggestion.label;
     setSelectedAddress(suggestion);
     setAddressQuery(suggestion.label);
     setPostalCode(suggestion.postalCode);
@@ -591,6 +596,14 @@ export default function Navbar() {
                         >
                           <CreditCard className="w-4 h-4" />
                           Loyalty Card
+                        </Link>
+                        <Link
+                          href="/account/monthly-rider"
+                          onClick={() => setIsUserMenuOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-brand-light"
+                        >
+                          <CalendarClock className="w-4 h-4" />
+                          Monthly Rider
                         </Link>
                         <Link
                           href="/account/settings"

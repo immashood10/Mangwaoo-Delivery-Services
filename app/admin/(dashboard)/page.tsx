@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Banknote,
   Bike,
+  CalendarClock,
   CircleDashed,
   Clock,
   CreditCard,
@@ -59,6 +60,7 @@ async function getDashboardData() {
     cartCustomers,
     pendingPayouts,
     pendingCards,
+    pendingMonthlyRiders,
   ] = await Promise.all([
     // Pending riders / sellers who haven't confirmed their WhatsApp number are unfinished signups, not counted.
     prisma.rider.count({ where: { isApproved: false, user: LIVE_ACCOUNT } }),
@@ -92,6 +94,8 @@ async function getDashboardData() {
     prisma.walletWithdrawal.count({ where: { status: 'PENDING' } }),
     // Customers who applied for a Loyalty Card and wait for approval (the Loyalty Cards page).
     prisma.loyaltyCard.count({ where: { status: 'PENDING' } }),
+    // Monthly rider requests that need a price and rider, or a payment to check (the Monthly Riders page).
+    prisma.monthlyRiderBooking.count({ where: { status: { in: ['REQUESTED', 'PAYMENT_SENT'] } } }),
   ]);
 
   return {
@@ -99,6 +103,7 @@ async function getDashboardData() {
     cartCustomers,
     pendingPayouts,
     pendingCards,
+    pendingMonthlyRiders,
     pendingRiders,
     approvedRiders,
     onlineRiders,
@@ -310,6 +315,13 @@ export default async function AdminDashboardPage({
             description="Customers with enough delivered orders can apply. Approve a card and every order they place gets a random discount."
             icon={CreditCard}
             badge={data.pendingCards > 0 ? `${data.pendingCards} waiting` : undefined}
+          />
+          <SectionCard
+            href="/admin/monthly-riders"
+            title="Monthly Riders"
+            description="Customers who want a rider of their own for a month. Set the price, choose the rider and confirm the payment."
+            icon={CalendarClock}
+            badge={data.pendingMonthlyRiders > 0 ? `${data.pendingMonthlyRiders} waiting` : undefined}
           />
           <SectionCard
             href="/admin/stories"

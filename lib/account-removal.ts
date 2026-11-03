@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { releaseUncoveredAreaChats } from '@/lib/area-managers';
 import { releaseCouponIfUnused } from '@/lib/coupons';
 import { closeCustomerLoyaltyCard, releaseLoyaltyIfUnused } from '@/lib/loyalty-card';
+import { closeMonthlyBookingsForAccount } from '@/lib/monthly-rider';
 import { invalidateBanSnapshot } from '@/lib/bans';
 import { refreshFoodCatalog, refreshMartCatalog, refreshStories } from '@/lib/catalog-cache';
 import { orderRef } from '@/lib/order-number';
@@ -115,6 +116,8 @@ export async function removeAccount(userId: string, adminId: string): Promise<Re
       cancelled += await cancelOpenOrders(tx, { customerId }, true);
       // The Loyalty Card can never be used or applied for again.
       await closeCustomerLoyaltyCard(tx, customerId);
+      // A monthly rider booking can no longer be paid or used.
+      await closeMonthlyBookingsForAccount(tx, { customerId });
       // An order a rider had taken ends here: the rider's history says Mangwaoo closed it.
       const takenChats = await tx.riderChat.findMany({
         where: { customerId, status: 'ACTIVE', riderId: { not: null } },
@@ -155,6 +158,8 @@ export async function removeAccount(userId: string, adminId: string): Promise<Re
       const riderId = user.rider.id;
 
       await tx.rider.update({ where: { id: riderId }, data: { isApproved: false, isAvailable: false, lastSeenAt: null } });
+      // Their monthly customers wait for an admin or the area manager to give them another rider.
+      await closeMonthlyBookingsForAccount(tx, { riderId });
       // Chats this rider was handling go back to waiting for another rider.
       await tx.riderChat.updateMany({ where: { riderId, status: 'ACTIVE' }, data: { status: 'OPEN', riderId: null, claimedAt: null } });
     }

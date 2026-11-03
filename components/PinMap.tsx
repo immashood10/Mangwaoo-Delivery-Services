@@ -14,7 +14,11 @@ const ZOOM_WITH_PLACE = 16;
 const ZOOM_CITY = 12;
 const MIN_ZOOM = 3;
 const MAX_ZOOM = 20;
-const SETTLE_MS = 650;
+/** How long the map must stand still before the place under the pin is looked up. */
+const SETTLE_MS = 450;
+const FOCUS_EASE_MS = 600;
+/** Two points closer than this many degrees (about 5 m) are the same spot. */
+const FOCUS_SAME_SPOT = 0.00005;
 export type MapPlace = PickedLocation & { id: string; postalCode: string };
 
 type Props = {
@@ -32,6 +36,8 @@ export default function PinMap({ start, focus = null, settleOnMount = false, onS
   const mapRef = useRef<MapLibreMap | null>(null);
   const callbacks = useRef({ onSettle, onMoveStart });
   const focusId = useRef<string | null>(null);
+  /** True while the map is moving to the `focus` place by itself. */
+  const followingFocus = useRef(false);
   const timer = useRef<number | undefined>(undefined);
   const loadTimer = useRef<number | undefined>(undefined);
   const lookup = useRef<AbortController | null>(null);
@@ -85,18 +91,29 @@ export default function PinMap({ start, focus = null, settleOnMount = false, onS
         map = mapInstance;
         mapRef.current = mapInstance;
 
-        const handleMoveStart = () => {
+        // The map moving by itself to a place whose address is already known (see the `focus` effect) is not the visitor
+        // moving the pin: it must not clear the chosen address or look it up again. A drag, wheel or key press carries
+        // `originalEvent`, so it is never mistaken for that.
+        const handleMoveStart = (event: { originalEvent?: unknown }) => {
+          if (followingFocus.current && !event.originalEvent) return;
+
           callbacks.current.onMoveStart?.();
           setMoving(true);
           window.clearTimeout(timer.current);
           lookup.current?.abort();
         };
-        const handleMoveEnd = () => {
+        const handleMoveEnd = (event: { originalEvent?: unknown }) => {
           const point = mapInstance.getCenter();
           if (!point) return;
 
           setCenter({ lat: point.lat, lng: point.lng });
           setZoom(Math.round(mapInstance.getZoom()));
+
+          if (followingFocus.current && !event.originalEvent) {
+            followingFocus.current = false;
+            return;
+          }
+
           window.clearTimeout(timer.current);
           timer.current = window.setTimeout(() => {
             void settle({ lat: point.lat, lng: point.lng });
@@ -136,12 +153,25 @@ export default function PinMap({ start, focus = null, settleOnMount = false, onS
   }, []);
 
   useEffect(() => {
-    if (!mapReady || !focus || focus.id === focusId.current) return;
+    const map = mapRef.current;
+
+    if (!mapReady || !map || !focus || focus.id === focusId.current) return;
     focusId.current = focus.id;
-    mapRef.current?.easeTo({
+
+    // The place the visitor just put the pin on is already under the pin: nothing to move to (moving anyway zoomed the map
+    // in by itself and started another address lookup).
+    const here = map.getCenter();
+
+    if (Math.abs(here.lat - focus.point.lat) < FOCUS_SAME_SPOT && Math.abs(here.lng - focus.point.lng) < FOCUS_SAME_SPOT) return;
+
+    followingFocus.current = true;
+    window.setTimeout(() => {
+      followingFocus.current = false;
+    }, FOCUS_EASE_MS + 800);
+    map.easeTo({
       center: [focus.point.lng, focus.point.lat],
-      zoom: Math.max(mapRef.current.getZoom(), ZOOM_WITH_PLACE),
-      duration: 600,
+      zoom: Math.max(map.getZoom(), ZOOM_WITH_PLACE),
+      duration: FOCUS_EASE_MS,
     });
   }, [focus, mapReady]);
 
@@ -180,17 +210,22 @@ export default function PinMap({ start, focus = null, settleOnMount = false, onS
 
   return (
     <div className={`relative isolate overflow-hidden rounded-xl bg-[#e6eaee] ${className}`}>
-      <div
-        ref={hostRef}
-        role="application"
-        tabIndex={0}
-        data-testid="pin-map"
-        data-lat={center.lat.toFixed(6)}
-        data-lng={center.lng.toFixed(6)}
-        data-zoom={zoom}
-        aria-label="Map. Drag to move the map under the pin and choose a place."
-        className="absolute inset-0"
-      />
+      {/* MapLibre's own stylesheet sets `position: relative` on the element it draws in, and (not being in a CSS layer) it beats
+          Tailwind's `absolute inset-0` on that same element: the map ended up 0 px high, blank and impossible to drag. So the
+          map's element is plain and only fills this absolutely placed box. */}
+      <div className="absolute inset-0">
+        <div
+          ref={hostRef}
+          role="application"
+          tabIndex={0}
+          data-testid="pin-map"
+          data-lat={center.lat.toFixed(6)}
+          data-lng={center.lng.toFixed(6)}
+          data-zoom={zoom}
+          aria-label="Map. Drag to move the map under the pin and choose a place."
+          className="h-full w-full"
+        />
+      </div>
       <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[92%]" aria-hidden="true" data-testid="pin-map-pin">
         <MapPin className="h-10 w-10 fill-brand-red-primary text-white drop-shadow-lg" strokeWidth={1.5} />
       </div>
@@ -206,14 +241,13 @@ export default function PinMap({ start, focus = null, settleOnMount = false, onS
         <button type="button" onClick={() => zoomBy(-1)} className={controlClass} aria-label="Zoom out">
           <Minus className="h-4 w-4" />
         </button>
-      </div>
-      <div className="absolute bottom-8 left-2">
+        {/* Not at the bottom: the map's credit text opens there and covered this button on a phone. */}
         <button type="button" onClick={locateMe} disabled={locating} className={controlClass} aria-label="Show my location">
           <LocateFixed className={`h-4 w-4 ${locating ? 'animate-pulse text-accent' : ''}`} />
         </button>
       </div>
       {locateError || loadingError ? (
-        <p role="alert" className="absolute bottom-8 left-12 right-2 rounded-lg bg-surface/95 px-2 py-1 text-xs text-danger shadow">
+        <p role="alert" className="absolute bottom-8 left-2 right-2 rounded-lg bg-surface/95 px-2 py-1 text-xs text-danger shadow">
           {locateError || loadingError}
         </p>
       ) : null}

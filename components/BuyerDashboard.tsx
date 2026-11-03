@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { User, MapPin, Banknote, Smartphone, XCircle, PackageSearch, History as HistoryIcon, MessageSquare, Star, ChevronRight, Gift, CreditCard, Navigation } from 'lucide-react';
+import { User, MapPin, Banknote, Smartphone, XCircle, PackageSearch, History as HistoryIcon, MessageSquare, Star, ChevronRight, Gift, CreditCard, CalendarClock, Navigation } from 'lucide-react';
 import MessagesInbox from './MessagesInbox';
 import type { LoyaltyCardStatusKey } from '@/lib/loyalty-card-config';
 import { trackingPath } from '@/lib/order-number';
@@ -302,6 +302,13 @@ export default function BuyerDashboard({
             ) : loyalty.canApply ? (
               <span className="rounded-full bg-brand-red-primary/10 px-2 py-0.5 text-xs text-accent">Apply</span>
             ) : null}
+          </Link>
+          <Link
+            href="/account/monthly-rider"
+            className="flex shrink-0 items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-semibold text-brand-gray transition-colors hover:text-accent"
+          >
+            <CalendarClock className="w-4 h-4" />
+            Monthly Rider
           </Link>
           <Link
             href="/account/points"
