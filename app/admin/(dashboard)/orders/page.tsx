@@ -8,6 +8,7 @@ import { formatKarachiDateTime } from '@/lib/ban-duration';
 import { startOfKarachiDay } from '@/lib/admin-stats';
 import AutoRefresh from '@/components/AutoRefresh';
 import OrderStatusButtons from '@/components/OrderStatusButtons';
+import { orderSearchWhere } from '@/lib/admin-order-search';
 
 export const metadata = {
   title: 'Orders - Mangwaoo Admin',
@@ -56,14 +57,17 @@ type OrderRow = {
 
 const pkr = (amount: number) => `PKR ${amount.toLocaleString('en-US')}`;
 
-export default async function AdminOrdersPage({ searchParams }: { searchParams: Promise<{ range?: string }> }) {
+export default async function AdminOrdersPage({ searchParams }: { searchParams: Promise<{ range?: string; q?: string }> }) {
   const session = await getSession();
 
   if (!session || session.role !== 'ADMIN') {
     redirect('/admin/login');
   }
 
-  const { range: rawRange } = await searchParams;
+  const { range: rawRange, q: rawQuery } = await searchParams;
+  // A search looks through every day, not just the chosen period
+  const search = orderSearchWhere(rawQuery ?? '');
+  const searchText = (rawQuery ?? '').trim().slice(0, 80);
   const range = RANGES.find((candidate) => candidate.key === rawRange) ?? RANGES[0];
   // eslint-disable-next-line react-hooks/purity -- server component, rendered per request
   const since = new Date(startOfKarachiDay(Date.now()) - range.daysBack * DAY_MS);
@@ -75,10 +79,10 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
   } as const;
 
   const [martOrders, foodOrders, martCount, foodCount] = await Promise.all([
-    prisma.order.findMany({ where: { createdAt: { gte: since } }, orderBy: { createdAt: 'desc' }, take: ORDER_LIST_LIMIT, include }),
-    prisma.gulplazaOrder.findMany({ where: { createdAt: { gte: since } }, orderBy: { createdAt: 'desc' }, take: ORDER_LIST_LIMIT, include }),
-    prisma.order.count({ where: { createdAt: { gte: since } } }),
-    prisma.gulplazaOrder.count({ where: { createdAt: { gte: since } } }),
+    prisma.order.findMany({ where: search ? search.mart : { createdAt: { gte: since } }, orderBy: { createdAt: 'desc' }, take: ORDER_LIST_LIMIT, include }),
+    prisma.gulplazaOrder.findMany({ where: search ? search.food : { createdAt: { gte: since } }, orderBy: { createdAt: 'desc' }, take: ORDER_LIST_LIMIT, include }),
+    prisma.order.count({ where: search ? search.mart : { createdAt: { gte: since } } }),
+    prisma.gulplazaOrder.count({ where: search ? search.food : { createdAt: { gte: since } } }),
   ]);
 
   const all: OrderRow[] = [
@@ -132,7 +136,16 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
         only see their orders.
       </p>
 
-      <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Period">
+      {search ? (
+        <p className="mb-4 flex flex-wrap items-center gap-3 text-sm text-ink">
+          Showing orders matching <strong>&ldquo;{searchText}&rdquo;</strong> (all days).
+          <Link href="/admin/orders" className="font-semibold text-accent hover:underline">
+            Clear search
+          </Link>
+        </p>
+      ) : null}
+
+      <div className={`mb-4 flex flex-wrap gap-2 ${search ? 'hidden' : ''}`} role="group" aria-label="Period">
         {RANGES.map((candidate) => (
           <Link
             key={candidate.key}
@@ -157,7 +170,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
 
       {orders.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-gray-200 bg-surface p-10 text-center text-sm text-brand-gray">
-          No orders {range.key === 'today' ? 'have been placed today' : 'in this period'}.
+          {search ? 'No order matches your search.' : `No orders ${range.key === 'today' ? 'have been placed today' : 'in this period'}.`}
         </p>
       ) : (
         <ul className="space-y-3">

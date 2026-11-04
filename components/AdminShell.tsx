@@ -2,7 +2,8 @@
 
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
-import AdminSidebar, { adminPageTitle } from '@/components/AdminSidebar';
+import AdminSearch from '@/components/AdminSearch';
+import AdminSidebar, { adminPages, adminPageTitle } from '@/components/AdminSidebar';
 import { NotificationBell, SellerNotificationsProvider } from '@/components/seller/SellerNotifications';
 import type { NotificationSnapshot } from '@/lib/notification-types';
 
@@ -25,6 +26,7 @@ export default function AdminShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const pages = adminPages(isSuperAdmin);
 
   return (
     <SellerNotificationsProvider initial={initialNotifications} endpoint={ADMIN_NOTIFICATIONS_API}>
@@ -33,9 +35,16 @@ export default function AdminShell({
         <div className="min-w-0 flex-1">
           {/* Desktop: page title on the left, notifications on the right (on a phone the bell is in the top bar) */}
           <header className="sticky top-0 z-30 hidden items-center justify-between gap-4 border-b border-gray-100 bg-surface px-8 py-3 lg:flex">
-            <p className="text-sm font-semibold text-brand-gray">{adminPageTitle(pathname)}</p>
+            <p className="shrink-0 text-sm font-semibold text-brand-gray">{adminPageTitle(pathname)}</p>
+            <div className="flex flex-1 justify-center">
+              <AdminSearch pages={pages} />
+            </div>
             <NotificationBell />
           </header>
+          {/* Phone: the search box sits under the top bar */}
+          <div className="border-b border-gray-100 bg-surface px-4 py-2 lg:hidden">
+            <AdminSearch pages={pages} />
+          </div>
           {children}
         </div>
       </div>

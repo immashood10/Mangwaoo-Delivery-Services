@@ -64,6 +64,11 @@ function isActive(pathname: string, href: string) {
   return href === '/admin' ? pathname === '/admin' : pathname === href || pathname.startsWith(`${href}/`);
 }
 
+/** Every page the signed-in admin can open, for the search box. */
+export function adminPages(isSuperAdmin: boolean) {
+  return (isSuperAdmin ? [...SUPER_LINKS, ...ADMIN_LINKS] : ADMIN_LINKS).map(({ href, label }) => ({ href, label }));
+}
+
 export function adminPageTitle(pathname: string) {
   return [...SUPER_LINKS, ...ADMIN_LINKS].find((link) => isActive(pathname, link.href))?.label ?? 'Admin';
 }
