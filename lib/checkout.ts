@@ -7,7 +7,8 @@ import { sendWhatsAppNotification } from '@/lib/whatsapp';
 import { refreshFoodCatalog, refreshMartCatalog } from '@/lib/catalog-cache';
 import { getSellerUserIds, notifyAdminsAfterResponse, notifyAfterResponse } from '@/lib/notify';
 import { orderRef, trackingPath } from '@/lib/order-number';
-import { ADMIN_PAGES, SELLER_PAGES } from '@/lib/notification-types';
+import { ADMIN_PAGES, ASM_PAGES, SELLER_PAGES } from '@/lib/notification-types';
+import { managedAreaFor, notifyAreaManagers } from '@/lib/area-managers';
 import { normalizeCouponCode, type CouponScope } from '@/lib/coupons';
 import { MART_PRODUCTS } from '@/lib/data';
 import { readPortions } from '@/lib/food-portions';
@@ -622,7 +623,7 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
 
   // Tell each seller they have a new order to handle.
   notifyAfterResponse(async () => {
-    const sellerUserIds = await getSellerUserIds(placed.map((order) => order.sellerId), { excludeShopOwners: true });
+    const sellerUserIds = await getSellerUserIds(placed.map((order) => order.sellerId));
 
     return placed.flatMap((order, index) => {
       const userId = sellerUserIds.get(order.sellerId);
@@ -633,7 +634,11 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
           userId,
           type: 'ORDER' as const,
           title: 'New order',
-          message: `Order ${order.ref} from ${input.fullName} - PKR ${quote.orders[index].subtotal.toLocaleString()}.`,
+          // No customer name: vendors prepare the order, Mangwaoo's team handles the customer and the delivery.
+          message:
+            groups[index]?.sellerType !== 'GULPLAZA_OWNER' && groups[index]?.sellerType !== 'WHOLESALER'
+              ? `Order ${order.ref} - PKR ${quote.orders[index].subtotal.toLocaleString()}. Mangwaoo will confirm it: just get it ready.`
+              : `Order ${order.ref} - PKR ${quote.orders[index].subtotal.toLocaleString()}.`,
           href: SELLER_PAGES.orders,
           refId: `order:${order.id}`,
         },
@@ -651,6 +656,18 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
     href: placed.length > 1 ? '/account' : trackingPath(placed[0].ref),
     refId: `placed:${placed[0].id}`,
   }));
+
+  // The Area Sales Manager of the customer's area handles these orders (accepts them, follows them to delivery): tell them.
+  const managedArea = input.dropoff ? await managedAreaFor(input.dropoff).catch(() => null) : null;
+
+  if (managedArea !== null) {
+    notifyAreaManagers(managedArea, {
+      title: placed.length > 1 ? `${placed.length} new shop orders` : 'New shop order',
+      message: `${placed.map((order) => order.ref).join(', ')} placed in your area. Accept ${placed.length > 1 ? 'them' : 'it'} and follow ${placed.length > 1 ? 'them' : 'it'} to delivery.`,
+      href: ASM_PAGES.shopOrders,
+      refId: `asm-shop-order:${placed[0].id}`,
+    });
+  }
 
   // Tell the admins too: one line per checkout, however many seller orders it made.
   notifyAdminsAfterResponse(async () => {

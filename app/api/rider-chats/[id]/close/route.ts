@@ -5,6 +5,7 @@ import { ADMIN_PAGES } from '@/lib/notification-types';
 import { closeOrderChat } from '@/lib/rider-wallet';
 import { RECHARGE_TITLE, formatPkr, rechargeMessage } from '@/lib/rider-wallet-config';
 import { awardOrderPoints } from '@/lib/points';
+import { notifyVendorsOfDelivery } from '@/lib/order-fulfillment';
 
 /**
  * Finishes a delivered order: the rider's "Complete order" or the customer's "Order received". When a rider had taken
@@ -42,6 +43,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     } catch (error) {
       console.error('Could not award points for rider-delivered order', order.id, error);
     }
+  }
+
+  // The vendors of those orders are told the delivery is done (a shop owner changes no status themselves).
+  try {
+    await notifyVendorsOfDelivery(deliveredOrders);
+  } catch (error) {
+    console.error('Could not tell the vendors about the delivery', error);
   }
 
   // The rider says it is delivered: the customer may not be looking at the chat, so they are told and asked to rate the ride.

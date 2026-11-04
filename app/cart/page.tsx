@@ -6,12 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Minus, Plus, Trash2, ShoppingCart, MessageCircle, Banknote, Smartphone, BadgePercent, X, Gift, CreditCard } from 'lucide-react';
 import { useCart } from '@/lib/cart-context';
 import { useDeliveryAddress } from '@/lib/delivery-address-context';
-import {
-  DELIVERY_RATE_PER_KM,
-  FOOD_DELIVERY_RADIUS_KM,
-  MINIMUM_DELIVERY_FEE,
-  farAwayNote,
-} from '@/lib/delivery';
+import { FOOD_DELIVERY_RADIUS_KM, farAwayNote } from '@/lib/delivery';
 import { formatPortion, withPortionLabel } from '@/lib/food-portions';
 import type { Quote } from '@/lib/checkout-types';
 import { SERVICE_AREA_MESSAGE } from '@/lib/service-area';
@@ -550,11 +545,6 @@ export default function CartPage() {
                   {`${order.sellerName} hasn't set its location on the map yet, so we can't work out the delivery fee. Please choose another restaurant.`}
                 </p>
               ))}
-              {cartHasFood ? (
-                <p className="text-xs text-gray-400">
-                  {`Delivery is PKR ${DELIVERY_RATE_PER_KM} per km, never less than PKR ${MINIMUM_DELIVERY_FEE}.`}
-                </p>
-              ) : null}
 
               <ul className="list-disc space-y-0.5 pl-5 text-xs font-bold text-ink">
                 <li>No other taxes</li>

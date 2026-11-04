@@ -10,7 +10,6 @@ import type { AssignableRider, ManagerChatRow } from '@/lib/area-managers-config
 import { formatDistance } from '@/lib/geo';
 import { enableNotificationSound, playNotificationSound } from '@/lib/notification-sound';
 import { formatPkr } from '@/lib/rider-wallet-config';
-import ShopOwnerFulfillmentOrders from '@/components/ShopOwnerFulfillmentOrders';
 
 const POLL_MS = 5000;
 const RIDERS_POLL_MS = 8000;
@@ -405,7 +404,6 @@ export default function AsmOrders() {
 
   return (
     <div className="space-y-4">
-      <ShopOwnerFulfillmentOrders endpoint="/api/asm/shop-owner-orders" heading="Shop Owner orders in your area" />
       <div>
         <h1 className="text-2xl font-bold text-ink">Orders{areaName ? ` · ${areaName}` : ''}</h1>
         <p className="mt-1 text-sm text-brand-gray">

@@ -1,7 +1,7 @@
 import { CheckCircle2 } from 'lucide-react';
 import OrdersList from '@/components/seller/OrdersList';
 import SellerPageHeader from '@/components/seller/SellerPageHeader';
-import { requireSeller } from '@/lib/seller-context';
+import { canChangeOrderStatus, requireSeller } from '@/lib/seller-context';
 import { getSellerOrders } from '@/lib/seller-data';
 
 export default async function CompletedOrdersPage() {
@@ -16,7 +16,7 @@ export default async function CompletedOrdersPage() {
         description="Orders that were delivered or cancelled. They stay here until you remove them; removing one only clears it from your list."
       />
 
-      <OrdersList orders={orders} mode="completed" />
+      <OrdersList orders={orders} mode="completed" canUpdateStatus={canChangeOrderStatus(seller)} />
     </div>
   );
 }

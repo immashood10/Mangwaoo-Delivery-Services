@@ -7,6 +7,7 @@ import { orderRef } from '@/lib/order-number';
 import { formatKarachiDateTime } from '@/lib/ban-duration';
 import { startOfKarachiDay } from '@/lib/admin-stats';
 import AutoRefresh from '@/components/AutoRefresh';
+import OrderStatusButtons from '@/components/OrderStatusButtons';
 
 export const metadata = {
   title: 'Orders - Mangwaoo Admin',
@@ -41,6 +42,7 @@ type OrderRow = {
   id: string;
   ref: string;
   marketplace: 'MangwaooMart' | 'Food';
+  kind: 'MART' | 'GULPLAZA';
   createdAt: Date;
   status: string;
   seller: string;
@@ -84,6 +86,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
       id: order.id,
       ref: orderRef('mart', order.orderNumber),
       marketplace: 'MangwaooMart' as const,
+      kind: 'MART' as const,
       createdAt: order.createdAt,
       status: order.status,
       seller: order.seller.businessName,
@@ -98,6 +101,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
       id: order.id,
       ref: orderRef('gulplaza', order.orderNumber),
       marketplace: 'Food' as const,
+      kind: 'GULPLAZA' as const,
       createdAt: order.createdAt,
       status: order.status,
       seller: order.seller.businessName,
@@ -124,7 +128,8 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
       <h1 className="mb-2 text-3xl font-bold text-ink">Orders</h1>
       <p className="mb-6 max-w-3xl text-brand-gray">
         Every MangwaooMart and food order placed in the period. The amount is what the customer pays: items minus any coupon,
-        plus the delivery fee on food.
+        plus the delivery fee on food. You (and the area&apos;s manager) accept, prepare, hand over and deliver orders here; vendors
+        only see their orders.
       </p>
 
       <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Period">
@@ -189,6 +194,8 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
                     ) : null}
                   </div>
                 </div>
+                {/* Only Mangwaoo (admins and the area's manager) moves an order along; vendors only watch. */}
+                <OrderStatusButtons apiBase="/api/admin/orders" kind={order.kind} id={order.id} orderRef={order.ref} status={order.status} />
               </li>
             );
           })}

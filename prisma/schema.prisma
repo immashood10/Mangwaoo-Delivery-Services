@@ -293,6 +293,11 @@ model Seller {
   /// gives it automatically). Set by the seller in Settings.
   freeDeliveryMinOrder Int?
 
+  /// True for Mangwaoo's OWN store (name "Mangwaoo"), the one MangwaooMart seller whose products Mangwaoo sells itself. Nobody logs
+  /// in as it: admins post and edit its products in Admin > Mangwaoo Store, and its orders are handled by admins and area managers.
+  /// A partial unique index (migration) allows only one.
+  isOfficial Boolean @default(false)
+
   products         Product[]
   productAds       ProductAd[]
   orders           Order[]

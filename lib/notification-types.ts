@@ -45,6 +45,7 @@ export const ASM_PAGES = {
   orders: '/asm',
   riders: '/asm/riders',
   monthlyRiders: '/asm/monthly-riders',
+  shopOrders: '/asm/shop-orders',
 } as const;
 
 export const SELLER_PAGES = {

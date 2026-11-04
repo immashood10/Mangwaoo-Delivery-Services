@@ -2,7 +2,7 @@ import { GULPLAZA_CATEGORIES } from '@/lib/data';
 import { readPortions, withPortionLabel } from '@/lib/food-portions';
 import { orderRef } from '@/lib/order-number';
 import { prisma } from '@/lib/prisma';
-import { isFoodSeller, isShopOwner, type CurrentSeller } from '@/lib/seller-context';
+import { isFoodSeller, type CurrentSeller } from '@/lib/seller-context';
 import { parseSizeDetails } from '@/lib/size-options';
 import { parseVehicleDetails } from '@/lib/vehicle-details';
 import {
@@ -88,8 +88,6 @@ export async function getSellerProducts(seller: CurrentSeller): Promise<SellerPr
 }
 
 export async function getSellerOrders(seller: CurrentSeller, scope: 'incoming' | 'completed'): Promise<SellerOrder[]> {
-  if (isShopOwner(seller)) return [];
-
   const status = { in: [...(scope === 'incoming' ? INCOMING_STATUSES : FINISHED_STATUSES)] };
 
   if (isFoodSeller(seller)) {
@@ -98,8 +96,6 @@ export async function getSellerOrders(seller: CurrentSeller, scope: 'incoming' |
       orderBy: { createdAt: 'desc' },
       include: {
         items: { include: { product: { select: { name: true } } } },
-        customer: { select: { user: { select: { name: true } } } },
-        address: true,
         payment: true,
       },
     });
@@ -110,12 +106,7 @@ export async function getSellerOrders(seller: CurrentSeller, scope: 'incoming' |
       marketplace: 'GULPLAZA' as const,
       status: order.status,
       totalAmount: Number(order.totalAmount),
-      platformCommissionAmount: order.platformCommissionAmount,
-      platformCommissionPercent: order.platformCommissionPercent,
       createdAt: order.createdAt.toISOString(),
-      customerName: order.customer.user.name,
-      address: `${order.address.street}, ${order.address.city}`,
-      addressLabel: order.address.label,
       note: order.note,
       paymentMethod: order.payment?.method ?? null,
       paymentStatus: order.payment?.status ?? null,
@@ -133,8 +124,6 @@ export async function getSellerOrders(seller: CurrentSeller, scope: 'incoming' |
     orderBy: { createdAt: 'desc' },
     include: {
       items: { include: { product: { select: { name: true } } } },
-      customer: { select: { user: { select: { name: true } } } },
-      address: true,
       payment: true,
     },
   });
@@ -145,12 +134,7 @@ export async function getSellerOrders(seller: CurrentSeller, scope: 'incoming' |
     marketplace: 'MART' as const,
     status: order.status,
     totalAmount: Number(order.totalAmount),
-    platformCommissionAmount: 0,
-    platformCommissionPercent: 0,
     createdAt: order.createdAt.toISOString(),
-    customerName: order.customer.user.name,
-    address: `${order.address.street}, ${order.address.city}`,
-    addressLabel: order.address.label,
     note: order.note,
     paymentMethod: order.payment?.method ?? null,
     paymentStatus: order.payment?.status ?? null,
@@ -168,12 +152,14 @@ export async function getPendingCarts(seller: CurrentSeller): Promise<PendingCar
   const items = await prisma.cartItem.findMany({
     where: { sellerId: seller.id, marketplace: sellerMarketplace(seller), dismissedAt: null },
     orderBy: { updatedAt: 'desc' },
-    include: { customer: { select: { user: { select: { name: true } } } } },
   });
+
+  // Vendors are not shown who the customers are: each one is just "Customer 1", "Customer 2"… in this list.
+  const labels = new Map<string, string>();
 
   return items.map((item) => ({
     id: item.id,
-    customerName: item.customer.user.name,
+    customerName: labels.get(item.customerId) ?? (labels.set(item.customerId, `Customer ${labels.size + 1}`), labels.get(item.customerId) as string),
     productName: item.productName,
     quantity: item.quantity,
     price: Number(item.price),

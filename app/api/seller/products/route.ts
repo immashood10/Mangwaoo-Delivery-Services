@@ -1,22 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { isRasterImageDataUrl } from '@/lib/data-url-image';
-import { getSession } from '@/lib/auth';
+import { resolveProductSeller } from '@/lib/official-store';
 import { refreshMartCatalog } from '@/lib/catalog-cache';
 import { resolveProductAttributes } from '@/lib/product-attributes';
 
 export async function POST(request: NextRequest) {
-  const session = await getSession();
-
-  if (!session || session.role !== 'SELLER') {
-    return NextResponse.json({ error: 'You must be logged in as a seller to do this.' }, { status: 401 });
-  }
-
-  const seller = await prisma.seller.findUnique({ where: { userId: session.userId } });
-
-  if (!seller) {
-    return NextResponse.json({ error: 'Seller account not found.' }, { status: 404 });
-  }
+  // The signed-in seller's own products, or (an admin with the store header) the official Mangwaoo store's.
+  const owner = await resolveProductSeller(request);
+  if ('error' in owner) return owner.error;
+  const { seller } = owner;
 
   const body = await request.json().catch(() => null);
   const name = typeof body?.name === 'string' ? body.name.trim() : '';

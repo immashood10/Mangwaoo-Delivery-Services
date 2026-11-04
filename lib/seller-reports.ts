@@ -1,8 +1,8 @@
-import { PAYMENT_LABELS, statusLabel, summarizeCustomers, summarizeSales, type AnalyticsOrder } from '@/lib/seller-analytics';
+import { PAYMENT_LABELS, statusLabel, summarizeSales, type AnalyticsOrder } from '@/lib/seller-analytics';
 
 // The seller's downloadable reports (CSV, opens in Excel or Google Sheets).
 
-export const REPORT_TYPES = ['orders', 'products', 'customers'] as const;
+export const REPORT_TYPES = ['orders', 'products'] as const;
 export type ReportType = (typeof REPORT_TYPES)[number];
 
 export const REPORT_RANGES = [
@@ -36,7 +36,7 @@ export function buildReport(type: ReportType, orders: AnalyticsOrder[]) {
   const lines: string[] = [];
 
   if (type === 'orders') {
-    lines.push(row(['Order ID', 'Date', 'Status', 'Customer', 'Products', 'Payment', 'Amount (PKR)']));
+    lines.push(row(['Order ID', 'Date', 'Status', 'Products', 'Payment', 'Amount (PKR)']));
 
     for (const order of orders) {
       lines.push(
@@ -44,24 +44,17 @@ export function buildReport(type: ReportType, orders: AnalyticsOrder[]) {
           order.ref,
           day(order.createdAt),
           statusLabel(order.status),
-          order.customerName,
           order.items.map((item) => `${item.name} x${item.quantity}`).join('; '),
           PAYMENT_LABELS[order.payment ?? ''] ?? '',
           Math.round(order.revenue),
         ])
       );
     }
-  } else if (type === 'products') {
+  } else {
     lines.push(row(['Product', 'Category', 'Units sold', 'Share of revenue (%)', 'Earnings (PKR)']));
 
     for (const product of summarizeSales(orders).products) {
       lines.push(row([product.name, product.category, product.units, Math.round(product.percent * 10) / 10, Math.round(product.revenue)]));
-    }
-  } else {
-    lines.push(row(['Customer', 'Orders', 'Delivered orders', 'Spent (PKR)', 'Last order']));
-
-    for (const customer of summarizeCustomers(orders)) {
-      lines.push(row([customer.name, customer.orders, customer.delivered, Math.round(customer.spent), day(customer.lastOrder)]));
     }
   }
 

@@ -46,13 +46,9 @@ export type SellerOrder = {
   marketplace: Marketplace;
   status: string;
   totalAmount: number;
-  /** Mangwaoo's fee on this food order; zero for MangwaooMart orders. */
-  platformCommissionAmount: number;
-  platformCommissionPercent: number;
   createdAt: string;
-  customerName: string;
-  address: string;
-  addressLabel: string | null;
+  // A vendor is not shown who the customer is, where the order goes or what Mangwaoo's fee is: Mangwaoo's team handles the
+  // customer and the delivery. The customer's note (for example "no onions") is kept: it is about preparing the food.
   note: string | null;
   paymentMethod: string | null;
   paymentStatus: string | null;

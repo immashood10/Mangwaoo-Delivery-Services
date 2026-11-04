@@ -69,7 +69,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       userId,
       type: 'ORDER' as const,
       title: 'Order cancelled',
-      message: `${customer.user.name} cancelled order ${orderRef('gulplaza', order.orderNumber)}.`,
+      message: `Order ${orderRef('gulplaza', order.orderNumber)} was cancelled by the customer.`,
       href: SELLER_PAGES.completed,
       refId: `cancel:${order.id}`,
     };

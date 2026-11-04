@@ -51,6 +51,7 @@ const MAX_IMAGES = 6;
 
 export default function EditProductModal({
   apiBasePath,
+  requestHeaders = {},
   enableVehicleDetails = false,
   enableSizes = false,
   enablePortions = false,
@@ -61,6 +62,8 @@ export default function EditProductModal({
   onSaved,
 }: {
   apiBasePath: string;
+  /** Extra headers for the save request (an admin editing Mangwaoo's own store sends the store header). */
+  requestHeaders?: Record<string, string>;
   /** Show the vehicle detail fields when the "Vehicles" category is selected (MangwaooMart only). */
   enableVehicleDetails?: boolean;
   /** Ask for sizes when a clothes/shoes category (Men, Women, Kids) is selected (MangwaooMart only). */
@@ -166,7 +169,7 @@ export default function EditProductModal({
     try {
       const response = await fetch(`${apiBasePath}/${product.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...requestHeaders },
         body: JSON.stringify({
           name: form.name,
           description: form.description,

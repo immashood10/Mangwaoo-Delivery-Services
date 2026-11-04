@@ -18,12 +18,7 @@ import {
   RIDER_CANCEL_FINE_MIN_PKR,
   RIDER_CANCEL_STREAK_FINE_MAX_PKR,
   RIDER_CANCEL_STREAK_THRESHOLD,
-  DELIVERY_ETA_MAX_MINUTES,
-  DELIVERY_ETA_MINUTES,
   RIDER_BONUS_DEADLINE_MINUTES,
-  VERY_LATE_COMMISSION_MINUTES,
-  LATE_COMMISSION_START_MINUTES,
-  commissionFor,
   formatPkr,
   rechargeMessage,
   riderPayoutPolicy,
@@ -249,7 +244,6 @@ function OrderActions({
   const charge = chat.deliveryCharge;
   const assignedAt = Date.parse(chat.claimedAt ?? chat.createdAt);
   const payoutPolicy = riderPayoutPolicy(now > 0 ? now - assignedAt : 0, rules.commissionPercent);
-  const commission = charge > 0 ? commissionFor(charge, payoutPolicy.commissionPercent) : 0;
 
   useEffect(() => {
     const updateTime = () => setNow(Date.now());
@@ -329,14 +323,6 @@ function OrderActions({
             <span className="text-sm font-semibold text-ink">Delivery charge</span>
             <span className="text-lg font-bold text-ink">{charge > 0 ? formatPkr(charge) : 'None'}</span>
           </div>
-          <p className="mt-1.5 text-xs text-brand-gray">
-            {charge > 0
-              ? `Mangwaoo keeps ${payoutPolicy.commissionPercent}%${commission > 0 ? `: ${formatPkr(commission)} on this order` : ''}, which is added to your account.`
-              : 'This order has no delivery charge, so no commission is added to your account.'}
-          </p>
-          <p className="mt-1.5 text-xs text-brand-gray">
-            Expected delivery is {DELIVERY_ETA_MINUTES}–{DELIVERY_ETA_MAX_MINUTES} minutes after assignment. At {LATE_COMMISSION_START_MINUTES} minutes Mangwaoo&apos;s share becomes 35%; at exactly {VERY_LATE_COMMISSION_MINUTES} minutes it becomes 50%, and after that the full delivery charge goes to Mangwaoo.
-          </p>
           {rules.bonusEnabled ? (
             payoutPolicy.bonusEligible ? (
               <p className="mt-1.5 flex items-start gap-1.5 text-xs font-semibold text-success">

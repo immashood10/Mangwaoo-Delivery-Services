@@ -5,7 +5,7 @@ import { buildReport, parseReportRange, parseReportType } from '@/lib/seller-rep
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// GET /api/seller/reports?type=orders|products|customers&range=30|90|365|all: the signed-in seller's own numbers as a CSV file.
+// GET /api/seller/reports?type=orders|products&range=30|90|365|all: the signed-in seller's own numbers as a CSV file.
 export async function GET(request: NextRequest) {
   const seller = await getCurrentSeller();
 

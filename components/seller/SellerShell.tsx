@@ -13,7 +13,6 @@ import {
   LayoutDashboard,
   ListOrdered,
   TrendingUp,
-  Users,
   LogOut,
   MapPin,
   Megaphone,
@@ -34,7 +33,6 @@ import { NotificationBell, SellerNotificationsProvider, useSellerNotifications }
 const SELLER_LINKS: { href: string; label: string; icon: LucideIcon; martOnly?: boolean }[] = [
   { href: SELLER_PAGES.dashboard, label: 'Dashboard', icon: LayoutDashboard },
   { href: SELLER_PAGES.sales, label: 'Sales', icon: TrendingUp },
-  { href: SELLER_PAGES.customers, label: 'Customers', icon: Users },
   { href: SELLER_PAGES.allOrders, label: 'All orders', icon: ListOrdered },
   { href: SELLER_PAGES.reports, label: 'Reports', icon: FileText },
   { href: SELLER_PAGES.post, label: 'Post product', icon: PackagePlus },
@@ -121,7 +119,7 @@ function SidebarContent({ profile, onNavigate }: { profile: ShellProfile; onNavi
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-4" aria-label="Seller dashboard">
-        {SELLER_LINKS.filter((link) => !(link.martOnly && profile.isFood) && !(profile.isShopOwner && ['/seller/dashboard', '/seller/sales', '/seller/customers', '/seller/all-orders', '/seller/reports', '/seller/orders', '/seller/completed', '/seller/stats', '/seller/cart'].includes(link.href))).map(({ href, label, icon: Icon }) => {
+        {SELLER_LINKS.filter((link) => !(link.martOnly && profile.isFood)).map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);
           const unread = counts[href] ?? 0;
 

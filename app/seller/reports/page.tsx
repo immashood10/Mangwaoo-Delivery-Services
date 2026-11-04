@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Download, FileText, Package, Users } from 'lucide-react';
+import { Download, FileText, Package } from 'lucide-react';
 import { KpiCard, Panel, SellerTopNav, pkr } from '@/components/seller/SellerAnalyticsUi';
 import { loadSellerOrders, summarizeSales } from '@/lib/seller-analytics';
 import { requireSeller } from '@/lib/seller-context';
@@ -11,9 +11,8 @@ export const metadata = { title: 'Reports - Mangwaoo Seller' };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const REPORTS = [
-  { type: 'orders', title: 'Orders', text: 'Every order: ID, date, status, customer, products, payment and amount.', icon: FileText },
+  { type: 'orders', title: 'Orders', text: 'Every order: ID, date, status, products, payment and amount.', icon: FileText },
   { type: 'products', title: 'Products', text: 'What you sold per product, its share of your revenue and what it earned.', icon: Package },
-  { type: 'customers', title: 'Customers', text: 'Each customer with their orders, what they spent and their last order.', icon: Users },
 ] as const;
 
 export default async function SellerReportsPage({ searchParams }: { searchParams: Promise<{ range?: string }> }) {

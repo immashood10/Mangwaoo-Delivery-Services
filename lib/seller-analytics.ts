@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { KARACHI_UTC_OFFSET_MS, startOfKarachiDay } from '@/lib/admin-stats';
 import { withPortionLabel } from '@/lib/food-portions';
 import { orderRef } from '@/lib/order-number';
-import { isFoodSeller, isShopOwner, type CurrentSeller } from '@/lib/seller-context';
+import { isFoodSeller, type CurrentSeller } from '@/lib/seller-context';
 
 // Numbers for the seller's Dashboard, Sales, Customers, Orders and Reports pages. One query per marketplace loads the
 // seller's orders (newest first, at most MAX_ORDERS) and everything else is worked out here, so the pages agree with
@@ -27,8 +27,6 @@ export type AnalyticsOrder = {
 };
 
 export async function loadSellerOrders(seller: CurrentSeller): Promise<AnalyticsOrder[]> {
-  if (isShopOwner(seller)) return [];
-
   const orderBy = { createdAt: 'desc' } as const;
   const where = { sellerId: seller.id };
 
@@ -39,7 +37,6 @@ export async function loadSellerOrders(seller: CurrentSeller): Promise<Analytics
       take: MAX_ORDERS,
       include: {
         items: { include: { product: { select: { name: true, category: { select: { name: true } } } } } },
-        customer: { select: { user: { select: { name: true } } } },
         payment: { select: { method: true } },
       },
     });
@@ -51,7 +48,8 @@ export async function loadSellerOrders(seller: CurrentSeller): Promise<Analytics
       createdAt: order.createdAt,
       soldAt: order.deliveredAt ?? order.updatedAt,
       customerId: order.customerId,
-      customerName: order.customer.user.name,
+      // Vendors are not shown who the customer is (only that it is a customer): Mangwaoo's team deals with them.
+      customerName: 'Customer',
       payment: order.payment?.method ?? null,
       revenue: order.items.reduce((sum, item) => sum + item.quantity * Number(item.price), 0),
       items: order.items.map((item) => ({ name: withPortionLabel(item.product.name, item.portionGrams), category: item.product.category.name, quantity: item.quantity, price: Number(item.price) })),
@@ -76,7 +74,7 @@ export async function loadSellerOrders(seller: CurrentSeller): Promise<Analytics
     createdAt: order.createdAt,
     soldAt: order.deliveredAt ?? order.updatedAt,
     customerId: order.customerId,
-    customerName: order.customer.user.name,
+    customerName: 'Customer',
     payment: order.payment?.method ?? null,
     revenue: order.items.reduce((sum, item) => sum + item.quantity * Number(item.price), 0),
     items: order.items.map((item) => ({ name: item.product.name, category: item.product.category.name, quantity: item.quantity, price: Number(item.price) })),

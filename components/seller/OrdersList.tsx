@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Banknote, MapPin, Smartphone, Trash2 } from 'lucide-react';
+import { Banknote, Info, Smartphone, Trash2 } from 'lucide-react';
 import { foodIconFor } from '@/lib/food-icons';
 import { FINISHED_STATUSES, INCOMING_STATUSES, type SellerOrder } from '@/lib/seller-types';
 import { useServerRefresh } from './useServerRefresh';
@@ -22,7 +22,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   BANK_TRANSFER: 'Bank Transfer',
 };
 
-// The button that moves an order along, per current status (the API enforces the same steps).
+// The button that moves an order along, per current status (the API enforces the same steps). Small business owners only.
 const NEXT_STEP: Record<string, { status: string; label: string }> = {
   PENDING: { status: 'CONFIRMED', label: 'Accept order' },
   CONFIRMED: { status: 'PREPARING', label: 'Start preparing' },
@@ -32,13 +32,31 @@ const NEXT_STEP: Record<string, { status: string; label: string }> = {
 
 const CANCELLABLE = ['PENDING', 'CONFIRMED', 'PREPARING'];
 
+// What Mangwaoo's team is doing with the order at each step (shop owners only), so they know what to do next.
+const STATUS_HINTS: Record<string, string> = {
+  PENDING: 'Mangwaoo will confirm this order shortly.',
+  CONFIRMED: 'Confirmed by Mangwaoo. Get the order ready.',
+  PREPARING: 'Prepare the order. Mangwaoo will send the rider.',
+  OUT_FOR_DELIVERY: 'Handed to the rider. Mangwaoo is delivering it.',
+};
+
 const formatStatus = (status: string) => status.replace(/_/g, ' ');
 
 /**
- * Incoming orders (the seller moves each one along or cancels it) or completed orders
- * (delivered / cancelled — the seller can remove them from their own list).
+ * The vendor's orders: what was ordered and where it stands. A small business owner moves their own orders along
+ * (`canUpdateStatus`); a shop owner only watches (Mangwaoo's admins and the area's manager move those orders, and the shop owner
+ * is told when the rider has delivered). Nobody sees customer details, a delivery address or Mangwaoo's fee here. Completed orders
+ * can be removed from the vendor's own list.
  */
-export default function OrdersList({ orders, mode }: { orders: SellerOrder[]; mode: 'incoming' | 'completed' }) {
+export default function OrdersList({
+  orders,
+  mode,
+  canUpdateStatus = false,
+}: {
+  orders: SellerOrder[];
+  mode: 'incoming' | 'completed';
+  canUpdateStatus?: boolean;
+}) {
   const { refresh } = useServerRefresh();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -59,66 +77,69 @@ export default function OrdersList({ orders, mode }: { orders: SellerOrder[]; mo
     .map((order) => (statusOverrides[order.id] ? { ...order, status: statusOverrides[order.id] } : order))
     .filter((order) => shown.includes(order.status));
 
-  /** Shows the change at once, then confirms it with the server (and undoes it if that fails). */
-  const run = async (
-    orderId: string,
-    request: () => Promise<Response>,
-    apply: () => void,
-    undo: () => void
-  ) => {
-    setBusyId(orderId);
+  const forget = (orderId: string) =>
+    setStatusOverrides((current) => {
+      const rest = { ...current };
+      delete rest[orderId];
+      return rest;
+    });
+
+  /** Shows the new status at once, then confirms it with the server (and undoes it if that fails). */
+  const moveTo = async (order: SellerOrder, status: string) => {
+    setBusyId(order.id);
     setError('');
-    apply();
+    setStatusOverrides((current) => ({ ...current, [order.id]: status }));
 
     try {
-      const response = await request();
+      const response = await fetch(`/api/seller/orders/${order.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ marketplace: order.marketplace, status }),
+      });
 
       if (response.ok) {
         refresh();
       } else {
-        undo();
         const data = await response.json().catch(() => null);
         setError(data?.error ?? 'Something went wrong. Please try again.');
+        forget(order.id);
       }
     } catch {
-      undo();
       setError('Could not reach the server. Please try again.');
+      forget(order.id);
     } finally {
       setBusyId(null);
     }
   };
-
-  const moveTo = (order: SellerOrder, status: string) =>
-    run(
-      order.id,
-      () =>
-        fetch(`/api/seller/orders/${order.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ marketplace: order.marketplace, status }),
-        }),
-      () => setStatusOverrides((current) => ({ ...current, [order.id]: status })),
-      () =>
-        setStatusOverrides((current) => {
-          const rest = { ...current };
-          delete rest[order.id];
-          return rest;
-        })
-    );
 
   const cancel = (order: SellerOrder) => {
     if (!window.confirm(`Cancel order ${order.ref}? The items go back into stock.`)) return;
     void moveTo(order, 'CANCELLED');
   };
 
-  const remove = (order: SellerOrder) => {
+  const remove = async (order: SellerOrder) => {
     if (!window.confirm('Remove this order from your list? The customer keeps their order history.')) return;
-    void run(
-      order.id,
-      () => fetch(`/api/seller/orders/${order.id}?marketplace=${order.marketplace}`, { method: 'DELETE' }),
-      () => setRemovedIds((current) => [...current, order.id]),
-      () => setRemovedIds((current) => current.filter((id) => id !== order.id))
-    );
+
+    setBusyId(order.id);
+    setError('');
+    setRemovedIds((current) => [...current, order.id]);
+
+    try {
+      const response = await fetch(`/api/seller/orders/${order.id}?marketplace=${order.marketplace}`, { method: 'DELETE' });
+
+      if (response.ok) {
+        refresh();
+      } else {
+        setRemovedIds((current) => current.filter((id) => id !== order.id));
+        const data = await response.json().catch(() => null);
+        setError(data?.error ?? 'Something went wrong. Please try again.');
+      }
+    } catch {
+      setRemovedIds((current) => current.filter((id) => id !== order.id));
+      setError('Could not reach the server. Please try again.');
+    } finally {
+      setBusyId(null);
+    }
   };
 
   if (visibleOrders.length === 0) {
@@ -126,18 +147,25 @@ export default function OrdersList({ orders, mode }: { orders: SellerOrder[]; mo
       <div className="rounded-2xl bg-surface p-8 text-center shadow-soft">
         <p className="text-sm text-brand-gray">
           {mode === 'incoming'
-            ? 'No orders to handle right now. Orders customers place for your products will show up here.'
-            : 'No completed orders yet. Orders you deliver (or that get cancelled) will be kept here.'}
+            ? 'No orders to prepare right now. Orders customers place for your products will show up here.'
+            : 'No completed orders yet. Orders that are delivered (or cancelled) will be kept here.'}
         </p>
       </div>
     );
   }
 
   const delivered = visibleOrders.filter((order) => order.status === 'DELIVERED');
-  const earned = delivered.reduce((sum, order) => sum + order.totalAmount - order.platformCommissionAmount, 0);
+  const deliveredValue = delivered.reduce((sum, order) => sum + order.totalAmount, 0);
 
   return (
     <div className="space-y-4">
+      {mode === 'incoming' && !canUpdateStatus ? (
+        <p className="flex items-start gap-2 rounded-xl bg-brand-light p-3 text-xs text-brand-gray">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          Mangwaoo&apos;s team accepts each order and updates its status, and takes care of the customer and the delivery. You just prepare what was ordered; you will be told when the rider has delivered it.
+        </p>
+      ) : null}
+
       {mode === 'completed' ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-2xl bg-surface p-4 shadow-soft">
@@ -145,8 +173,8 @@ export default function OrdersList({ orders, mode }: { orders: SellerOrder[]; mo
             <p className="text-xl font-bold text-ink">{delivered.length}</p>
           </div>
           <div className="rounded-2xl bg-surface p-4 shadow-soft">
-            <p className="text-xs text-brand-gray">Earned after Mangwaoo platform fee</p>
-            <p className="text-xl font-bold text-accent">PKR {earned.toLocaleString()}</p>
+            <p className="text-xs text-brand-gray">Value of delivered orders</p>
+            <p className="text-xl font-bold text-accent">PKR {deliveredValue.toLocaleString()}</p>
           </div>
           <div className="rounded-2xl bg-surface p-4 shadow-soft">
             <p className="text-xs text-brand-gray">Cancelled</p>
@@ -158,16 +186,15 @@ export default function OrdersList({ orders, mode }: { orders: SellerOrder[]; mo
       {error ? <p className="text-sm text-danger">{error}</p> : null}
 
       {visibleOrders.map((order) => {
-        const next = NEXT_STEP[order.status];
         const isBusy = busyId === order.id;
+        const next = NEXT_STEP[order.status];
 
         return (
-          <div key={order.id} className="rounded-2xl bg-surface p-5 shadow-soft">
+          <div key={order.id} className="rounded-2xl bg-surface p-5 shadow-soft" data-order-ref={order.ref}>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold text-ink">Order {order.ref}</p>
                 <p className="text-xs text-brand-gray">
-                  {order.customerName} &middot;{' '}
                   <time dateTime={order.createdAt} suppressHydrationWarning>
                     {new Date(order.createdAt).toLocaleString('en-PK', { dateStyle: 'medium', timeStyle: 'short' })}
                   </time>
@@ -182,13 +209,7 @@ export default function OrdersList({ orders, mode }: { orders: SellerOrder[]; mo
               </span>
             </div>
 
-            <div className="mb-3 flex items-start gap-2 text-xs text-brand-gray">
-              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>
-                {order.addressLabel ? <span className="font-semibold text-ink">{order.addressLabel} &middot; </span> : null}
-                {order.address}
-              </span>
-            </div>
+            {!canUpdateStatus && STATUS_HINTS[order.status] ? <p className="mb-3 text-xs text-brand-gray">{STATUS_HINTS[order.status]}</p> : null}
 
             {order.note ? (
               <div className="mb-3 rounded-lg bg-yellow-50 px-3 py-2 text-xs text-warning">
@@ -217,29 +238,19 @@ export default function OrdersList({ orders, mode }: { orders: SellerOrder[]; mo
 
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3">
               <span className="inline-flex items-center gap-1.5 text-xs text-brand-gray">
-                {order.paymentMethod === 'CASH_ON_DELIVERY' ? (
-                  <Banknote className="h-3.5 w-3.5" />
-                ) : (
-                  <Smartphone className="h-3.5 w-3.5" />
-                )}
+                {order.paymentMethod === 'CASH_ON_DELIVERY' ? <Banknote className="h-3.5 w-3.5" /> : <Smartphone className="h-3.5 w-3.5" />}
                 {order.paymentMethod ? (PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod) : 'N/A'}
                 {order.paymentStatus ? ` · ${order.paymentStatus}` : ''}
               </span>
               <span className="font-bold text-accent">PKR {order.totalAmount.toLocaleString()}</span>
             </div>
-            {order.marketplace === 'GULPLAZA' && order.platformCommissionPercent > 0 ? (
-              <div className="mt-2 flex items-center justify-between text-xs text-brand-gray">
-                <span>Mangwaoo platform fee if delivered ({order.platformCommissionPercent}%)</span>
-                <span>PKR {order.platformCommissionAmount.toLocaleString()} · Your share PKR {(order.totalAmount - order.platformCommissionAmount).toLocaleString()}</span>
-              </div>
-            ) : null}
 
-            {mode === 'incoming' ? (
+            {mode === 'incoming' && canUpdateStatus ? (
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 {next ? (
                   <button
                     type="button"
-                    onClick={() => moveTo(order, next.status)}
+                    onClick={() => void moveTo(order, next.status)}
                     disabled={isBusy}
                     className="rounded-xl bg-gradient-to-r from-brand-red-primary to-brand-red-secondary px-5 py-2 text-sm font-semibold text-white transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
                   >
@@ -257,11 +268,13 @@ export default function OrdersList({ orders, mode }: { orders: SellerOrder[]; mo
                   </button>
                 ) : null}
               </div>
-            ) : (
+            ) : null}
+
+            {mode === 'completed' ? (
               <div className="mt-4">
                 <button
                   type="button"
-                  onClick={() => remove(order)}
+                  onClick={() => void remove(order)}
                   disabled={isBusy}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-red-600 hover:text-danger disabled:opacity-60"
                 >
@@ -269,7 +282,7 @@ export default function OrdersList({ orders, mode }: { orders: SellerOrder[]; mo
                   {isBusy ? 'Removing…' : 'Remove from my list'}
                 </button>
               </div>
-            )}
+            ) : null}
           </div>
         );
       })}

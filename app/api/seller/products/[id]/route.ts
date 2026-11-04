@@ -1,22 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { isRasterImageDataUrl } from '@/lib/data-url-image';
-import { getSession } from '@/lib/auth';
+import { resolveProductSeller } from '@/lib/official-store';
 import { refreshMartCatalog } from '@/lib/catalog-cache';
 import { Prisma } from '@/lib/generated/prisma/client';
 import { resolveProductAttributes } from '@/lib/product-attributes';
 
-async function resolveOwnedProduct(id: string) {
-  const session = await getSession();
-
-  if (!session || session.role !== 'SELLER') {
-    return { error: NextResponse.json({ error: 'You must be logged in as a seller to do this.' }, { status: 401 }) } as const;
-  }
-
-  const seller = await prisma.seller.findUnique({ where: { userId: session.userId } });
-  if (!seller) {
-    return { error: NextResponse.json({ error: 'Seller account not found.' }, { status: 404 }) } as const;
-  }
+async function resolveOwnedProduct(request: Request, id: string) {
+  const resolved = await resolveProductSeller(request);
+  if ('error' in resolved) return resolved;
+  const { seller } = resolved;
 
   const product = await prisma.product.findUnique({ where: { id } });
   if (!product || product.sellerId !== seller.id) {
@@ -28,7 +21,7 @@ async function resolveOwnedProduct(id: string) {
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const resolved = await resolveOwnedProduct(id);
+  const resolved = await resolveOwnedProduct(request, id);
   if ('error' in resolved) return resolved.error;
 
   const body = await request.json().catch(() => null);
@@ -84,7 +77,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const resolved = await resolveOwnedProduct(id);
+  const resolved = await resolveOwnedProduct(request, id);
   if ('error' in resolved) return resolved.error;
 
   // Soft-delete: past orders/reviews still reference this product, so a hard

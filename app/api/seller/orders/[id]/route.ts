@@ -1,183 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { resolveSellerApi } from '@/lib/seller-api';
-import { refreshFoodCatalog, refreshMartCatalog } from '@/lib/catalog-cache';
+import { canChangeOrderStatus } from '@/lib/seller-context';
+import { changeOrderStatus, outcomeError, type FulfillmentStatus } from '@/lib/order-fulfillment';
 import { FINISHED_STATUSES } from '@/lib/seller-types';
-import { releaseCouponIfUnused } from '@/lib/coupons';
-import { ensureLoyaltyInvitation, releaseLoyaltyIfUnused } from '@/lib/loyalty-card';
-import { notifyAfterResponse } from '@/lib/notify';
-import { orderRef } from '@/lib/order-number';
-import { statusNotice, statusStamp } from '@/lib/order-tracking';
-import { awardOrderPoints, type OrderKindKey } from '@/lib/points';
 
-// What a seller can do with an order at each step. Cancelling is possible until it is out for delivery.
-const NEXT_STATUSES: Record<string, string[]> = {
-  PENDING: ['CONFIRMED', 'CANCELLED'],
-  CONFIRMED: ['PREPARING', 'CANCELLED'],
-  PREPARING: ['OUT_FOR_DELIVERY', 'CANCELLED'],
-  OUT_FOR_DELIVERY: ['DELIVERED'],
-};
-
-type OrderStatusValue = 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
+const STATUSES: FulfillmentStatus[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
 
 function readMarketplace(value: unknown) {
   return value === 'GULPLAZA' ? 'GULPLAZA' : value === 'MART' ? 'MART' : null;
 }
 
-function describe(status: string) {
-  return status.toLowerCase().replace(/_/g, ' ');
-}
-
-/**
- * The customer is told at each step (the bell and a push, both opening the tracking page); a problem here never undoes the change.
- * Delivery has no notice here: the points and the rider's "Order delivered" tell them.
- */
-function announceStatus(kind: 'mart' | 'gulplaza', order: { id: string; orderNumber: number; customer: { userId: string } }, status: string, storeName: string) {
-  const notice = statusNotice({
-    status,
-    kind,
-    ref: orderRef(kind, order.orderNumber),
-    storeName,
-    orderId: order.id,
-    customerUserId: order.customer.userId,
-  });
-
-  if (notice) notifyAfterResponse(async () => notice);
-}
-
-/**
- * A delivered order wins its customer Mangwaoo Points (lib/points.ts: once per order, a random number). A problem here is
- * logged and never undoes the delivery: the customer's points page catches up on anything that was missed.
- */
-async function awardPoints(kind: OrderKindKey, orderId: string) {
-  try {
-    const result = await awardOrderPoints(kind, orderId);
-
-    if (!result.awarded) return;
-
-    notifyAfterResponse(async () => ({
-      userId: result.customerUserId,
-      type: 'ACCOUNT' as const,
-      title: 'You won Mangwaoo Points!',
-      message: `${result.points} points for your delivered order ${result.ref}. You have ${result.totalPoints.toLocaleString('en-PK')} points now.`,
-      href: '/account/points',
-      refId: `points:${orderId}`,
-    }));
-  } catch (error) {
-    console.error('Could not award Mangwaoo Points:', error);
-  }
-}
-
-/**
- * A customer whose delivered orders have just reached the number the Loyalty Card needs is invited to apply (once: the
- * invitation is one row per customer). A problem here is logged and never undoes the delivery: the customer's card page
- * catches up on anything that was missed.
- */
-async function inviteToLoyaltyCard(customerId: string) {
-  try {
-    const invite = await ensureLoyaltyInvitation(customerId);
-
-    if (!invite.invited) return;
-
-    notifyAfterResponse(async () => ({
-      userId: invite.customerUserId,
-      type: 'ACCOUNT' as const,
-      title: 'Apply for your Loyalty Card',
-      message: `You have had ${invite.ordersRequired} orders delivered! You can now apply for the Mangwaoo Loyalty Card and get a surprise discount on every order.`,
-      href: '/account/loyalty-card',
-      refId: `loyalty-card:invite:${customerId}`,
-    }));
-  } catch (error) {
-    console.error('Could not invite to the Loyalty Card:', error);
-  }
-}
-
-// Moves an order to its next step (accept → prepare → out for delivery → delivered) or cancels it.
+// A small food business (food business owner, wholesaler) moves its own order along (accept -> preparing -> out for delivery ->
+// delivered) or cancels it. A SHOP OWNER or a MangwaooMart vendor changes nothing: they receive the order, make it, and are told when
+// the rider delivered; Mangwaoo's admins and the area's manager move those orders (PATCH /api/admin/orders/[id], PATCH
+// /api/asm/orders/[id]) and can move any order.
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolved = await resolveSellerApi();
   if ('error' in resolved) return resolved.error;
   const { seller } = resolved;
-  const { id } = await params;
 
+  if (!canChangeOrderStatus(seller)) {
+    return NextResponse.json(
+      { error: "Mangwaoo's team updates the status of your orders. You just prepare them: you will be told when the rider has taken and delivered them." },
+      { status: 403 }
+    );
+  }
+
+  const { id } = await params;
   const body = await request.json().catch(() => null);
   const marketplace = readMarketplace(body?.marketplace);
-  const status = typeof body?.status === 'string' ? (body.status as OrderStatusValue) : null;
+  const status = STATUSES.find((candidate) => candidate === body?.status);
 
   if (!marketplace || !status) {
     return NextResponse.json({ error: 'Choose an order and the status to move it to.' }, { status: 400 });
   }
 
-  const notFound = () => NextResponse.json({ error: 'Order not found.' }, { status: 404 });
-  const notAllowed = (from: string) =>
-    NextResponse.json({ error: `A ${describe(from)} order can't be moved to ${describe(status)}.` }, { status: 400 });
-  const conflict = () =>
-    NextResponse.json({ error: 'This order was just updated. Please refresh.' }, { status: 409 });
+  const outcome = await changeOrderStatus({ kind: marketplace, id, status, sellerId: seller.id });
 
-  if (marketplace === 'MART') {
-    const order = await prisma.order.findFirst({ where: { id, sellerId: seller.id }, include: { items: true, customer: { select: { userId: true } } } });
-    if (!order) return notFound();
-    if (!NEXT_STATUSES[order.status]?.includes(status)) return notAllowed(order.status);
+  if (outcome.kind !== 'ok') {
+    const { status: code, error } = outcomeError(outcome, status);
 
-    const changed = await prisma.$transaction(async (tx) => {
-      // The status guard stops a double click (or the customer cancelling at the same moment) from applying twice.
-      const result = await tx.order.updateMany({
-        where: { id, sellerId: seller.id, status: order.status },
-        data: { status, ...statusStamp(status), ...(status === 'DELIVERED' ? { deliveredAt: new Date() } : {}) },
-      });
-      if (result.count === 0) return false;
-
-      if (status === 'CANCELLED') {
-        for (const item of order.items) {
-          await tx.product.update({ where: { id: item.productId }, data: { stock: { increment: item.quantity } } });
-        }
-
-        await releaseCouponIfUnused(tx, order.redemptionId);
-        await releaseLoyaltyIfUnused(tx, order.loyaltyRedemptionId);
-      }
-
-      return true;
-    });
-
-    if (!changed) return conflict();
-    announceStatus('mart', order, status, seller.businessName);
-    if (status === 'CANCELLED') refreshMartCatalog();
-    if (status === 'DELIVERED') {
-      await awardPoints('MART', id);
-      await inviteToLoyaltyCard(order.customerId);
-    }
-
-    return NextResponse.json({ order: { id, status } });
-  }
-
-  const order = await prisma.gulplazaOrder.findFirst({ where: { id, sellerId: seller.id }, include: { items: true, customer: { select: { userId: true } } } });
-  if (!order) return notFound();
-  if (!NEXT_STATUSES[order.status]?.includes(status)) return notAllowed(order.status);
-
-  const changed = await prisma.$transaction(async (tx) => {
-    const result = await tx.gulplazaOrder.updateMany({
-      where: { id, sellerId: seller.id, status: order.status },
-      data: { status, ...statusStamp(status), ...(status === 'DELIVERED' ? { deliveredAt: new Date() } : {}) },
-    });
-    if (result.count === 0) return false;
-
-    if (status === 'CANCELLED') {
-      for (const item of order.items) {
-        await tx.gulplazaProduct.update({ where: { id: item.productId }, data: { stock: { increment: item.quantity } } });
-      }
-
-      await releaseCouponIfUnused(tx, order.redemptionId);
-      await releaseLoyaltyIfUnused(tx, order.loyaltyRedemptionId);
-    }
-
-    return true;
-  });
-
-  if (!changed) return conflict();
-  announceStatus('gulplaza', order, status, seller.businessName);
-  if (status === 'CANCELLED') refreshFoodCatalog();
-  if (status === 'DELIVERED') {
-    await awardPoints('GULPLAZA', id);
-    await inviteToLoyaltyCard(order.customerId);
+    return NextResponse.json({ error }, { status: code });
   }
 
   return NextResponse.json({ order: { id, status } });

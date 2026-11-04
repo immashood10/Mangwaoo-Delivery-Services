@@ -42,3 +42,13 @@ export function isFoodSeller(seller: { sellerType: string }) {
 export function isShopOwner(seller: { sellerType: string }) {
   return seller.sellerType === 'SHOP_OWNER';
 }
+
+/**
+ * Whether a vendor moves its own orders along (accept, preparing, out for delivery, delivered, cancel). Only the small food
+ * businesses do (food business owners and wholesalers); Shop Owners and MangwaooMart vendors (Mangwaoo's own store included)
+ * only receive and prepare: Mangwaoo's admins and the area's manager move their orders, and the vendor is told when the rider
+ * has taken and delivered them.
+ */
+export function canChangeOrderStatus(seller: { sellerType: string }) {
+  return seller.sellerType === 'GULPLAZA_OWNER' || seller.sellerType === 'WHOLESALER';
+}

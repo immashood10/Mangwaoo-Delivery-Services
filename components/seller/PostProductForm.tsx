@@ -7,6 +7,7 @@ import { CheckCircle2, ImagePlus, X } from 'lucide-react';
 import SizeFields from '@/components/SizeFields';
 import VehicleDetailsFields from '@/components/VehicleDetailsFields';
 import { SELLER_PAGES } from '@/lib/notification-types';
+import { STORE_HEADER, STORE_HEADER_VALUE } from '@/lib/official-store-config';
 import PortionFields, { portionsFromRows, type PortionRow } from './PortionFields';
 import FoodMetadataFields from './FoodMetadataFields';
 import FoodIconPicker from './FoodIconPicker';
@@ -35,9 +36,12 @@ const INPUT_CLASS =
 export default function PostProductForm({
   marketplace,
   categories,
+  asStore = false,
 }: {
   marketplace: Marketplace;
   categories: SellerCategory[];
+  /** An admin posting for Mangwaoo's own store (Admin > Mangwaoo Store): the request says so and the links stay in the admin panel. */
+  asStore?: boolean;
 }) {
   const router = useRouter();
   const isMart = marketplace === 'MART';
@@ -137,7 +141,7 @@ export default function PostProductForm({
     try {
       const response = await fetch(isMart ? '/api/seller/products' : '/api/seller/gulplaza-products', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(asStore ? { [STORE_HEADER]: STORE_HEADER_VALUE } : {}) },
         body: JSON.stringify({
           name: form.name,
           description: form.description,
@@ -187,8 +191,8 @@ export default function PostProductForm({
         >
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           <span className="font-semibold">&ldquo;{postedName}&rdquo; is posted.</span>
-          <Link href={SELLER_PAGES.products} className="font-semibold underline">
-            See it in Your products
+          <Link href={asStore ? '#our-products' : SELLER_PAGES.products} className="font-semibold underline">
+            {asStore ? 'See it in our products' : 'See it in Your products'}
           </Link>
         </div>
       ) : null}

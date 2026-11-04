@@ -10,7 +10,6 @@ export const pkr = (value: number) => `PKR ${Math.round(value).toLocaleString('e
 export const SELLER_NAV = [
   { href: '/seller/dashboard', label: 'Dashboard' },
   { href: '/seller/sales', label: 'Sales' },
-  { href: '/seller/customers', label: 'Customers' },
   { href: '/seller/reports', label: 'Reports' },
   { href: '/seller/all-orders', label: 'Orders' },
 ] as const;
@@ -254,7 +253,6 @@ export function OrdersTable({ orders, empty = 'No orders yet.' }: { orders: Anal
           <tr className="border-b border-gray-100 text-xs text-brand-gray">
             <th className="py-2 pr-3 font-semibold">Order ID</th>
             <th className="py-2 pr-3 font-semibold">Products</th>
-            <th className="py-2 pr-3 font-semibold">Customer</th>
             <th className="py-2 pr-3 font-semibold">Date</th>
             <th className="py-2 pr-3 font-semibold">Payment</th>
             <th className="py-2 pr-3 text-right font-semibold">Amount</th>
@@ -266,7 +264,6 @@ export function OrdersTable({ orders, empty = 'No orders yet.' }: { orders: Anal
             <tr key={order.id} className="border-b border-gray-50 last:border-0">
               <td className="whitespace-nowrap py-3 pr-3 font-semibold text-ink">{order.ref}</td>
               <td className="max-w-[220px] truncate py-3 pr-3 text-ink">{productsLabel(order)}</td>
-              <td className="max-w-[160px] truncate py-3 pr-3 text-ink">{order.customerName}</td>
               <td className="whitespace-nowrap py-3 pr-3 text-brand-gray">{date(order.createdAt)}</td>
               <td className="whitespace-nowrap py-3 pr-3 text-brand-gray">{PAYMENT_SHORT[order.payment ?? ''] ?? '–'}</td>
               <td className="whitespace-nowrap py-3 pr-3 text-right font-semibold text-ink">{pkr(order.revenue)}</td>

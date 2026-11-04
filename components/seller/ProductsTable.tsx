@@ -7,6 +7,7 @@ import EditProductModal from '@/components/EditProductModal';
 import { dishIcon } from '@/lib/food-icons';
 import { portionSizesLabel } from '@/lib/food-portions';
 import { SELLER_PAGES } from '@/lib/notification-types';
+import { STORE_HEADER, STORE_HEADER_VALUE } from '@/lib/official-store-config';
 import type { Marketplace, SellerCategory, SellerProduct } from '@/lib/seller-types';
 import { useServerRefresh } from './useServerRefresh';
 
@@ -15,15 +16,19 @@ export default function ProductsTable({
   marketplace,
   categories,
   products: allProducts,
+  asStore = false,
 }: {
   marketplace: Marketplace;
   categories: SellerCategory[];
   products: SellerProduct[];
+  /** The list of Mangwaoo's own store in Admin > Mangwaoo Store: requests act as that store. */
+  asStore?: boolean;
 }) {
   const { refresh } = useServerRefresh();
   const isMart = marketplace === 'MART';
   const apiBasePath = isMart ? '/api/seller/products' : '/api/seller/gulplaza-products';
   const catalogName = isMart ? 'MangwaooMart' : 'Food';
+  const storeHeaders: Record<string, string> = asStore ? { [STORE_HEADER]: STORE_HEADER_VALUE } : {};
 
   const [editingProduct, setEditingProduct] = useState<SellerProduct | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -49,7 +54,7 @@ export default function ProductsTable({
     setRemovedIds((current) => [...current, product.id]);
 
     try {
-      const response = await fetch(`${apiBasePath}/${product.id}`, { method: 'DELETE' });
+      const response = await fetch(`${apiBasePath}/${product.id}`, { method: 'DELETE', headers: storeHeaders });
 
       if (response.ok) {
         refresh();
@@ -72,7 +77,7 @@ export default function ProductsTable({
           You haven&apos;t posted any products yet. Add your first one to see it live on {catalogName}.
         </p>
         <Link
-          href={SELLER_PAGES.post}
+          href={asStore ? '#post-product' : SELLER_PAGES.post}
           className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-red-primary to-brand-red-secondary px-6 py-2.5 text-sm font-semibold text-white hover:shadow-lg"
         >
           <PackagePlus className="h-4 w-4" />
@@ -165,6 +170,7 @@ export default function ProductsTable({
       {editingProduct && (
         <EditProductModal
           apiBasePath={apiBasePath}
+          requestHeaders={storeHeaders}
           enableVehicleDetails={isMart}
           enableSizes={isMart}
           enablePortions={!isMart}

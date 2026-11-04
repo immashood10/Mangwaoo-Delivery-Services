@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { GULPLAZA_ADS, GULPLAZA_CATEGORIES } from '@/lib/data';
 import { MessageCircle, Store, X, LayoutGrid } from 'lucide-react';
 import AddToCartButton from '@/components/AddToCartButton';
+import CuisineDropdown, { type CuisineOption } from '@/components/CuisineDropdown';
 import NearbyNotice from '@/components/NearbyNotice';
 import { FOOD_DELIVERY_RADIUS_KM, foodReach } from '@/lib/delivery';
 import { dishIcon } from '@/lib/food-icons';
@@ -85,6 +86,12 @@ export default async function GulPlaza({
 
   const hasResults = products.length > 0;
 
+  // The category list as the phone's "Cuisines for you" dropdown: all dishes first, then each category with its picture.
+  const cuisineOptions: CuisineOption[] = [
+    { key: 'all', label: 'All dishes', icon: null, href: buildCategoryHref(q, undefined, origin), active: !selectedCategory },
+    ...GULPLAZA_CATEGORIES.map((cat) => ({ key: String(cat.id), label: cat.name, icon: cat.icon, href: buildCategoryHref(q, cat.name, origin), active: selectedCategory === cat.name })),
+  ];
+
   return (
     <div className="w-full">
       {/* Hero */}
@@ -161,8 +168,13 @@ export default async function GulPlaza({
       <section id="shop" className="py-16 md:py-24 bg-brand-light scroll-mt-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
-            {/* Categories */}
-            <aside className="lg:sticky lg:top-24 lg:w-56 lg:shrink-0">
+            {/* On a phone the categories are one dropdown, "Cuisines for you", instead of a long list of filters. */}
+            <div className="lg:hidden">
+              <CuisineDropdown options={cuisineOptions} />
+            </div>
+
+            {/* Categories (desktop) */}
+            <aside className="hidden lg:sticky lg:top-24 lg:block lg:w-56 lg:shrink-0">
               <div className="rounded-2xl border border-gray-100 bg-surface p-4 shadow-soft">
                 <h3 className="mb-3 px-2 text-xs font-bold uppercase tracking-wide text-brand-gray">
                   Categories
