@@ -4,6 +4,7 @@ import { MessageCircle, Store, X, LayoutGrid } from 'lucide-react';
 import AddToCartButton from '@/components/AddToCartButton';
 import NearbyNotice from '@/components/NearbyNotice';
 import { FOOD_DELIVERY_RADIUS_KM, foodReach } from '@/lib/delivery';
+import { dishIcon } from '@/lib/food-icons';
 import { dishPriceLabel, readPortions } from '@/lib/food-portions';
 import { isRealLocation, parseCoordinates, type Coordinates } from '@/lib/geo';
 import { getGulplazaProducts } from '@/lib/products';
@@ -67,7 +68,7 @@ export default async function GulPlaza({
       price: dishPriceLabel(Number(product.price), portions),
       portions,
       ...(portions.length === 1 ? { portion: portions[0].grams } : {}),
-      icon: CATEGORY_ICONS[product.category.name] ?? '🍽️',
+      icon: dishIcon(product, CATEGORY_ICONS[product.category.name]),
       imageUrl: product.images[0] ?? null,
     };
   });

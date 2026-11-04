@@ -1101,6 +1101,9 @@ model GulplazaProduct {
   dishTags   String[] @default([])
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
+  /// The picture (an emoji from lib/food-icons.ts FOOD_ICON_CHOICES) the seller chose for the dish; null = automatic, picked
+  /// from the dish's name. Shown to customers where the dish has no photo.
+  icon        String?
 
   sellerId   String
   seller     Seller           @relation(fields: [sellerId], references: [id])

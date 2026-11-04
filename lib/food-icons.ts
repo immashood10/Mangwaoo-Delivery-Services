@@ -56,11 +56,79 @@ const compiledRules = FOOD_ICON_RULES.map((rule) => ({
   pattern: new RegExp(`(?:^| )(?:${rule.words.map((word) => word.replace(/[^a-z0-9 ]/g, '')).join('|')})(?:s|es)?(?: |$)`),
 }));
 
-/** The emoji for a food item's name, or a plate when nothing in the name is recognised. */
-export function foodIconFor(name: string): string {
+/** The emoji that fits a food item's name, or null when nothing in the name is recognised. */
+export function guessFoodIcon(name: string): string | null {
   const normalized = normalizeName(name);
 
-  if (!normalized) return GENERIC_FOOD_ICON;
+  if (!normalized) return null;
 
-  return compiledRules.find((rule) => rule.pattern.test(normalized))?.icon ?? GENERIC_FOOD_ICON;
+  return compiledRules.find((rule) => rule.pattern.test(normalized))?.icon ?? null;
+}
+
+/** The emoji for a food item's name, or a plate when nothing in the name is recognised. */
+export function foodIconFor(name: string): string {
+  return guessFoodIcon(name) ?? GENERIC_FOOD_ICON;
+}
+
+/**
+ * The pictures a seller can choose for a dish in Post product / Edit, with the words they stand for. Only these are accepted
+ * (`parseFoodIcon`), so nothing else can be stored as an icon.
+ */
+export const FOOD_ICON_CHOICES: { icon: string; label: string }[] = [
+  { icon: '🍛', label: 'Biryani, curry' },
+  { icon: '🍚', label: 'Rice' },
+  { icon: '🍔', label: 'Burger' },
+  { icon: '🍕', label: 'Pizza' },
+  { icon: '🌯', label: 'Roll, shawarma' },
+  { icon: '🥪', label: 'Sandwich' },
+  { icon: '🌭', label: 'Hot dog' },
+  { icon: '🍟', label: 'Fries, nuggets' },
+  { icon: '🥟', label: 'Momos, samosa' },
+  { icon: '🍢', label: 'BBQ, kebab, tikka' },
+  { icon: '🍗', label: 'Chicken' },
+  { icon: '🥩', label: 'Steak, meat' },
+  { icon: '🐟', label: 'Fish, seafood' },
+  { icon: '🍝', label: 'Pasta' },
+  { icon: '🍜', label: 'Noodles, soup' },
+  { icon: '🥗', label: 'Salad' },
+  { icon: '🫓', label: 'Naan, roti, paratha' },
+  { icon: '🍳', label: 'Egg, breakfast' },
+  { icon: '🥘', label: 'Pot dish, paya, chana' },
+  { icon: '🎂', label: 'Cake' },
+  { icon: '🍩', label: 'Donut' },
+  { icon: '🍪', label: 'Cookie, brownie' },
+  { icon: '🥐', label: 'Pastry, puff' },
+  { icon: '🍮', label: 'Pudding, kheer' },
+  { icon: '🍫', label: 'Chocolate' },
+  { icon: '🍬', label: 'Mithai, sweets' },
+  { icon: '🍦', label: 'Ice cream' },
+  { icon: '🍧', label: 'Falooda, gola' },
+  { icon: '☕', label: 'Tea, coffee' },
+  { icon: '🥤', label: 'Cold drink, shake' },
+  { icon: '🧃', label: 'Juice' },
+  { icon: '💧', label: 'Water' },
+  { icon: '🥛', label: 'Milk, lassi, dahi' },
+  { icon: '🍉', label: 'Fruit, chaat' },
+  { icon: GENERIC_FOOD_ICON, label: 'Other food' },
+];
+
+/**
+ * What a seller sent as a dish's icon: one of `FOOD_ICON_CHOICES`, or null / empty for "automatic". `undefined` (not sent at
+ * all, e.g. an older open page) stays `undefined` so the saved icon is kept.
+ */
+export function parseFoodIcon(raw: unknown): { value: string | null | undefined } | { error: string } {
+  if (raw === undefined) return { value: undefined };
+  if (raw === null || raw === '') return { value: null };
+
+  if (typeof raw === 'string' && FOOD_ICON_CHOICES.some((choice) => choice.icon === raw)) return { value: raw };
+
+  return { error: 'Please choose the dish picture from the list.' };
+}
+
+/**
+ * The picture shown for a dish before it is ordered: the one its seller chose, else the one that fits its name, else the
+ * category's own picture (`categoryIcon`), else a plate.
+ */
+export function dishIcon(dish: { name: string; icon?: string | null }, categoryIcon?: string | null): string {
+  return dish.icon || guessFoodIcon(dish.name) || categoryIcon || GENERIC_FOOD_ICON;
 }

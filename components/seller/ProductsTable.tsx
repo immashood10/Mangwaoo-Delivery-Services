@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ExternalLink, PackagePlus, Pencil, Trash2 } from 'lucide-react';
 import EditProductModal from '@/components/EditProductModal';
+import { dishIcon } from '@/lib/food-icons';
 import { portionSizesLabel } from '@/lib/food-portions';
 import { SELLER_PAGES } from '@/lib/notification-types';
 import type { Marketplace, SellerCategory, SellerProduct } from '@/lib/seller-types';
@@ -110,7 +111,9 @@ export default function ProductsTable({
                         className="h-10 w-10 rounded-lg border border-gray-200 object-cover"
                       />
                     ) : (
-                      <div className="h-10 w-10 rounded-lg bg-brand-light" />
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-light text-xl" aria-hidden="true">
+                        {isMart ? null : dishIcon(product)}
+                      </div>
                     )}
                   </td>
                   <td className="py-3 pr-4 font-semibold text-ink">{product.name}</td>

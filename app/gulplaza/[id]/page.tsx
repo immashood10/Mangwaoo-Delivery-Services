@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, Info, MapPin } from 'lucide-react';
 import { GULPLAZA_CATEGORIES } from '@/lib/data';
 import { farAwayNote, foodReach } from '@/lib/delivery';
+import { dishIcon } from '@/lib/food-icons';
 import { readPortions } from '@/lib/food-portions';
 import { isRealLocation, parseCoordinates } from '@/lib/geo';
 import { prisma } from '@/lib/prisma';
@@ -52,7 +53,7 @@ export default async function GulplazaProductDetail({
     sellerId: dbProduct.sellerId,
     marketplace: 'gulplaza' as const,
     price: `PKR ${Number(dbProduct.price).toLocaleString()}`,
-    icon: CATEGORY_ICONS[dbProduct.category.name] ?? '🍽️',
+    icon: dishIcon(dbProduct, CATEGORY_ICONS[dbProduct.category.name]),
     imageUrl: dbProduct.images[0] ?? null,
     description:
       dbProduct.description?.trim() ||

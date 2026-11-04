@@ -9,6 +9,7 @@ import VehicleDetailsFields from '@/components/VehicleDetailsFields';
 import { SELLER_PAGES } from '@/lib/notification-types';
 import PortionFields, { portionsFromRows, type PortionRow } from './PortionFields';
 import FoodMetadataFields from './FoodMetadataFields';
+import FoodIconPicker from './FoodIconPicker';
 import type { Marketplace, SellerCategory } from '@/lib/seller-types';
 import type { FoodDishTag, FoodSpiceLevelKey } from '@/lib/food-ai-metadata';
 import {
@@ -55,6 +56,8 @@ export default function PostProductForm({
   const [portionRows, setPortionRows] = useState<PortionRow[]>([]);
   const [spiceLevel, setSpiceLevel] = useState<FoodSpiceLevelKey | null>(null);
   const [dishTags, setDishTags] = useState<FoodDishTag[]>([]);
+  // The picture customers see on the dish; null = automatic (from the name).
+  const [dishIconChoice, setDishIconChoice] = useState<string | null>(null);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [formError, setFormError] = useState('');
   const [postedName, setPostedName] = useState('');
@@ -143,7 +146,7 @@ export default function PostProductForm({
           ...(!isMart && byWeight ? { portions: portionsFromRows(portionRows) } : { price: parseFloat(form.price) }),
           // A vehicle ad is a single item, so it has no stock count to enter; food has none at all.
           ...(isMart ? { stock: isVehicleAd ? 1 : parseInt(form.stock, 10) } : {}),
-          ...(!isMart ? { spiceLevel, dishTags } : {}),
+          ...(!isMart ? { spiceLevel, dishTags, icon: dishIconChoice } : {}),
           images: imagePreviews,
           ...(isVehicleAd ? { attributes: vehicle } : {}),
           ...(isSizedAd ? { attributes: sizes } : {}),
@@ -165,6 +168,7 @@ export default function PostProductForm({
       setPortionRows([]);
       setSpiceLevel(null);
       setDishTags([]);
+      setDishIconChoice(null);
       setImagePreviews([]);
       router.refresh();
     } catch {
@@ -289,6 +293,7 @@ export default function PostProductForm({
 
       {isMart ? null : (
         <>
+        <FoodIconPicker idPrefix="post-food" value={dishIconChoice} onChange={setDishIconChoice} dishName={form.name} />
         <FoodMetadataFields idPrefix="post-food" spiceLevel={spiceLevel} dishTags={dishTags} onSpiceChange={setSpiceLevel} onTagsChange={setDishTags} />
         <PortionFields
           enabled={byWeight}

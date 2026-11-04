@@ -27,6 +27,8 @@ export type SellerProduct = {
   portions: Portion[];
   /** Food listing metadata; null/empty for old unclassified dishes and non-food products. */
   spiceLevel: FoodSpiceLevelKey | null;
+  /** Food only: the picture the seller chose for the dish (an emoji); null = automatic, from the name. */
+  icon: string | null;
   dishTags: FoodDishTag[];
 };
 

@@ -1,4 +1,5 @@
 import { FOOD_CATEGORY_ICONS } from '@/lib/food-search';
+import { dishIcon } from '@/lib/food-icons';
 import { foodReach } from '@/lib/delivery';
 import { readPortions, type Portion } from '@/lib/food-portions';
 import { isRealLocation, type Coordinates } from '@/lib/geo';
@@ -88,7 +89,7 @@ function toAssistantDish(product: Awaited<ReturnType<typeof queryDishes>>[number
     marketplace: 'gulplaza',
     name: product.name,
     category: product.category.name,
-    icon: FOOD_CATEGORY_ICONS[product.category.name] ?? '🍽️',
+    icon: dishIcon(product, FOOD_CATEGORY_ICONS[product.category.name]),
     vendor: product.seller.businessName,
     sellerId: product.seller.id,
     price: Number(product.price),

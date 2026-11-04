@@ -3,6 +3,7 @@ import { foodReach } from '@/lib/delivery';
 import { readPortions, type Portion } from '@/lib/food-portions';
 import { isRealLocation, type Coordinates } from '@/lib/geo';
 import { getGulplazaProducts } from '@/lib/products';
+import { dishIcon } from '@/lib/food-icons';
 import { coverPath } from '@/lib/seller-cover-config';
 
 export const FOOD_CATEGORY_ICONS: Record<string, string> = Object.fromEntries(
@@ -59,7 +60,7 @@ function toFoodItem(product: GulplazaProductRow): FoodItem {
     priceValue,
     price: `PKR ${priceValue.toLocaleString()}`,
     portions: readPortions(product.portions),
-    icon: FOOD_CATEGORY_ICONS[product.category.name] ?? '🍽️',
+    icon: dishIcon(product, FOOD_CATEGORY_ICONS[product.category.name]),
     imageUrl: product.images[0] ?? null,
     stock: product.stock,
   };

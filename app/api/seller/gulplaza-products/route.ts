@@ -6,6 +6,7 @@ import { isRasterImageDataUrl } from '@/lib/data-url-image';
 import { getSession } from '@/lib/auth';
 import { refreshFoodCatalog } from '@/lib/catalog-cache';
 import { parseFoodMetadata } from '@/lib/food-ai-metadata';
+import { parseFoodIcon } from '@/lib/food-icons';
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -34,6 +35,8 @@ export async function POST(request: NextRequest) {
   const images = Array.isArray(body?.images) ? body.images.filter((url: unknown) => typeof url === 'string') : [];
   const foodMetadata = parseFoodMetadata(body?.spiceLevel ?? null, body?.dishTags ?? []);
   if ('error' in foodMetadata) return NextResponse.json({ error: foodMetadata.error }, { status: 400 });
+  const icon = parseFoodIcon(body?.icon);
+  if ('error' in icon) return NextResponse.json({ error: icon.error }, { status: 400 });
 
   // A dish sold by weight (250 g, 500 g, 1 kg ...) has a price per size; the dish's own price is then the lowest of them.
   const sizes = parsePortionsInput(body?.portions);
@@ -71,6 +74,7 @@ export async function POST(request: NextRequest) {
       portions: portions.length > 0 ? portions : undefined,
       spiceLevel: foodMetadata.spiceLevel,
       dishTags: foodMetadata.dishTags,
+      icon: icon.value ?? null,
       stock: FOOD_UNLIMITED_STOCK,
       images,
       categoryId,

@@ -7,6 +7,7 @@ import SizeFields from './SizeFields';
 import VehicleDetailsFields from './VehicleDetailsFields';
 import PortionFields, { portionRowsFrom, portionsFromRows, type PortionRow } from './seller/PortionFields';
 import FoodMetadataFields from './seller/FoodMetadataFields';
+import FoodIconPicker from './seller/FoodIconPicker';
 import type { Portion } from '@/lib/food-portions';
 import type { FoodDishTag, FoodSpiceLevelKey } from '@/lib/food-ai-metadata';
 import {
@@ -41,6 +42,8 @@ type EditableProduct = {
   portions?: Portion[];
   spiceLevel?: FoodSpiceLevelKey | null;
   dishTags?: FoodDishTag[];
+  /** Food dishes only: the picture the seller chose (an emoji); null = automatic, from the name. */
+  icon?: string | null;
 };
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
@@ -86,6 +89,7 @@ export default function EditProductModal({
   const [portionRows, setPortionRows] = useState<PortionRow[]>(() => portionRowsFrom(product.portions ?? []));
   const [spiceLevel, setSpiceLevel] = useState<FoodSpiceLevelKey | null>(product.spiceLevel ?? null);
   const [dishTags, setDishTags] = useState<FoodDishTag[]>(product.dishTags ?? []);
+  const [icon, setIcon] = useState<string | null>(product.icon ?? null);
   const [images, setImages] = useState<string[]>(product.images);
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -170,7 +174,7 @@ export default function EditProductModal({
           // A dish sold by weight is priced by its sizes (the server takes the lowest as the dish's own price).
           ...(enablePortions && byWeight ? {} : { price: parseFloat(form.price) }),
           ...(enablePortions ? { portions: byWeight ? portionsFromRows(portionRows) : [] } : {}),
-          ...(enablePortions ? { spiceLevel, dishTags } : {}),
+          ...(enablePortions ? { spiceLevel, dishTags, icon } : {}),
           ...(hideStock ? {} : { stock: parseInt(form.stock, 10) }),
           ...(isVehicleAd ? { attributes: vehicle } : {}),
           ...(isSizedAd ? { attributes: sizes } : {}),
@@ -292,6 +296,7 @@ export default function EditProductModal({
 
           {enablePortions ? (
             <>
+            <FoodIconPicker idPrefix="edit-food" value={icon} onChange={setIcon} dishName={form.name} />
             <FoodMetadataFields idPrefix="edit-food" spiceLevel={spiceLevel} dishTags={dishTags} onSpiceChange={setSpiceLevel} onTagsChange={setDishTags} />
             <PortionFields
               enabled={byWeight}

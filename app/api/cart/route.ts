@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
 import { GULPLAZA_CATEGORIES, MART_CATEGORIES } from '@/lib/data';
+import { dishIcon } from '@/lib/food-icons';
 import { cartRowProductId, readPortions, splitCartRowProductId, withPortionLabel, type Portion } from '@/lib/food-portions';
 import { getSellerUserIds, notifyAfterResponse } from '@/lib/notify';
 import { SELLER_PAGES } from '@/lib/notification-types';
@@ -77,7 +78,7 @@ async function loadLiveProducts(lines: { marketplace: Marketplace; productId: st
       price: Number(product.price),
       sellerId: product.sellerId,
       vendor: product.seller.businessName,
-      icon: FOOD_ICONS[product.category.name] ?? '🍽️',
+      icon: dishIcon(product, FOOD_ICONS[product.category.name]),
       portions: readPortions(product.portions),
     });
   }
