@@ -288,6 +288,11 @@ model Seller {
   coverUpdatedAt DateTime?
   cover          SellerCover?
 
+  /// Food sellers only: the restaurant's own free-delivery offer. When an order's items (before discounts) come to this
+  /// many PKR or more, the customer pays no delivery fee. null = no free delivery (the default: the platform no longer
+  /// gives it automatically). Set by the seller in Settings.
+  freeDeliveryMinOrder Int?
+
   products         Product[]
   productAds       ProductAd[]
   orders           Order[]

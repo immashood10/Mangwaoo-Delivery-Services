@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, BadgeCheck, Bike, Clock, Info, MapPin, Store } from 'lucide-react';
 import NearbyNotice from '@/components/NearbyNotice';
 import { getRestaurant, itemMatchesQuery, normalizeQuery } from '@/lib/food-search';
-import { FREE_DELIVERY_MIN_ORDER_AMOUNT, deliveryFeeForDistance, farAwayNote, foodReach } from '@/lib/delivery';
+import { deliveryFeeForDistance, farAwayNote, foodReach, freeDeliveryBadge } from '@/lib/delivery';
 import { formatDistance, isRealLocation, parseCoordinates } from '@/lib/geo';
 import FavouriteButton from '@/components/FavouriteButton';
 import RestaurantMenuItem from '@/components/RestaurantMenuItem';
@@ -141,7 +141,7 @@ export default async function RestaurantPage({
                 {distanceKm !== null ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-3 py-1 backdrop-blur">
                     <Bike className="h-3.5 w-3.5" />
-                    Delivery PKR {deliveryFeeForDistance(distanceKm)} · Free on PKR {FREE_DELIVERY_MIN_ORDER_AMOUNT}+
+                    Delivery PKR {deliveryFeeForDistance(distanceKm)}{freeDeliveryBadge(restaurant.freeDeliveryMin)}
                   </span>
                 ) : null}
               </div>
@@ -156,7 +156,7 @@ export default async function RestaurantPage({
         {reach.status === 'FAR' ? (
           <p role="note" className="mb-6 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-ink">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
-            <span>{farAwayNote(reach.distanceKm)}</span>
+            <span>{farAwayNote(reach.distanceKm, undefined, restaurant.freeDeliveryMin)}</span>
           </p>
         ) : null}
 

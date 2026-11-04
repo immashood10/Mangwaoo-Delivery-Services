@@ -29,6 +29,7 @@ import { useCart } from '@/lib/cart-context';
 import { useAuth } from '@/lib/auth-context';
 import { useDeliveryAddress, type DeliveryAddress } from '@/lib/delivery-address-context';
 import { isRealLocation } from '@/lib/geo';
+import { SERVICE_AREA_MESSAGE, isInServiceArea } from '@/lib/service-area';
 import { mapPlaceId } from '@/lib/map-math';
 
 type AddressSuggestion = DeliveryAddress;
@@ -249,6 +250,9 @@ export default function Navbar() {
     { name: 'Contact', href: '/contact' },
   ];
 
+  // The chosen place is outside the area Mangwaoo delivers in (Karachi): it can't be confirmed as a delivery address.
+  const addressOutsideArea = !!selectedAddress && isRealLocation(selectedAddress) && !isInServiceArea(selectedAddress);
+
   const handleSelectAddressSuggestion = (suggestion: AddressSuggestion) => {
     chosenAddressQuery.current = suggestion.postalCode.trim() ? `${suggestion.label}, ${suggestion.postalCode}` : suggestion.label;
     setSelectedAddress(suggestion);
@@ -318,7 +322,7 @@ export default function Navbar() {
   };
 
   const handleConfirmAddress = () => {
-    if (!selectedAddress) {
+    if (!selectedAddress || addressOutsideArea) {
       return;
     }
 
@@ -918,6 +922,11 @@ export default function Navbar() {
                 </button>
 
                 {addressError ? <p className="text-xs text-danger">{addressError}</p> : null}
+                {addressOutsideArea ? (
+                  <p role="alert" data-testid="address-outside-area" className="text-xs font-semibold text-danger">
+                    {SERVICE_AREA_MESSAGE}
+                  </p>
+                ) : null}
 
                 {/* Typing and "Locate me" are one way in; here any other place can be chosen too: move the map under the pin. */}
                 <PinMap
@@ -960,7 +969,7 @@ export default function Navbar() {
                   </button>
                   <button
                     type="button"
-                    disabled={!selectedAddress}
+                    disabled={!selectedAddress || addressOutsideArea}
                     onClick={handleConfirmAddress}
                     className="rounded-full bg-[#9b0000] px-3 py-2 text-sm font-semibold text-white shadow-md shadow-red-200 hover:bg-[#840000] disabled:cursor-not-allowed disabled:opacity-50"
                   >

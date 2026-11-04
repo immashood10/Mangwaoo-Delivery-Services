@@ -9,12 +9,12 @@ import { useDeliveryAddress } from '@/lib/delivery-address-context';
 import {
   DELIVERY_RATE_PER_KM,
   FOOD_DELIVERY_RADIUS_KM,
-  FREE_DELIVERY_MIN_ORDER_AMOUNT,
   MINIMUM_DELIVERY_FEE,
   farAwayNote,
 } from '@/lib/delivery';
 import { formatPortion, withPortionLabel } from '@/lib/food-portions';
 import type { Quote } from '@/lib/checkout-types';
+import { SERVICE_AREA_MESSAGE } from '@/lib/service-area';
 import LocationPicker, { type PickedLocation } from '@/components/LocationPicker';
 
 const MAX_NOTE_LENGTH = 500;
@@ -106,6 +106,8 @@ export default function CartPage() {
   const foodOrders = quote?.orders.filter((order) => order.marketplace === 'gulplaza') ?? [];
   // Food from a restaurant whose kitchen isn't on the map has no distance, so no delivery fee, and can't be ordered.
   const blockedOrders = foodOrders.filter((order) => order.deliveryNote === 'NO_RESTAURANT_PIN');
+  // A delivery location outside Karachi can't be ordered to (food or MangwaooMart).
+  const outsideArea = quote?.outsideServiceArea ?? false;
   // Restaurants beyond the nearby radius can be ordered from; the customer is told the delivery fee is higher.
   const farOrders = foodOrders.filter((order) => order.farAway && !order.freeDelivery);
   const cartHasFood = items.some((item) => item.marketplace === 'gulplaza');
@@ -529,9 +531,20 @@ export default function CartPage() {
               ) : null}
               {farOrders.map((order) => (
                 <p key={order.sellerId} role="note" className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-ink">
-                  {farAwayNote(order.distanceKm ?? FOOD_DELIVERY_RADIUS_KM, order.sellerName)}
+                  {farAwayNote(order.distanceKm ?? FOOD_DELIVERY_RADIUS_KM, order.sellerName, order.freeDeliveryMin)}
                 </p>
               ))}
+              {/* A restaurant that offers free delivery from an order amount says how much is still missing. */}
+              {foodOrders
+                .filter((order) => order.freeDeliveryMin !== null && !order.freeDelivery && order.deliveryNote === null)
+                .map((order) => (
+                  <p key={`free-${order.sellerId}`} role="note" className="rounded-lg bg-green-50 px-3 py-2 text-xs text-success">
+                    {order.sellerName} delivers free on food of PKR {(order.freeDeliveryMin ?? 0).toLocaleString('en-PK')} or more
+                    {order.freeDeliveryMin !== null && order.subtotal < order.freeDeliveryMin
+                      ? ` (add PKR ${(order.freeDeliveryMin - order.subtotal).toLocaleString('en-PK')} more).`
+                      : '.'}
+                  </p>
+                ))}
               {blockedOrders.map((order) => (
                 <p key={order.sellerId} role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-danger">
                   {`${order.sellerName} hasn't set its location on the map yet, so we can't work out the delivery fee. Please choose another restaurant.`}
@@ -539,7 +552,7 @@ export default function CartPage() {
               ))}
               {cartHasFood ? (
                 <p className="text-xs text-gray-400">
-                  {`Each restaurant's food subtotal before discounts of PKR ${FREE_DELIVERY_MIN_ORDER_AMOUNT} or more gets free delivery. Otherwise, delivery is PKR ${DELIVERY_RATE_PER_KM} per km, never less than PKR ${MINIMUM_DELIVERY_FEE}.`}
+                  {`Delivery is PKR ${DELIVERY_RATE_PER_KM} per km, never less than PKR ${MINIMUM_DELIVERY_FEE}.`}
                 </p>
               ) : null}
 
@@ -558,11 +571,16 @@ export default function CartPage() {
               </div>
             </div>
 
+            {outsideArea ? (
+              <p role="alert" data-testid="outside-area" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs text-danger">
+                {SERVICE_AREA_MESSAGE}
+              </p>
+            ) : null}
             {formError ? <p className="mt-4 text-sm text-danger">{formError}</p> : null}
 
             <button
               type="submit"
-              disabled={isPlacingOrder || blockedOrders.length > 0}
+              disabled={isPlacingOrder || blockedOrders.length > 0 || outsideArea}
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-red-primary to-brand-red-secondary py-3 text-sm font-semibold text-white hover:shadow-lg transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <MessageCircle className="w-4 h-4" />

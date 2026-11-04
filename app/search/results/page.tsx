@@ -5,8 +5,8 @@ import NearbyNotice from '@/components/NearbyNotice';
 import { normalizeQuery, searchRestaurants } from '@/lib/food-search';
 import {
   FOOD_DELIVERY_RADIUS_KM,
-  FREE_DELIVERY_MIN_ORDER_AMOUNT,
   deliveryFeeForDistance,
+  freeDeliveryBadge,
   isWithinFoodRadius,
 } from '@/lib/delivery';
 import { formatDistance, isRealLocation, parseCoordinates } from '@/lib/geo';
@@ -88,7 +88,7 @@ export default async function SearchResultsPage({
                     {distanceKm !== null ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-brand-light px-2.5 py-0.5 text-xs font-semibold text-brand-gray">
                         <Bike className="h-3 w-3" />
-                        Delivery PKR {deliveryFeeForDistance(distanceKm)} · Free on PKR {FREE_DELIVERY_MIN_ORDER_AMOUNT}+
+                        Delivery PKR {deliveryFeeForDistance(distanceKm)}{freeDeliveryBadge(restaurant.freeDeliveryMin)}
                       </span>
                     ) : null}
                     {index === 0 && distanceKm !== null && !isFarAway(distanceKm) ? (
@@ -122,8 +122,8 @@ export default async function SearchResultsPage({
                     <p className="mt-2 flex items-start gap-1.5 text-xs text-warning">
                       <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                       <span>
-                        This restaurant is more than {FOOD_DELIVERY_RADIUS_KM} km from you, so delivery costs more unless its food subtotal before
-                        discounts is at least PKR {FREE_DELIVERY_MIN_ORDER_AMOUNT}. Ordering from a restaurant closer to you is better.
+                        This restaurant is more than {FOOD_DELIVERY_RADIUS_KM} km from you, so delivery costs more
+                        {restaurant.freeDeliveryMin ? ` unless its food subtotal before discounts is at least PKR ${restaurant.freeDeliveryMin.toLocaleString('en-PK')}` : ''}. Ordering from a restaurant closer to you is better.
                       </span>
                     </p>
                   ) : null}

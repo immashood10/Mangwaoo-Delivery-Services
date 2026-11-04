@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
 import { MAX_ORDER_CHAT_ADDRESS_LENGTH as MAX_ADDRESS_LENGTH, startOrContinueOrderChat } from '@/lib/order-chat';
 import { enforceRateLimits } from '@/lib/rate-limit';
+import { SERVICE_AREA_MESSAGE, isInServiceArea } from '@/lib/service-area';
 import { MAX_RIDER_CHAT_MESSAGE_LENGTH, RIDER_CHAT_INCLUDE, summarizeRiderChat } from '@/lib/rider-chat';
 
 async function getCustomer() {
@@ -72,6 +73,11 @@ export async function POST(request: NextRequest) {
 
   if (!pickupText || (!hasPickupCoordinates && !fromCheckout)) {
     return NextResponse.json({ error: 'Please select the pickup location first.' }, { status: 400 });
+  }
+
+  // Both the drop-off and the pickup must be in the area Mangwaoo delivers in (Karachi).
+  if (!isInServiceArea({ lat, lng }) || (hasPickupCoordinates && !isInServiceArea({ lat: pickupLat, lng: pickupLng }))) {
+    return NextResponse.json({ error: SERVICE_AREA_MESSAGE }, { status: 400 });
   }
 
   if (!text) {

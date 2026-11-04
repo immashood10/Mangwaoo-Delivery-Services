@@ -1,6 +1,7 @@
 import { CheckCircle2, Clock, Settings } from 'lucide-react';
 import SellerPageHeader from '@/components/seller/SellerPageHeader';
 import StoreProfileCard from '@/components/StoreProfileCard';
+import FreeDeliveryCard from '@/components/seller/FreeDeliveryCard';
 import { prisma } from '@/lib/prisma';
 import { formatMonthYear } from '@/lib/ads';
 import { isFoodSeller, requireSeller } from '@/lib/seller-context';
@@ -48,6 +49,8 @@ export default async function SellerSettingsPage() {
             : null
         }
       />
+
+      {isFood ? <FreeDeliveryCard freeDeliveryMinOrder={seller.freeDeliveryMinOrder} /> : null}
 
       <section aria-labelledby="account-heading" className="rounded-2xl bg-surface p-6 shadow-soft">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

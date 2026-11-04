@@ -5,6 +5,7 @@ import { LocateFixed, Map as MapIcon, MapPin, Search, X } from 'lucide-react';
 import MapPinPicker from '@/components/MapPinPicker';
 import type { LatLng } from '@/lib/map-math';
 import type { PickedLocation } from '@/lib/picked-location';
+import { SERVICE_AREA_MESSAGE, isInServiceArea } from '@/lib/service-area';
 
 export type { PickedLocation };
 
@@ -83,6 +84,14 @@ export default function LocationPicker({
   }, [query]);
 
   const select = (location: PickedLocation) => {
+    // Orders are delivered in Karachi only: a place outside it (the current location of someone in Islamabad) is not taken.
+    if (!isInServiceArea(location)) {
+      setSuggestions([]);
+      setError(SERVICE_AREA_MESSAGE);
+      return;
+    }
+
+    setError('');
     lastSelectedRef.current = location.label;
     setSuggestions([]);
     setQuery('');

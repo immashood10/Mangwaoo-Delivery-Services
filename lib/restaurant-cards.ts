@@ -22,6 +22,8 @@ export type RestaurantCardData = {
   hasImage: boolean;
   /** When the owner's background picture was set (a version for its address), null when there is none. */
   coverVersion: number | null;
+  /** The order amount (PKR) from which the restaurant delivers free; null = no free-delivery offer. */
+  freeDeliveryMin: number | null;
   /** Straight-line distance from the customer's address (every card shown is within the delivery radius). */
   distanceKm: number | null;
 };
@@ -51,6 +53,7 @@ type RestaurantRow = {
   prices: number[];
   hasImage: boolean;
   coverVersion: number | null;
+  freeDeliveryMin: number | null;
 };
 
 type Restaurant = Omit<RestaurantCardData, 'distanceKm'> & { location: Coordinates | null };
@@ -70,6 +73,7 @@ function toRestaurant(row: RestaurantRow): Restaurant {
     priceTier: priceTierFor(row.prices),
     hasImage: row.hasImage,
     coverVersion: row.coverVersion,
+    freeDeliveryMin: row.freeDeliveryMin,
     location: row.latitude !== null && row.longitude !== null ? { lat: row.latitude, lng: row.longitude } : null,
   };
 }
@@ -79,7 +83,7 @@ function toRestaurant(row: RestaurantRow): Restaurant {
 const getRestaurants = unstable_cache(
   async (): Promise<Restaurant[]> => {
     const rows = await prisma.$queryRaw<RestaurantRow[]>`
-      SELECT s."id", s."businessName" AS "name", s."latitude", s."longitude",
+      SELECT s."id", s."businessName" AS "name", s."latitude", s."longitude", s."freeDeliveryMinOrder" AS "freeDeliveryMin",
              array_agg(c."name") AS "categories",
              array_agg(p."price"::float8) AS "prices",
              (bool_or(cardinality(p."images") > 0) OR s."coverUpdatedAt" IS NOT NULL) AS "hasImage",

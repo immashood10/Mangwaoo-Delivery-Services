@@ -41,6 +41,8 @@ export type Restaurant = {
   /** The small square picture next to the name in lists: a dish photo, or the background picture without one. */
   thumbnailImage: string | null;
   location: RestaurantLocation | null;
+  /** The order amount (PKR) from which this restaurant delivers free; null = no free-delivery offer. */
+  freeDeliveryMin: number | null;
 };
 
 type GulplazaProductRow = Awaited<ReturnType<typeof getGulplazaProducts>>[number];
@@ -79,6 +81,7 @@ function toRestaurant(seller: GulplazaProductRow['seller'], items: FoodItem[]): 
       seller.latitude !== null && seller.longitude !== null
         ? { lat: seller.latitude, lng: seller.longitude, label: seller.locationLabel }
         : null,
+    freeDeliveryMin: seller.freeDeliveryMinOrder ?? null,
   };
 }
 

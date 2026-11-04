@@ -1,6 +1,7 @@
 import { distanceInKm, formatDistance, isRealLocation, type Coordinates } from '@/lib/geo';
 
-// Food delivery is charged by distance unless the restaurant's food subtotal meets the free-delivery minimum.
+// Food delivery is charged by distance unless the restaurant has its own free-delivery offer and the order's food subtotal
+// meets it (each restaurant decides in its Settings; there is no automatic free delivery any more).
 // Only food has a delivery fee (MangwaooMart has none).
 
 /**
@@ -16,12 +17,33 @@ export const DELIVERY_RATE_PER_KM = 80;
  */
 export const MINIMUM_DELIVERY_FEE = 80;
 
-/** Food orders from one restaurant get free delivery when their item subtotal reaches this amount. */
-export const FREE_DELIVERY_MIN_ORDER_AMOUNT = 200;
+/** The most a restaurant can set as its free-delivery amount (PKR); a typing slip like 5000000 is refused. */
+export const MAX_FREE_DELIVERY_MIN_ORDER = 100000;
 
-/** Free-delivery eligibility uses the food subtotal before coupons or Loyalty Card discounts. */
-export function qualifiesForFreeDelivery(subtotal: number) {
-  return subtotal >= FREE_DELIVERY_MIN_ORDER_AMOUNT;
+/**
+ * Whether an order gets free delivery: the restaurant offers it (`freeFrom` is its amount in PKR, null = it doesn't) and the
+ * food subtotal reaches that amount. The subtotal is the one before coupons or Loyalty Card discounts.
+ */
+export function qualifiesForFreeDelivery(subtotal: number, freeFrom: number | null | undefined) {
+  return typeof freeFrom === 'number' && freeFrom > 0 && subtotal >= freeFrom;
+}
+
+/** What a seller sent as their free-delivery amount: a whole PKR amount, or null for "no free delivery". */
+export function parseFreeDeliveryMin(raw: unknown): { value: number | null } | { error: string } {
+  if (raw === null || raw === undefined || raw === '') return { value: null };
+
+  const amount = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw.trim()) : NaN;
+
+  if (!Number.isInteger(amount) || amount < 1 || amount > MAX_FREE_DELIVERY_MIN_ORDER) {
+    return { error: `Enter the order amount in whole rupees (1 to ${MAX_FREE_DELIVERY_MIN_ORDER.toLocaleString('en-PK')}).` };
+  }
+
+  return { value: amount };
+}
+
+/** " · free on PKR 500+" for a restaurant that offers free delivery, "" for one that doesn't. */
+export function freeDeliveryBadge(freeFrom: number | null | undefined) {
+  return typeof freeFrom === 'number' && freeFrom > 0 ? ` · free on PKR ${freeFrom.toLocaleString('en-PK')}+` : '';
 }
 
 /**
@@ -51,7 +73,7 @@ export function deliveryFeeForDistance(distanceKm: number) {
  * The "nearby" distance, in kilometres (in a straight line) from the customer's location: the delivery address they
  * picked, or the drop-off pinned in the cart. The home page and the Food page list only restaurants inside it. A
  * restaurant farther away can still be found (search, favourites) and ordered from, with a note that its delivery
- * charge is higher unless its food subtotal qualifies for free delivery.
+ * charge is higher unless the restaurant offers free delivery and its food subtotal qualifies.
  */
 export const FOOD_DELIVERY_RADIUS_KM = 5;
 
@@ -80,6 +102,11 @@ export function foodReach(origin: Coordinates | null | undefined, kitchen: Coord
 }
 
 /** What a customer is told about a restaurant beyond the nearby radius. */
-export function farAwayNote(distanceKm: number, name = 'This restaurant') {
-  return `${name} is ${formatDistance(distanceKm)} from your delivery address, more than ${FOOD_DELIVERY_RADIUS_KM} km away. Delivery is free when this restaurant's food subtotal is PKR ${FREE_DELIVERY_MIN_ORDER_AMOUNT} or more; otherwise, the longer distance costs more. Ordering from a restaurant closer to you is better.`;
+export function farAwayNote(distanceKm: number, name = 'This restaurant', freeFrom: number | null | undefined = null) {
+  const free =
+    typeof freeFrom === 'number' && freeFrom > 0
+      ? ` Delivery is free when this restaurant's food subtotal is PKR ${freeFrom.toLocaleString('en-PK')} or more; otherwise, the longer distance costs more.`
+      : ' The longer distance costs more.';
+
+  return `${name} is ${formatDistance(distanceKm)} from your delivery address, more than ${FOOD_DELIVERY_RADIUS_KM} km away.${free} Ordering from a restaurant closer to you is better.`;
 }

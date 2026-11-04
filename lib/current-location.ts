@@ -1,4 +1,5 @@
 import type { DeliveryAddress } from '@/lib/delivery-address-context';
+import { SERVICE_AREA_MESSAGE, isInServiceArea } from '@/lib/service-area';
 
 /** A problem getting the visitor's location, with a message that is safe to show them. */
 export class LocationError extends Error {}
@@ -46,6 +47,10 @@ type ReverseGeocodeResult = {
  */
 export async function detectCurrentLocation(): Promise<DeliveryAddress> {
   const { latitude, longitude } = await getPosition();
+
+  // Somebody outside Karachi (Islamabad, say) cannot order, so their position is not taken as a delivery address.
+  if (!isInServiceArea({ lat: latitude, lng: longitude })) throw new LocationError(SERVICE_AREA_MESSAGE);
+
   let label = 'My current location';
   let postalCode = '';
 

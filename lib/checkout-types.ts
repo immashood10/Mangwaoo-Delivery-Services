@@ -28,15 +28,18 @@ export type OrderQuote = {
   subtotal: number;
   /** Food only: the distance charge from the restaurant to the customer. Always 0 for MangwaooMart. */
   deliveryFee: number;
-  /** Food only: this restaurant's item subtotal qualifies for free delivery and the delivery location is known. */
+  /** Food only: this restaurant offers free delivery, its item subtotal qualifies and the delivery location is known. */
   freeDelivery: boolean;
+  /** Food only: the order amount (PKR) from which this restaurant delivers free; null = it has no free-delivery offer. */
+  freeDeliveryMin: number | null;
   /** Food only: the distance the fee is for (billed to 0.1 km). */
   distanceKm: number | null;
   /**
    * Food only: why the delivery fee can't be worked out, so the order can't go ahead as it is. The customer hasn't pinned
-   * a location, or the restaurant hasn't pinned its kitchen (so nobody can tell how far it is). Checkout refuses both.
+   * a location, or the restaurant hasn't pinned its kitchen (so nobody can tell how far it is), or the delivery location is
+   * outside the area Mangwaoo delivers in (OUT_OF_AREA, no fee is worked out). Checkout refuses all three.
    */
-  deliveryNote: 'NEEDS_DROPOFF' | 'NO_RESTAURANT_PIN' | null;
+  deliveryNote: 'NEEDS_DROPOFF' | 'NO_RESTAURANT_PIN' | 'OUT_OF_AREA' | null;
   /** Food only: the restaurant is farther than the nearby radius (5 km). The order goes ahead, at the higher fee for the longer ride. */
   farAway: boolean;
   /** What the coupon takes off this order (PKR). */
@@ -61,4 +64,6 @@ export type Quote = {
   coupon: CouponInfo | null;
   /** The Loyalty Card's part of `discount`; null for a customer without an active card. */
   loyalty: LoyaltyInfo | null;
+  /** The delivery location is outside the area Mangwaoo delivers in (Karachi): the order can't be placed. */
+  outsideServiceArea: boolean;
 };

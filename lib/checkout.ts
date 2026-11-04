@@ -1,6 +1,7 @@
 import type { Coupon, Prisma } from '@/lib/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
 import { billedDistanceKm, deliveryFeeForDistance, foodReach, qualifiesForFreeDelivery } from '@/lib/delivery';
+import { SERVICE_AREA_MESSAGE, isInServiceArea } from '@/lib/service-area';
 import { type Coordinates } from '@/lib/geo';
 import { sendWhatsAppNotification } from '@/lib/whatsapp';
 import { refreshFoodCatalog, refreshMartCatalog } from '@/lib/catalog-cache';
@@ -56,6 +57,8 @@ type Group = {
   sellerType: string;
   sellerName: string;
   location: Coordinates | null;
+  /** Food only: the restaurant's own free-delivery amount (PKR), null = none. */
+  freeDeliveryMin: number | null;
   lines: ResolvedLine[];
   subtotal: number;
 };
@@ -149,7 +152,7 @@ async function resolveGroups(lines: CheckoutLine[]) {
             portions: true,
             stock: true,
             sellerId: true,
-            seller: { select: { businessName: true, latitude: true, longitude: true, sellerType: true } },
+            seller: { select: { businessName: true, latitude: true, longitude: true, sellerType: true, freeDeliveryMinOrder: true } },
           },
         })
       : [],
@@ -187,7 +190,7 @@ async function resolveGroups(lines: CheckoutLine[]) {
     }
 
     const key = `${line.marketplace}:${product.sellerId}`;
-    const seller = product.seller as { businessName: string; latitude?: number | null; longitude?: number | null; sellerType?: string };
+    const seller = product.seller as { businessName: string; latitude?: number | null; longitude?: number | null; sellerType?: string; freeDeliveryMinOrder?: number | null };
     const group =
       groups.get(key) ??
       ({
@@ -199,6 +202,7 @@ async function resolveGroups(lines: CheckoutLine[]) {
           line.marketplace === 'gulplaza' && seller.latitude != null && seller.longitude != null
             ? { lat: seller.latitude, lng: seller.longitude }
             : null,
+        freeDeliveryMin: line.marketplace === 'gulplaza' ? (seller.freeDeliveryMinOrder ?? null) : null,
         lines: [],
         subtotal: 0,
       } satisfies Group);
@@ -238,6 +242,7 @@ function sampleOrders(lines: CheckoutLine[], groups: Group[]): OrderQuote[] {
     subtotal,
     deliveryFee: 0,
     freeDelivery: false,
+    freeDeliveryMin: null,
     distanceKm: null,
     deliveryNote: null,
     farAway: false,
@@ -297,6 +302,9 @@ export async function priceCheckout(input: {
     }
   }
 
+  // A delivery location outside the area Mangwaoo serves (Karachi) can't be ordered to, whatever is in the cart.
+  const outsideServiceArea = input.dropoff !== null && !isInServiceArea(input.dropoff);
+
   // The sample items come last, so `orders[i]` stays the order of `groups[i]` (placeOrders relies on that).
   const orders: OrderQuote[] = groups.map((group, index) => {
     const isFood = group.marketplace === 'gulplaza';
@@ -310,15 +318,16 @@ export async function priceCheckout(input: {
     let farAway = false;
 
     if (isFood) {
-      // The fee follows the distance unless this restaurant's item subtotal qualifies for free delivery. A restaurant
+      // The fee follows the distance unless this restaurant offers free delivery and the item subtotal qualifies. A restaurant
       // beyond FOOD_DELIVERY_RADIUS_KM is still orderable. Without both pins there is no distance, so no fee (placeOrders refuses).
       const reach = foodReach(input.dropoff, group.location);
 
-      if (reach.status === 'NEEDS_ORIGIN') deliveryNote = 'NEEDS_DROPOFF';
+      if (outsideServiceArea) deliveryNote = 'OUT_OF_AREA';
+      else if (reach.status === 'NEEDS_ORIGIN') deliveryNote = 'NEEDS_DROPOFF';
       else if (reach.status === 'NO_PIN') deliveryNote = 'NO_RESTAURANT_PIN';
       else {
         distanceKm = billedDistanceKm(reach.distanceKm);
-        freeDelivery = qualifiesForFreeDelivery(group.subtotal);
+        freeDelivery = qualifiesForFreeDelivery(group.subtotal, group.freeDeliveryMin);
         deliveryFee = freeDelivery ? 0 : deliveryFeeForDistance(distanceKm);
         farAway = reach.status === 'FAR';
       }
@@ -331,6 +340,7 @@ export async function priceCheckout(input: {
       subtotal: group.subtotal,
       deliveryFee,
       freeDelivery,
+      freeDeliveryMin: group.freeDeliveryMin,
       distanceKm,
       deliveryNote,
       farAway,
@@ -364,6 +374,7 @@ export async function priceCheckout(input: {
           }
         : null,
       loyalty: loyalty ? { percent: loyalty.percent, discount: sum((order) => order.loyaltyDiscount) } : null,
+      outsideServiceArea,
     },
   };
 }
@@ -453,6 +464,8 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
   }
 
   // Nothing is placed (or announced to the owner) for a food order that has no delivery fee (a missing pin).
+  if (quote.outsideServiceArea) throw new CheckoutError(400, SERVICE_AREA_MESSAGE);
+
   assertFoodDeliverable(quote.orders);
 
   // Tell the owner's own WhatsApp about every well-formed order attempt — independent of whether the items resolve

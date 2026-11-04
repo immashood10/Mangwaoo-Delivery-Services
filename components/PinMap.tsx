@@ -164,6 +164,9 @@ export default function PinMap({ start, focus = null, settleOnMount = false, onS
 
     if (Math.abs(here.lat - focus.point.lat) < FOCUS_SAME_SPOT && Math.abs(here.lng - focus.point.lng) < FOCUS_SAME_SPOT) return;
 
+    // An address lookup for the spot the map is leaving must not land on the place being moved to.
+    window.clearTimeout(timer.current);
+    lookup.current?.abort();
     followingFocus.current = true;
     window.setTimeout(() => {
       followingFocus.current = false;
