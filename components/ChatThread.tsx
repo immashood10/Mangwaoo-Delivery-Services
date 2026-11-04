@@ -5,7 +5,6 @@ import { Send } from 'lucide-react';
 import { enableNotificationSound, playNotificationSound } from '@/lib/notification-sound';
 import { SUPPORT_NAME } from '@/lib/support-types';
 import { useChatTyping } from '@/lib/use-chat-typing';
-import InAppCall from '@/components/InAppCall';
 
 type Message = {
   id: string;
@@ -164,7 +163,6 @@ export default function ChatThread({
         <div ref={bottomRef} />
       </div>
 
-      <InAppCall kind="CONVERSATION" targetId={conversationId} />
       {error ? <p className="px-4 text-xs text-danger">{error}</p> : null}
 
       <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-gray-100 p-3">

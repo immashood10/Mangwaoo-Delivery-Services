@@ -9,12 +9,6 @@ const firebasePhone = process.env.PHONE_VERIFICATION_PROVIDER === "firebase";
 const recaptcha = firebasePhone ? " https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/" : "";
 const firebaseApis = firebasePhone ? " https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com" : "";
 const firebaseFrames = firebasePhone ? " https://www.google.com/recaptcha/ https://recaptcha.google.com" : "";
-let liveKitOrigin = "";
-try {
-  liveKitOrigin = process.env.LIVEKIT_URL ? ` ${new URL(process.env.LIVEKIT_URL).origin}` : "";
-} catch {
-  // An invalid LiveKit URL is reported by the call API; it adds no CSP source.
-}
 
 // The live tracking map's tiles (components/LiveMap.tsx) come from a tile server: OpenStreetMap's by default. This must name the
 // same server as lib/map-config.ts; NEXT_PUBLIC_MAP_TILE_URL switches both to another provider (placeholders {z} {x} {y}, no {s}).
@@ -35,7 +29,7 @@ const contentSecurityPolicy = [
   `img-src 'self' data: blob: ${mapTileOrigin} https://tiles.openfreemap.org https://*.googleapis.com https://*.gstatic.com https://*.google.com${firebasePhone ? " https://www.gstatic.com" : ""}`,
   "media-src 'self' data: blob:",
   "font-src 'self' data: https://fonts.gstatic.com",
-  `connect-src 'self' https://nominatim.openstreetmap.org https://tiles.openfreemap.org https://*.googleapis.com https://*.gstatic.com https://*.google.com${firebaseApis}${liveKitOrigin}`,
+  `connect-src 'self' https://nominatim.openstreetmap.org https://tiles.openfreemap.org https://*.googleapis.com https://*.gstatic.com https://*.google.com${firebaseApis}`,
   `frame-src https://maps.google.com https://www.google.com${firebaseFrames}`,
   "worker-src 'self' blob:",
   "object-src 'none'",
@@ -51,7 +45,7 @@ const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   // Only the features the site uses: the customer's/rider's location and the rider's voice notes.
-  { key: "Permissions-Policy", value: "geolocation=(self), microphone=(self), camera=(), payment=(), usb=(), bluetooth=(), serial=(), interest-cohort=()" },
+  { key: "Permissions-Policy", value: "geolocation=(self), microphone=(self), camera=(), payment=(), usb=(), bluetooth=(), serial=()" },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
   { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
   ...(isProduction

@@ -894,22 +894,6 @@ enum SenderRole {
   ADMIN
 }
 
-enum InAppCallStatus {
-  RINGING
-  ACTIVE
-  DECLINED
-  ENDED
-}
-
-enum CallRecordingStatus {
-  PENDING
-  STARTING
-  RECORDING
-  PROCESSING
-  READY
-  FAILED
-}
-
 enum JerseySize {
   XS
   S
@@ -951,34 +935,6 @@ enum JerseyLogoPlacement {
   RIGHT_SLEEVE
   UPPER_BACK
   LOWER_BACK
-}
-
-/// An in-app audio call between the two people in a seller conversation or assigned rider order chat.
-/// Each participant's consent is recorded before a room token can be issued; all media is recorded by LiveKit Egress.
-model InAppCall {
-  id                    String               @id @default(cuid())
-  kind                  String
-  targetId              String
-  roomName              String               @unique
-  callerUserId          String
-  receiverUserId        String
-  callerName            String
-  receiverName          String
-  callerConsentedAt     DateTime
-  receiverConsentedAt   DateTime?
-  status                InAppCallStatus      @default(RINGING)
-  recordingStatus       CallRecordingStatus  @default(PENDING)
-  egressId              String?              @unique
-  recordingObjectKey    String?
-  startedAt             DateTime?
-  disconnectedAt        DateTime?
-  endedAt               DateTime?
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
-
-  @@index([kind, targetId, status, createdAt])
-  @@index([callerUserId, status, createdAt])
-  @@index([receiverUserId, status, createdAt])
 }
 
 // A signed-in customer's cart. This is the cart of record (nothing is kept in the browser): it is loaded

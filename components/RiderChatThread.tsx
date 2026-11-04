@@ -16,7 +16,6 @@ import MapPinPicker from '@/components/MapPinPicker';
 import { compressImage } from '@/lib/client-image';
 import { enableNotificationSound, playNotificationSound } from '@/lib/notification-sound';
 import { useChatTyping } from '@/lib/use-chat-typing';
-import InAppCall from '@/components/InAppCall';
 
 // Used only if the live stream can't connect (e.g. a proxy that blocks SSE).
 const FALLBACK_POLL_MS = 3000;
@@ -595,7 +594,6 @@ export default function RiderChatThread({
         {typingPeople.length ? <p className="px-1 text-xs italic text-brand-gray">{typingPeople.map((person) => person.senderName).join(', ')} {typingPeople.length === 1 ? 'is' : 'are'} typing…</p> : null}
       </div>
 
-      {(currentRole === 'CUSTOMER' || currentRole === 'RIDER') && chatStatus === 'ACTIVE' ? <InAppCall kind="RIDER_CHAT" targetId={chatId} /> : null}
       {error ? <p className="px-4 pb-1 text-xs text-danger">{error}</p> : null}
 
       {isClosed ? (

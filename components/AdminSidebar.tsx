@@ -18,7 +18,6 @@ import {
   MessageCircle,
   MessagesSquare,
   PackageCheck,
-  PhoneCall,
   Bike,
   ShoppingBag,
   ShoppingCart,
@@ -57,7 +56,6 @@ const ADMIN_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
 const SUPER_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: '/admin/super', label: 'Super Overview', icon: Crown },
   { href: '/admin/area-managers', label: 'Area Managers', icon: UserCog },
-  { href: '/admin/call-recordings', label: 'Call Recordings', icon: PhoneCall },
 ];
 
 function isActive(pathname: string, href: string) {
