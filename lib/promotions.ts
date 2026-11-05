@@ -43,6 +43,7 @@ async function queryRunningAds(
       AND a."startsAt" <= ${DB_NOW}
       AND a."endsAt" > ${DB_NOW}
       AND p."isActive" = true
+      AND s."isApproved" = true
       AND p."stock" > 0
       AND (
         a."targetAgeMin" IS NULL OR (

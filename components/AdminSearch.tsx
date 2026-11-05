@@ -18,7 +18,15 @@ const ICONS = { page: LayoutDashboard, user: UserRound, order: PackageCheck };
  * name) or a page of the panel. Pages are matched here; people and orders are asked of /api/admin/search after a short pause.
  * Enter opens the first result, the arrow keys move, Escape closes.
  */
-export default function AdminSearch({ pages }: { pages: { href: string; label: string }[] }) {
+export default function AdminSearch({
+  pages,
+  onNavigate,
+  placeholder = 'Search people, orders, pages…',
+}: {
+  pages: { href: string; label: string }[];
+  onNavigate?: () => void;
+  placeholder?: string;
+}) {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [users, setUsers] = useState<UserHit[]>([]);
@@ -100,6 +108,7 @@ export default function AdminSearch({ pages }: { pages: { href: string; label: s
     setOpen(false);
     setQuery('');
     router.push(item.href);
+    onNavigate?.();
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -134,7 +143,7 @@ export default function AdminSearch({ pages }: { pages: { href: string; label: s
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
-        placeholder="Search people, orders, pages…"
+        placeholder={placeholder}
         aria-label="Search the admin panel"
         data-testid="admin-search"
         maxLength={80}

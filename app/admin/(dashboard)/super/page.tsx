@@ -161,6 +161,10 @@ export default async function SuperOverviewPage({ searchParams }: { searchParams
         <Kpi label="Total Products" value={data.totals.products.toLocaleString('en-IN')} icon={Package} change={data.growth.products} />
       </div>
 
+      <Link href="/admin/mart-sellers" className="mb-6 block rounded-2xl bg-surface p-4 font-semibold text-accent shadow-soft hover:shadow-md">
+        Review MangwaooMart seller applications →
+      </Link>
+
       <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[1fr_320px]">
         <div className="min-w-0 space-y-6">
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-[3fr_2fr]">

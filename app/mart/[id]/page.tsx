@@ -29,7 +29,7 @@ const CATEGORY_ICONS: Record<string, string> = Object.fromEntries(
 // generateMetadata and the page both need the ad; cache() shares one query between them.
 const getAd = cache((id: string) =>
   prisma.product.findFirst({
-    where: { id, isActive: true },
+    where: { id, isActive: true, seller: { isApproved: true, sellerType: 'MART', user: { deletedAt: null, isActive: true } } },
     include: { category: true, seller: true },
   })
 );

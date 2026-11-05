@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth';
 import { refreshFoodCatalog, refreshMartCatalog } from '@/lib/catalog-cache';
 import { notifyAfterResponse } from '@/lib/notify';
 import { SELLER_PAGES } from '@/lib/notification-types';
+import { isSuperAdminLogin } from '@/lib/super-admin';
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -14,12 +15,22 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const { id } = await params;
   const body = await request.json().catch(() => null);
-  const isApproved = typeof body?.isApproved === 'boolean' ? body.isApproved : true;
+  if (typeof body?.isApproved !== 'boolean') {
+    return NextResponse.json({ error: 'Choose whether to approve or revoke this seller.' }, { status: 400 });
+  }
+  const isApproved = body.isApproved;
 
   const seller = await prisma.seller.findUnique({ where: { id }, include: { user: { select: { phoneVerifiedAt: true, deletedAt: true } } } });
 
-  if (!seller || seller.user.deletedAt) {
+  if (!seller || seller.user.deletedAt || seller.isOfficial) {
     return NextResponse.json({ error: 'Seller not found.' }, { status: 404 });
+  }
+
+  if (seller.sellerType === 'MART') {
+    const admin = await prisma.user.findUnique({ where: { id: session.userId }, select: { email: true } });
+    if (!isSuperAdminLogin(admin?.email)) {
+      return NextResponse.json({ error: 'Only the super admin can approve MangwaooMart sellers.' }, { status: 403 });
+    }
   }
 
   // A seller can only be approved once their WhatsApp number was confirmed with a code.

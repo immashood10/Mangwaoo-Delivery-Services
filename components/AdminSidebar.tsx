@@ -30,6 +30,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import AdminSearch from '@/components/AdminSearch';
 import { NotificationBell, useSellerNotifications } from '@/components/seller/SellerNotifications';
 
 const ADMIN_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
@@ -56,6 +57,7 @@ const ADMIN_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
 const SUPER_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: '/admin/super', label: 'Super Overview', icon: Crown },
   { href: '/admin/area-managers', label: 'Area Managers', icon: UserCog },
+  { href: '/admin/mart-sellers', label: 'MangwaooMart Approvals', icon: Store },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -103,6 +105,10 @@ function SidebarContent({ adminName, isSuperAdmin, onNavigate }: { adminName: st
             <p className="font-bold leading-tight">Mangwaoo</p>
             <p className="text-xs text-white/60">Admin panel</p>
           </div>
+        </div>
+
+        <div className="mt-4">
+          <AdminSearch pages={adminPages(isSuperAdmin)} onNavigate={onNavigate} placeholder="Search admin…" />
         </div>
       </div>
 

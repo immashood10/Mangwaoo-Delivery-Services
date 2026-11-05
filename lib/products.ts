@@ -12,7 +12,7 @@ import { FOOD_CATALOG_TAG, MART_CATALOG_TAG } from '@/lib/catalog-cache';
 export const getMartProducts = unstable_cache(
   async () =>
     prisma.product.findMany({
-      where: { isActive: true },
+      where: { isActive: true, seller: { isApproved: true, sellerType: 'MART', user: { deletedAt: null, isActive: true } } },
       include: { category: true, seller: true },
       orderBy: { createdAt: 'desc' },
     }),

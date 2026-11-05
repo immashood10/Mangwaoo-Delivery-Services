@@ -23,7 +23,7 @@ const SELLER_TYPE_LABELS: Record<string, string> = {
   WHOLESALER: 'Food Business Owner',
 };
 
-export default function AdminSellerApprovals({ sellers }: { sellers: SellerRow[] }) {
+export default function AdminSellerApprovals({ sellers, marketplace = 'food' }: { sellers: SellerRow[]; marketplace?: 'food' | 'mart' }) {
   const router = useRouter();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -57,7 +57,7 @@ export default function AdminSellerApprovals({ sellers }: { sellers: SellerRow[]
   if (sellers.length === 0) {
     return (
       <p className="text-brand-gray text-sm">
-        No food business seller applications yet.
+        No {marketplace === 'mart' ? 'MangwaooMart vendor' : 'food business seller'} applications yet.
       </p>
     );
   }
@@ -83,14 +83,14 @@ export default function AdminSellerApprovals({ sellers }: { sellers: SellerRow[]
               <tr key={seller.id} className="border-b border-gray-50 last:border-0">
                 <td className="py-3 pr-4 font-semibold text-ink">
                   {seller.businessName}
-                  {seller.hasLocation ? null : (
+                  {marketplace === 'food' && !seller.hasLocation ? (
                     <span
                       title="Customers only see restaurants within 5 km of them, which needs the kitchen on the map. The seller sets it in Settings."
                       className="mt-1 block text-xs font-semibold text-warning"
                     >
                       No map location · hidden from customers
                     </span>
-                  )}
+                  ) : null}
                 </td>
                 <td className="py-3 pr-4 text-brand-gray">
                   {seller.ownerName}

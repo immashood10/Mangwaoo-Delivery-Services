@@ -137,7 +137,7 @@ async function resolveGroups(lines: CheckoutLine[]) {
   const [martProducts, foodProducts] = await Promise.all([
     martIds.length > 0
       ? prisma.product.findMany({
-          where: { id: { in: martIds }, isActive: true },
+          where: { id: { in: martIds }, isActive: true, seller: { isApproved: true, sellerType: 'MART', user: { deletedAt: null, isActive: true } } },
           select: { id: true, name: true, price: true, stock: true, sellerId: true, seller: { select: { businessName: true } } },
         })
       : [],

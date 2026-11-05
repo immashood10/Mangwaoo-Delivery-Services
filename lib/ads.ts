@@ -39,7 +39,7 @@ export function toAdCards(rows: AdRow[]): AdCardData[] {
 export async function getRelatedAds(productId: string, categoryId: string, limit = 8) {
   const rows = await prisma.$queryRaw<AdRow[]>`
     SELECT ${CARD_COLUMNS} ${CARD_JOINS}
-    WHERE p."isActive" = true AND p."categoryId" = ${categoryId} AND p."id" <> ${productId}
+    WHERE p."isActive" = true AND s."isApproved" = true AND p."categoryId" = ${categoryId} AND p."id" <> ${productId}
     ORDER BY p."createdAt" DESC
     LIMIT ${limit}`;
 
@@ -50,7 +50,7 @@ export async function getRelatedAds(productId: string, categoryId: string, limit
 export async function getSellerAds(sellerId: string) {
   const rows = await prisma.$queryRaw<AdRow[]>`
     SELECT ${CARD_COLUMNS} ${CARD_JOINS}
-    WHERE p."isActive" = true AND p."sellerId" = ${sellerId}
+    WHERE p."isActive" = true AND s."isApproved" = true AND p."sellerId" = ${sellerId}
     ORDER BY p."createdAt" DESC`;
 
   return toAdCards(rows);
@@ -61,7 +61,7 @@ export async function getLikedAds(userId: string) {
   const rows = await prisma.$queryRaw<AdRow[]>`
     SELECT ${CARD_COLUMNS} ${CARD_JOINS}
     JOIN "ProductLike" l ON l."productId" = p."id"
-    WHERE p."isActive" = true AND l."userId" = ${userId}
+    WHERE p."isActive" = true AND s."isApproved" = true AND l."userId" = ${userId}
     ORDER BY l."createdAt" DESC`;
 
   return toAdCards(rows);
@@ -70,7 +70,7 @@ export async function getLikedAds(userId: string) {
 export function getStore(sellerId: string) {
   // A store whose account an admin deleted has no public page any more.
   return prisma.seller.findFirst({
-    where: { id: sellerId, user: { deletedAt: null } },
+    where: { id: sellerId, isApproved: true, sellerType: 'MART', user: { deletedAt: null, isActive: true } },
     select: { id: true, businessName: true, city: true, country: true, createdAt: true },
   });
 }
