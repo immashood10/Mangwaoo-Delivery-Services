@@ -75,7 +75,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 longitude: true,
                 pickupLatitude: true,
                 pickupLongitude: true,
-                areaId: true,
+                areaId: true, managerOnly: true,
               },
             }),
             prisma.riderChatMessage.findMany({
@@ -107,7 +107,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           }
 
           // An order with an area manager is not offered to riders, so there is no "riders nearby" to count.
-          const isOpenToRiders = chat.status === 'OPEN' && chat.areaId === null;
+          const isOpenToRiders = chat.status === 'OPEN' && chat.areaId === null && !chat.managerOnly;
 
           if (isOpenToRiders && Date.now() - lastNearbyCheck > NEARBY_RIDERS_INTERVAL_MS) {
             nearbyRiderCount = ridersForLocation(chatDispatchPoint(chat), await getOnlineRiders()).length;

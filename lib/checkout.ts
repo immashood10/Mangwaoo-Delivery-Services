@@ -1,14 +1,16 @@
+import { deliveryPlan } from '@/lib/delivery-policy';
+import { areaForPoint } from '@/lib/area-managers-config';
 import type { Coupon, Prisma } from '@/lib/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
 import { billedDistanceKm, deliveryFeeForDistance, foodReach, qualifiesForFreeDelivery } from '@/lib/delivery';
 import { SERVICE_AREA_MESSAGE, isInServiceArea } from '@/lib/service-area';
-import { type Coordinates } from '@/lib/geo';
+import { distanceInKm, isRealLocation, type Coordinates } from '@/lib/geo';
 import { sendWhatsAppNotification } from '@/lib/whatsapp';
 import { refreshFoodCatalog, refreshMartCatalog } from '@/lib/catalog-cache';
 import { getSellerUserIds, notifyAdminsAfterResponse, notifyAfterResponse } from '@/lib/notify';
 import { orderRef, trackingPath } from '@/lib/order-number';
 import { ADMIN_PAGES, ASM_PAGES, SELLER_PAGES } from '@/lib/notification-types';
-import { managedAreaFor, notifyAreaManagers } from '@/lib/area-managers';
+import { areasWithManagers, notifyAreaManagers } from '@/lib/area-managers';
 import { normalizeCouponCode, type CouponScope } from '@/lib/coupons';
 import { MART_PRODUCTS } from '@/lib/data';
 import { readPortions } from '@/lib/food-portions';
@@ -57,6 +59,8 @@ type Group = {
   sellerId: string;
   sellerType: string;
   sellerName: string;
+  sellerCity: string;
+  deliveryDays: number;
   location: Coordinates | null;
   /** Food only: the restaurant's own free-delivery amount (PKR), null = none. */
   freeDeliveryMin: number | null;
@@ -138,7 +142,7 @@ async function resolveGroups(lines: CheckoutLine[]) {
     martIds.length > 0
       ? prisma.product.findMany({
           where: { id: { in: martIds }, isActive: true, seller: { isApproved: true, sellerType: 'MART', user: { deletedAt: null, isActive: true } } },
-          select: { id: true, name: true, price: true, stock: true, sellerId: true, seller: { select: { businessName: true } } },
+          select: { id: true, name: true, price: true, stock: true, sellerId: true, deliveryDays: true, seller: { select: { businessName: true, latitude: true, longitude: true, city: true } } },
         })
       : [],
     // Only approved food businesses are eligible — the same gate the public Food catalog uses, so a stale cart
@@ -151,9 +155,10 @@ async function resolveGroups(lines: CheckoutLine[]) {
             name: true,
             price: true,
             portions: true,
+            deliveryDays: true,
             stock: true,
             sellerId: true,
-            seller: { select: { businessName: true, latitude: true, longitude: true, sellerType: true, freeDeliveryMinOrder: true } },
+            seller: { select: { businessName: true, city: true, latitude: true, longitude: true, sellerType: true, freeDeliveryMinOrder: true } },
           },
         })
       : [],
@@ -191,7 +196,7 @@ async function resolveGroups(lines: CheckoutLine[]) {
     }
 
     const key = `${line.marketplace}:${product.sellerId}`;
-    const seller = product.seller as { businessName: string; latitude?: number | null; longitude?: number | null; sellerType?: string; freeDeliveryMinOrder?: number | null };
+    const seller = product.seller as { businessName: string; city?: string | null; latitude?: number | null; longitude?: number | null; sellerType?: string; freeDeliveryMinOrder?: number | null };
     const group =
       groups.get(key) ??
       ({
@@ -199,8 +204,10 @@ async function resolveGroups(lines: CheckoutLine[]) {
         sellerId: product.sellerId,
         sellerType: seller.sellerType ?? 'MART',
         sellerName: seller.businessName,
+        sellerCity: seller.city || 'Karachi',
+        deliveryDays: 0,
         location:
-          line.marketplace === 'gulplaza' && seller.latitude != null && seller.longitude != null
+          seller.latitude != null && seller.longitude != null
             ? { lat: seller.latitude, lng: seller.longitude }
             : null,
         freeDeliveryMin: line.marketplace === 'gulplaza' ? (seller.freeDeliveryMinOrder ?? null) : null,
@@ -208,6 +215,7 @@ async function resolveGroups(lines: CheckoutLine[]) {
         subtotal: 0,
       } satisfies Group);
 
+    group.deliveryDays = Math.max(group.deliveryDays, product.deliveryDays);
     group.lines.push({ productId: product.id, name: product.name, price, quantity: line.qty, stock: product.stock, portion });
     // Rounded to paisa so sums like 0.1 + 0.2 don't leave floating point dust in the stored amounts.
     group.subtotal = Math.round((group.subtotal + price * line.qty) * 100) / 100;
@@ -266,6 +274,7 @@ export async function priceCheckout(input: {
   dropoff: Coordinates | null;
   couponCode: string | null;
   customerId: string;
+  city?: string;
 }): Promise<Priced> {
   const { groups, staleLines } = await resolveGroups(input.lines);
   const samples = sampleOrders(input.lines, groups);
@@ -304,10 +313,10 @@ export async function priceCheckout(input: {
   }
 
   // A delivery location outside the area Mangwaoo serves (Karachi) can't be ordered to, whatever is in the cart.
-  const outsideServiceArea = input.dropoff !== null && !isInServiceArea(input.dropoff);
+  const outsideServiceArea = false; // Remote destinations use vendor shipping instead of rider dispatch.
 
   // The sample items come last, so `orders[i]` stays the order of `groups[i]` (placeOrders relies on that).
-  const orders: OrderQuote[] = groups.map((group, index) => {
+  const orders: OrderQuote[] = groups.map((group, index): OrderQuote => {
     const isFood = group.marketplace === 'gulplaza';
     const couponDiscount = shares.get(group) ?? 0;
     const loyaltyDiscount = loyaltyShares[index] ?? 0;
@@ -318,7 +327,9 @@ export async function priceCheckout(input: {
     let deliveryNote: OrderQuote['deliveryNote'] = null;
     let farAway = false;
 
-    if (isFood) {
+    const rawDistance = isRealLocation(input.dropoff) && isRealLocation(group.location) ? distanceInKm(group.location, input.dropoff) : null;
+    const plan = deliveryPlan({ days: group.deliveryDays, distanceKm: rawDistance, sameCity: group.sellerCity.trim().toLowerCase() === (input.city || 'Karachi').trim().toLowerCase() && !!input.dropoff && isInServiceArea(input.dropoff) && !!group.location && isInServiceArea(group.location) });
+    if (isFood && !plan.vendorFulfilled) {
       // The fee follows the distance unless this restaurant offers free delivery and the item subtotal qualifies. A restaurant
       // beyond FOOD_DELIVERY_RADIUS_KM is still orderable. Without both pins there is no distance, so no fee (placeOrders refuses).
       const reach = foodReach(input.dropoff, group.location);
@@ -335,6 +346,7 @@ export async function priceCheckout(input: {
     }
 
     return {
+      ...plan,
       marketplace: group.marketplace,
       sellerId: group.sellerId,
       sellerName: group.sellerName,
@@ -388,6 +400,7 @@ export type PlaceOrdersInput = {
   fullName: string;
   contactNumber: string;
   completeAddress: string;
+  city?: string;
   note: string;
   paymentMethod: 'CASH_ON_DELIVERY' | 'WALLET';
   dropoff: Coordinates | null;
@@ -395,7 +408,7 @@ export type PlaceOrdersInput = {
 };
 
 /** `ref` is the order number both the customer and the seller see, e.g. MW-F10001. */
-export type PlacedOrder = { id: string; ref: string; sellerId: string; marketplace: Marketplace };
+export type PlacedOrder = { id: string; ref: string; sellerId: string; marketplace: Marketplace; dispatchText: string };
 
 export type PlaceOrdersResult = { orders: PlacedOrder[]; quote: Quote };
 
@@ -456,6 +469,7 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
     dropoff: input.dropoff,
     couponCode: input.couponCode,
     customerId: input.customer.id,
+    city: input.city,
   });
 
   // A size that was taken off after the dish went into the cart: the customer chooses again before anything is placed.
@@ -490,6 +504,8 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
   // prices): the owner was already notified above, so this is still a normal success for the customer.
   if (groups.length === 0) return { orders: [], quote };
 
+  const coveredAreas = await areasWithManagers();
+  const groupAreas = groups.map(group => (input.dropoff ? areaForPoint(input.dropoff, coveredAreas) : null) ?? (group.location ? areaForPoint(group.location, coveredAreas) : null));
   let placed: PlacedOrder[];
 
   try {
@@ -525,7 +541,9 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
           userId: input.customer.userId,
           label: `${input.fullName} • ${input.contactNumber}`,
           street: input.completeAddress,
-          city: 'Karachi',
+          city: input.city || 'Karachi',
+          latitude: input.dropoff?.lat ?? null,
+          longitude: input.dropoff?.lng ?? null,
         },
       });
 
@@ -563,6 +581,10 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
         }
 
         const common = {
+          vendorFulfilled: orderQuote.vendorFulfilled ?? false,
+          deliveryMinDays: orderQuote.deliveryMinDays ?? 0,
+          deliveryMaxDays: orderQuote.deliveryMaxDays ?? 0,
+          areaId: groupAreas[index],
           customerId: input.customer.id,
           sellerId: group.sellerId,
           addressId: address.id,
@@ -599,7 +621,7 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
                 },
               });
 
-        created.push({ id: order.id, ref: orderRef(group.marketplace, order.orderNumber), sellerId: group.sellerId, marketplace: group.marketplace });
+        created.push({ id: order.id, ref: orderRef(group.marketplace, order.orderNumber), sellerId: group.sellerId, marketplace: group.marketplace, dispatchText: group.sellerName + ': ' + group.lines.map(line => line.quantity + ' x ' + line.name).join(', ') });
       }
 
       return created;
@@ -658,9 +680,9 @@ export async function placeOrders(input: PlaceOrdersInput): Promise<PlaceOrdersR
   }));
 
   // The Area Sales Manager of the customer's area handles these orders (accepts them, follows them to delivery): tell them.
-  const managedArea = input.dropoff ? await managedAreaFor(input.dropoff).catch(() => null) : null;
+  const managedAreas = [...new Set(groupAreas.filter((area): area is number => area !== null))];
 
-  if (managedArea !== null) {
+  for (const managedArea of managedAreas) {
     notifyAreaManagers(managedArea, {
       title: placed.length > 1 ? `${placed.length} new shop orders` : 'New shop order',
       message: `${placed.map((order) => order.ref).join(', ')} placed in your area. Accept ${placed.length > 1 ? 'them' : 'it'} and follow ${placed.length > 1 ? 'them' : 'it'} to delivery.`,

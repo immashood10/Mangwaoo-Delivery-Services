@@ -1,3 +1,4 @@
+import { validDeliveryDays } from '@/lib/delivery-policy';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { isRasterImageDataUrl } from '@/lib/data-url-image';
@@ -12,6 +13,8 @@ export async function POST(request: NextRequest) {
   const { seller } = owner;
 
   const body = await request.json().catch(() => null);
+  const deliveryDays = body?.deliveryDays ?? 0;
+  if (!validDeliveryDays(deliveryDays)) return NextResponse.json({ error: 'Choose Immediate, 3 days, 5 days or 7 days.' }, { status: 400 });
   const name = typeof body?.name === 'string' ? body.name.trim() : '';
   const description = typeof body?.description === 'string' ? body.description.trim() : '';
   const categoryId = typeof body?.categoryId === 'string' ? body.categoryId : '';
@@ -47,6 +50,7 @@ export async function POST(request: NextRequest) {
 
   const product = await prisma.product.create({
     data: {
+      deliveryDays,
       name,
       description: description || null,
       price,

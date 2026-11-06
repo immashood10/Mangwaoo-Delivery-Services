@@ -209,9 +209,10 @@ export default function OrdersList({
               </span>
             </div>
 
-            {!canUpdateStatus && STATUS_HINTS[order.status] ? <p className="mb-3 text-xs text-brand-gray">{STATUS_HINTS[order.status]}</p> : null}
+            {!(canUpdateStatus || order.vendorFulfilled) && STATUS_HINTS[order.status] ? <p className="mb-3 text-xs text-brand-gray">{STATUS_HINTS[order.status]}</p> : null}
 
-            {order.note ? (
+            <div>{order.vendorFulfilled && <div className="mb-3 rounded-xl bg-brand-light p-3 text-sm text-ink"><p className="font-semibold">Vendor delivery: {order.deliveryMinDays === order.deliveryMaxDays ? order.deliveryMaxDays : `${order.deliveryMinDays}-${order.deliveryMaxDays}`} days</p><p>{order.deliveryAddress}</p><p>{order.customerPhone}</p></div>}</div>
+              {order.note ? (
               <div className="mb-3 rounded-lg bg-yellow-50 px-3 py-2 text-xs text-warning">
                 <span className="font-semibold">Customer note: </span>
                 <span className="whitespace-pre-wrap break-words">{order.note}</span>
@@ -245,7 +246,7 @@ export default function OrdersList({
               <span className="font-bold text-accent">PKR {order.totalAmount.toLocaleString()}</span>
             </div>
 
-            {mode === 'incoming' && canUpdateStatus ? (
+            {mode === 'incoming' && (canUpdateStatus || order.vendorFulfilled) ? (
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 {next ? (
                   <button

@@ -10,6 +10,7 @@ export type Marketplace = 'MART' | 'GULPLAZA';
 export type SellerCategory = { id: string; name: string };
 
 export type SellerProduct = {
+  deliveryDays?: number;
   id: string;
   name: string;
   description: string | null;
@@ -40,6 +41,11 @@ export type SellerOrderItem = {
 };
 
 export type SellerOrder = {
+  vendorFulfilled?: boolean;
+  deliveryMinDays?: number;
+  deliveryMaxDays?: number;
+  deliveryAddress?: string | null;
+  customerPhone?: string | null;
   id: string;
   /** The order number the customer sees too, e.g. MW-F10001. */
   ref: string;

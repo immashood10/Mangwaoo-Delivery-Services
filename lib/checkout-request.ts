@@ -86,6 +86,7 @@ export function parseOrderDetails(body: Record<string, unknown> | null) {
   const fullName = typeof body?.fullName === 'string' ? body.fullName.trim() : '';
   const contactNumber = typeof body?.contactNumber === 'string' ? body.contactNumber.trim() : '';
   const completeAddress = typeof body?.completeAddress === 'string' ? body.completeAddress.trim() : '';
+  const city = typeof body?.city === 'string' ? body.city.trim().slice(0, 80) : 'Karachi';
   const note = typeof body?.note === 'string' ? body.note.trim().slice(0, MAX_ORDER_NOTE_LENGTH) : '';
   const paymentMethod =
     typeof body?.paymentMethod === 'string' && Object.hasOwn(PAYMENT_METHOD_MAP, body.paymentMethod)
@@ -94,7 +95,7 @@ export function parseOrderDetails(body: Record<string, unknown> | null) {
 
   if (!fullName || !contactNumber || !completeAddress || !paymentMethod) return null;
 
-  return { fullName, contactNumber, completeAddress, note, paymentMethod };
+  return { fullName, contactNumber, completeAddress, city: city || 'Karachi', note, paymentMethod };
 }
 
 /** The response for a problem the customer can fix (a bad coupon, an item that sold out). */

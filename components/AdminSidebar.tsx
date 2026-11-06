@@ -49,6 +49,7 @@ const ADMIN_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: '/admin/loyalty-cards', label: 'Loyalty Cards', icon: CreditCard },
   { href: '/admin/rider-reviews', label: 'Rider Reviews', icon: Star },
   { href: '/admin/ads', label: 'Ad Requests', icon: Megaphone },
+  { href: '/admin/reels', label: 'Food Reels', icon: CircleDashed },
   { href: '/admin/stories', label: 'Stories', icon: CircleDashed },
   { href: '/admin/discounts', label: 'Discount', icon: BadgePercent },
 ];

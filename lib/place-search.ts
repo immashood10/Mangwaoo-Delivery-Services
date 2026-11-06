@@ -18,9 +18,9 @@ type NominatimResult = { place_id?: number; display_name?: string; lat?: string;
  * Up to 5 places that match `query`, best first. Throws when the service can't be reached (a request that was aborted throws
  * an AbortError, which callers ignore); an empty list means nothing matched.
  */
-export async function searchPlaces(query: string, signal?: AbortSignal): Promise<PlaceResult[]> {
+export async function searchPlaces(query: string, signal?: AbortSignal, allowOutsideServiceArea = false): Promise<PlaceResult[]> {
   const response = await fetch(
-    `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&viewbox=${KARACHI_VIEWBOX}&bounded=1&q=${encodeURIComponent(query.trim())}`,
+    `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&viewbox=${KARACHI_VIEWBOX}&bounded=${allowOutsideServiceArea ? '0&countrycodes=pk' : '1'}&q=${encodeURIComponent(query.trim())}`,
     { signal, headers: { Accept: 'application/json' } }
   );
 

@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const since = request.nextUrl.searchParams.get('since');
   // Riders nearby only matter for an order riders can take; one with an area manager waits for the manager to pick a rider.
-  const isOpenToRiders = access.chat.status === 'OPEN' && access.chat.areaId === null;
+  const isOpenToRiders = access.chat.status === 'OPEN' && access.chat.areaId === null && !access.chat.managerOnly;
 
   const [messages, chat, onlineRiders] = await Promise.all([
     prisma.riderChatMessage.findMany({
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // this atomic, so if two riders reply at once only one of them gets the order.
   if (access.role === 'RIDER' && !access.chat.riderId) {
     const claimed = await prisma.riderChat.updateMany({
-      where: { id, status: 'OPEN', riderId: null },
+      where: { id, status: 'OPEN', riderId: null, areaId: null, managerOnly: false },
       data: { riderId: access.riderId, status: 'ACTIVE', claimedAt: new Date() },
     });
 

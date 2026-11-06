@@ -50,7 +50,7 @@ export function serializeRiderChat(chat: ChatWithPeople) {
     }),
     customerName: chat.customer.user.name,
     riderName: chat.rider?.user.name ?? null,
-    managed: chat.areaId !== null,
+    managed: chat.areaId !== null || chat.managerOnly,
     areaName: areaName(chat.areaId),
     createdAt: chat.createdAt.toISOString(),
     claimedAt: chat.claimedAt?.toISOString() ?? null,
@@ -168,6 +168,7 @@ const CHAT_ACCESS_SELECT = {
   pickupLatitude: true,
   pickupLongitude: true,
   areaId: true,
+  managerOnly: true,
 } as const;
 
 export type RiderChatCore = {
@@ -181,6 +182,7 @@ export type RiderChatCore = {
   pickupLongitude: number | null;
   /** The service area whose Area Sales Manager assigns the rider (null: the first rider to reply takes the order). */
   areaId: number | null;
+  managerOnly: boolean;
 };
 
 type ChatAccess =
@@ -306,7 +308,7 @@ export async function resolveRiderChatAccess(chatId: string): Promise<ChatAccess
     }
 
     // An order with an Area Sales Manager (areaId set) is not offered to riders: the manager picks one.
-    if (chat.status === 'OPEN' && !chat.riderId && chat.areaId === null) {
+    if (chat.status === 'OPEN' && !chat.riderId && chat.areaId === null && !chat.managerOnly) {
       const hold = riderHold(rider);
 
       if (hold) {

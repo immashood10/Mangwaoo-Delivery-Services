@@ -10,7 +10,6 @@ import {
   MAX_BAN_AMOUNT,
   MAX_BAN_REASON_LENGTH,
   banHeadline,
-  formatKarachiDate,
   formatKarachiDateTime,
   parseBanInput,
   unitName,
@@ -500,7 +499,7 @@ function UserCard({
             </div>
 
             <p className="mt-1 text-xs text-brand-gray">
-              Joined {formatKarachiDate(new Date(user.createdAt))}
+              Joined {formatKarachiDateTime(new Date(user.createdAt))} (Karachi time)
               {user.orderCount !== null ? ` · ${user.orderCount} ${user.orderCount === 1 ? 'order' : 'orders'}` : ''}
               {user.rider?.vehicleType ? ` · ${user.rider.vehicleType}` : ''}
             </p>

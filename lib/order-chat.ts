@@ -36,6 +36,7 @@ export async function startOrContinueOrderChat(input: {
    * for Chat-window requests and Shop Owner checkout orders). Only a new chat is routed; an already-live chat keeps its route.
    */
   viaManager?: boolean;
+  requireManager?: boolean;
 }) {
   const { customer, deliveryCharge } = input;
   const messageData = { senderRole: 'CUSTOMER' as const, senderName: customer.name, body: input.text };
@@ -49,23 +50,30 @@ export async function startOrContinueOrderChat(input: {
   const existing = await prisma.riderChat.findFirst({
     where: { customerId: customer.id, status: { in: ['OPEN', 'ACTIVE'] } },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, deliveryCharge: true, deliveryDistanceKm: true },
+    select: { id: true, deliveryCharge: true, deliveryDistanceKm: true, managerOnly: true, riderId: true, areaId: true },
   });
 
   if (existing) {
-    await Promise.all([
-      prisma.riderChatMessage.create({ data: { chatId: existing.id, ...messageData } }),
-      prisma.riderChat.update({
-        where: { id: existing.id },
-        data: {
-          updatedAt: new Date(),
-          ...(deliveryCharge !== null ? { deliveryCharge: (existing.deliveryCharge ?? 0) + deliveryCharge } : {}),
-          ...(distanceKm !== null && distanceKm > (existing.deliveryDistanceKm ?? -1) ? { deliveryDistanceKm: distanceKm } : {}),
-        },
-        select: { id: true },
-      }),
-    ]);
-
+    const areaId = input.requireManager && !existing.managerOnly ? await managedAreaFor({ lat: input.lat, lng: input.lng }) : undefined;
+    let notificationArea = existing.areaId;
+    await prisma.$transaction(async tx => {
+      const rows = await tx.$queryRaw<{ riderId: string | null; managerOnly: boolean; status: string; areaId: number | null }[]>`SELECT "riderId", "managerOnly", "status", "areaId" FROM "RiderChat" WHERE id = ${existing.id} FOR UPDATE`;
+      if (!rows[0]) throw new Error('The current chat was removed. Please try again.');
+      if (!['OPEN', 'ACTIVE'].includes(rows[0].status)) throw new Error('That chat has finished. Please send your order again.');
+      if (input.requireManager && !rows[0].managerOnly && rows[0].riderId) throw new Error('Please finish your current delivery before sending a new order to your area team.');
+      notificationArea = areaId !== undefined ? areaId : rows[0].areaId;
+      await tx.riderChatMessage.create({ data: { chatId: existing.id, ...messageData } });
+      await tx.riderChat.update({ where: { id: existing.id }, data: {
+        updatedAt: new Date(),
+        ...(input.requireManager ? { managerOnly: true, ...(areaId !== undefined ? { areaId } : {}) } : {}),
+        ...(deliveryCharge !== null ? { deliveryCharge: { increment: deliveryCharge } } : {}),
+        ...(distanceKm !== null && distanceKm > (existing.deliveryDistanceKm ?? -1) ? { deliveryDistanceKm: distanceKm } : {}),
+      } });
+    });
+    if (input.requireManager) {
+      notifyAdminsAfterResponse(async () => ({ type: 'ORDER', title: 'New order in customer chat', message: input.text.slice(0, 180), href: ADMIN_PAGES.chats, refId: 'chat:' + existing.id }));
+      if (notificationArea != null) notifyAreaManagers(notificationArea, { title: 'New order in customer chat', message: input.text.slice(0, 180), refId: 'asm-chat:' + existing.id });
+    }
     return { chat: await getRiderChatSummary(existing.id), created: false };
   }
 
@@ -73,7 +81,7 @@ export async function startOrContinueOrderChat(input: {
   // A customer with an active monthly rider (who can take an order right now) skips the manager and the waiting: the chat
   // starts ACTIVE with that rider. Otherwise the manager of the customer's area (if there is one) is found first: that is the
   // chat's `areaId`.
-  const dedicated = await dedicatedRiderFor(customer.id);
+  const dedicated = input.requireManager ? null : await dedicatedRiderFor(customer.id);
   const areaId = !dedicated && input.viaManager ? await managedAreaFor({ lat: input.lat, lng: input.lng }) : null;
   const chat = await prisma.riderChat.create({
     data: {
@@ -87,6 +95,7 @@ export async function startOrContinueOrderChat(input: {
       deliveryCharge,
       deliveryDistanceKm: distanceKm,
       areaId,
+      managerOnly: input.requireManager === true,
       ...(dedicated ? { riderId: dedicated.riderId, status: 'ACTIVE' as const, claimedAt: new Date() } : {}),
     },
   });

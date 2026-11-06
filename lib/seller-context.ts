@@ -29,8 +29,6 @@ export async function requireSeller() {
 export async function requireSellerOrderAccess() {
   const seller = await requireSeller();
 
-  if (isShopOwner(seller)) redirect('/seller/products');
-
   return seller;
 }
 

@@ -37,23 +37,27 @@ model User {
   /// Sessions issued before this moment no longer work (set when the password is changed or reset), so a stolen
   /// login cookie stops working the moment the real owner changes the password.
   sessionsValidFrom DateTime?
+  reels             Reel[]        @relation("ReelAuthor")
+  reviewedReels     Reel[]        @relation("ReelModerator")
+  reelLikes         ReelLike[]
+  reelComments      ReelComment[]
 
-  customer            Customer?
-  seller              Seller?
-  rider               Rider?
-  wallet              Wallet?
-  addresses           Address[]
-  notifications       Notification[]
-  passwordResetTokens PasswordResetToken[]
-  productLikes        ProductLike[]
-  favourites          Favourite[]
-  phoneVerification   PhoneVerification?
-  bans                UserBan[]
-  supportThread       SupportThread?
-  pushSubscriptions   PushSubscription[]
-  areaManager         AreaManager?
-  asmStartedRiderThreads AreaManagerRiderThread[] @relation("AsmManagerThreads")
-  riderAsmThreads        AreaManagerRiderThread[] @relation("AsmRiderThreads")
+  customer               Customer?
+  seller                 Seller?
+  rider                  Rider?
+  wallet                 Wallet?
+  addresses              Address[]
+  notifications          Notification[]
+  passwordResetTokens    PasswordResetToken[]
+  productLikes           ProductLike[]
+  favourites             Favourite[]
+  phoneVerification      PhoneVerification?
+  bans                   UserBan[]
+  supportThread          SupportThread?
+  pushSubscriptions      PushSubscription[]
+  areaManager            AreaManager?
+  asmStartedRiderThreads AreaManagerRiderThread[]  @relation("AsmManagerThreads")
+  riderAsmThreads        AreaManagerRiderThread[]  @relation("AsmRiderThreads")
   asmRiderMessages       AreaManagerRiderMessage[] @relation("AsmRiderMessageSender")
 }
 
@@ -72,13 +76,13 @@ model AreaManager {
 
 /// A private conversation between one area manager and one rider. It is separate from Mangwaoo Support and order chats.
 model AreaManagerRiderThread {
-  id            String   @id @default(cuid())
+  id            String                    @id @default(cuid())
   managerUserId String
-  manager       User     @relation("AsmManagerThreads", fields: [managerUserId], references: [id], onDelete: Cascade)
+  manager       User                      @relation("AsmManagerThreads", fields: [managerUserId], references: [id], onDelete: Cascade)
   riderUserId   String
-  rider         User     @relation("AsmRiderThreads", fields: [riderUserId], references: [id], onDelete: Cascade)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @default(now())
+  rider         User                      @relation("AsmRiderThreads", fields: [riderUserId], references: [id], onDelete: Cascade)
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @default(now())
   messages      AreaManagerRiderMessage[]
 
   @@unique([managerUserId, riderUserId])
@@ -86,14 +90,14 @@ model AreaManagerRiderThread {
 }
 
 model AreaManagerRiderMessage {
-  id             String   @id @default(cuid())
-  threadId       String
-  thread         AreaManagerRiderThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  senderUserId   String
-  sender         User     @relation("AsmRiderMessageSender", fields: [senderUserId], references: [id], onDelete: Cascade)
-  body           String
-  isRead         Boolean  @default(false)
-  createdAt      DateTime @default(now())
+  id           String                 @id @default(cuid())
+  threadId     String
+  thread       AreaManagerRiderThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  senderUserId String
+  sender       User                   @relation("AsmRiderMessageSender", fields: [senderUserId], references: [id], onDelete: Cascade)
+  body         String
+  isRead       Boolean                @default(false)
+  createdAt    DateTime               @default(now())
 
   @@index([threadId, createdAt])
 }
@@ -224,19 +228,19 @@ model Customer {
   createdAt DateTime @default(now())
 
   /// Delivery form values from the customer's last successful checkout, loaded from the server for their next checkout.
-  deliveryFullName    String?
+  deliveryFullName      String?
   deliveryContactNumber String?
-  deliveryAddress     String?
+  deliveryAddress       String?
   /// Optional self-reported profile data; used only for aggregate adult audience reports and paid-ad matching.
-  dateOfBirth         DateTime? @db.Date
-  gender              CustomerGender?
+  dateOfBirth           DateTime?       @db.Date
+  gender                CustomerGender?
 
-  orders         Order[]
-  gulplazaOrders GulplazaOrder[]
-  reviews        Review[]
-  conversations  Conversation[]
-  cartItems      CartItem[]
-  riderChats     RiderChat[]
+  orders            Order[]
+  gulplazaOrders    GulplazaOrder[]
+  reviews           Review[]
+  conversations     Conversation[]
+  cartItems         CartItem[]
+  riderChats        RiderChat[]
   couponRedemptions CouponRedemption[]
   riderOrderRecords RiderOrderRecord[]
 
@@ -334,32 +338,32 @@ model Rider {
 
   // Latest GPS fix sent from the rider dashboard while online — used to
   // dispatch new order chats to the nearest riders.
-  lastLatitude  Float?
-  lastLongitude Float?
-  lastSeenAt    DateTime?
+  lastLatitude      Float?
+  lastLongitude     Float?
+  lastSeenAt        DateTime?
   /// When lastLatitude / lastLongitude were last written: by the online heartbeat, or by the location ping a rider sends while
   /// delivering an order (also when they switched themselves offline). The customer's live tracking shows how fresh it is.
   locationUpdatedAt DateTime?
 
-  orders            Order[]
-  locations         RiderLocation[]
-  deliveryTrackings DeliveryTracking[]
-  riderChats        RiderChat[]
+  orders               Order[]
+  locations            RiderLocation[]
+  deliveryTrackings    DeliveryTracking[]
+  riderChats           RiderChat[]
   monthlyRiderBookings MonthlyRiderBooking[]
-  documents         RiderDocument[]
+  documents            RiderDocument[]
 
   // ── Wallet: Mangwaoo's commission on every finished order (see lib/rider-wallet.ts) ──
   /// The sum of the ledger in PKR: negative = the rider owes Mangwaoo. Kept in step with the ledger in the same
   /// transaction that changes it.
-  walletBalance Int              @default(0)
+  walletBalance     Int              @default(0)
   /// Finished orders whose commission is not covered by payments yet (oldest are covered first).
-  unpaidOrders  Int              @default(0)
+  unpaidOrders      Int              @default(0)
   /// Set when unpaid orders reached the limit; cleared once the rider has paid up (balance back to 0 or more).
-  paymentHold   Boolean          @default(false)
+  paymentHold       Boolean          @default(false)
   /// An admin's decision on whether the rider may receive the next order (AUTO = the wallet rule decides).
-  orderAccess   RiderOrderAccess @default(AUTO)
+  orderAccess       RiderOrderAccess @default(AUTO)
   /// Consecutive rider-initiated cancellations since their last successfully completed delivery (capped at 3).
-  riderCancelStreak Int           @default(0)
+  riderCancelStreak Int              @default(0)
 
   ledger RiderLedgerEntry[]
   topUps RiderTopUp[]
@@ -392,24 +396,24 @@ enum RiderTopUpStatus {
 
 /// One line of a rider's wallet. `amount` is in PKR from the rider's side: a top-up/bonus is positive, commission/fine negative.
 model RiderLedgerEntry {
-  id         String          @id @default(cuid())
-  riderId    String
-  rider      Rider           @relation(fields: [riderId], references: [id], onDelete: Cascade)
-  type       RiderLedgerType
-  amount     Int
+  id          String          @id @default(cuid())
+  riderId     String
+  rider       Rider           @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  type        RiderLedgerType
+  amount      Int
   /// COMMISSION: the delivery charge the commission was taken from.
-  baseAmount Int?
+  baseAmount  Int?
   /// COMMISSION: the order chat it belongs to. A plain id, not a relation, so deleting a chat keeps the money record;
   /// unique = one commission per order, however many times it is closed.
-  chatId     String?         @unique
+  chatId      String?         @unique
   /// TOP_UP made from a rider's recharge request.
-  topUpId    String?         @unique
+  topUpId     String?         @unique
   /// BONUS: the order chat the bonus was paid for. A plain id like `chatId`; unique = one bonus per order.
-  bonusChatId String?        @unique
+  bonusChatId String?         @unique
   /// FINE: the next completed order where a pending rider-cancellation fine was applied.
-  fineChatId   String?        @unique
-  note       String?
-  createdAt  DateTime        @default(now())
+  fineChatId  String?         @unique
+  note        String?
+  createdAt   DateTime        @default(now())
 
   @@index([riderId, createdAt])
 }
@@ -524,10 +528,12 @@ model Product {
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
 
-  orderItems OrderItem[]
-  reviews    Review[]
-  likes      ProductLike[]
-  ads        ProductAd[]
+  orderItems   OrderItem[]
+  reviews      Review[]
+  likes        ProductLike[]
+  ads          ProductAd[]
+  /// 0 = immediate; otherwise vendor dispatch in 3, 5 or 7 days.
+  deliveryDays Int           @default(0)
 }
 
 enum AdPlacement {
@@ -549,9 +555,9 @@ enum AdStatus {
 
 /// A seller paying to feature one of their products for a week (see lib/ad-config.ts).
 model ProductAd {
-  id              String      @id @default(cuid())
+  id              String          @id @default(cuid())
   placement       AdPlacement
-  status          AdStatus    @default(PENDING)
+  status          AdStatus        @default(PENDING)
   // PKR charged, fixed at the time of the request
   amount          Int
   // The seller's EasyPaisa / JazzCash transaction id, checked by an admin
@@ -568,7 +574,7 @@ model ProductAd {
   // Set when an admin deletes an ended or declined request from the Ad Requests list. The row stays,
   // so a transaction id that was paid for can't be used for another ad.
   deletedAt       DateTime?
-  createdAt       DateTime    @default(now())
+  createdAt       DateTime        @default(now())
 
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -619,55 +625,61 @@ model Favourite {
 // ── Ordering ────────────────────────────────────────────────
 
 model Order {
-  id           String      @id @default(cuid())
+  id               String      @id @default(cuid())
   /// The number customers and sellers see (MW-M10001); starts at 10001, never reused.
-  orderNumber  Int         @unique @default(autoincrement())
-  status       OrderStatus @default(PENDING)
+  orderNumber      Int         @unique @default(autoincrement())
+  status           OrderStatus @default(PENDING)
   /// The items only (what the seller earns). The customer pays this minus `discountAmount`; MangwaooMart orders have no delivery fee.
-  totalAmount  Decimal
+  totalAmount      Decimal
   /// Taken off by the coupon and the Loyalty Card together (paid by Mangwaoo, not the seller); `loyaltyDiscount` is the card's part
-  discountAmount Decimal   @default(0)
+  discountAmount   Decimal     @default(0)
   // Optional message from the customer to the vendor, entered at checkout
-  note         String?
+  note             String?
   // The seller removed this finished order from their dashboard (the customer's history is untouched)
-  sellerHidden Boolean     @default(false)
+  sellerHidden     Boolean     @default(false)
   // When the seller marked it delivered; "products sold" in the seller's stats counts from here
-  deliveredAt  DateTime?
+  deliveredAt      DateTime?
   // When the order reached each of the other steps (the live tracking page's timeline, lib/order-tracking.ts); null = not
   // reached, or reached before tracking existed
   confirmedAt      DateTime?
   preparingAt      DateTime?
   outForDeliveryAt DateTime?
   cancelledAt      DateTime?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id])
-  sellerId   String
-  seller     Seller   @relation(fields: [sellerId], references: [id])
-  riderId    String?
-  rider      Rider?   @relation(fields: [riderId], references: [id])
-  addressId  String
-  address    Address  @relation(fields: [addressId], references: [id])
-  couponId   String?
-  coupon     Coupon?  @relation(fields: [couponId], references: [id])
-  redemptionId String?
-  redemption CouponRedemption? @relation(fields: [redemptionId], references: [id])
+  customerId          String
+  customer            Customer           @relation(fields: [customerId], references: [id])
+  sellerId            String
+  seller              Seller             @relation(fields: [sellerId], references: [id])
+  riderId             String?
+  rider               Rider?             @relation(fields: [riderId], references: [id])
+  addressId           String
+  address             Address            @relation(fields: [addressId], references: [id])
+  couponId            String?
+  coupon              Coupon?            @relation(fields: [couponId], references: [id])
+  redemptionId        String?
+  redemption          CouponRedemption?  @relation(fields: [redemptionId], references: [id])
   /// The Loyalty Card discount of this order: its share in PKR (part of `discountAmount`), the % the card drew, and the
   /// checkout it belongs to (so it can be given back when every order of that checkout is cancelled).
   loyaltyDiscount     Decimal            @default(0)
   loyaltyPercent      Int?
   loyaltyRedemptionId String?
   loyaltyRedemption   LoyaltyRedemption? @relation(fields: [loyaltyRedemptionId], references: [id], onDelete: SetNull)
-  riderChatId String?
-  riderChat RiderChat? @relation("RiderChatMartOrders", fields: [riderChatId], references: [id], onDelete: SetNull)
+  riderChatId         String?
+  riderChat           RiderChat?         @relation("RiderChatMartOrders", fields: [riderChatId], references: [id], onDelete: SetNull)
 
-  items    OrderItem[]
-  payment  Payment?
-  tracking DeliveryTracking?
+  items           OrderItem[]
+  payment         Payment?
+  tracking        DeliveryTracking?
+  /// Checkout snapshot: product edits do not change an existing order's promise.
+  vendorFulfilled Boolean           @default(false)
+  deliveryMinDays Int               @default(0)
+  deliveryMaxDays Int               @default(0)
+  areaId          Int?
 
   @@index([riderChatId])
+  @@index([areaId, createdAt])
 }
 
 enum OrderStatus {
@@ -722,14 +734,14 @@ model Message {
 
 /// Short-lived typing state for an authorized chat participant (rows expire after a few seconds).
 model ChatTypingIndicator {
-  id          String   @id @default(cuid())
-  kind        String
-  targetId    String
-  userId      String
-  senderRole  String
-  senderName  String
-  expiresAt   DateTime
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  kind       String
+  targetId   String
+  userId     String
+  senderRole String
+  senderName String
+  expiresAt  DateTime
+  updatedAt  DateTime @updatedAt
 
   @@unique([kind, targetId, userId])
   @@index([kind, targetId, expiresAt])
@@ -738,42 +750,44 @@ model ChatTypingIndicator {
 // ── Order chat: customer ↔ nearest rider (admin can join) ──
 
 model RiderChat {
-  id              String          @id @default(cuid())
-  customerId      String
-  customer        Customer        @relation(fields: [customerId], references: [id])
+  id                 String          @id @default(cuid())
+  customerId         String
+  customer           Customer        @relation(fields: [customerId], references: [id])
   // null while OPEN; set to the first nearby rider who replies
-  riderId         String?
-  rider           Rider?          @relation(fields: [riderId], references: [id])
+  riderId            String?
+  rider              Rider?          @relation(fields: [riderId], references: [id])
   // Drop-off (delivery) location
-  latitude        Float
-  longitude       Float
-  addressText     String
+  latitude           Float
+  longitude          Float
+  addressText        String
   // Pickup location (where the rider collects the order). Null on chats
   // created before pickup was asked for; riders are dispatched by this point.
-  pickupLatitude  Float?
-  pickupLongitude Float?
-  pickupText      String?
+  pickupLatitude     Float?
+  pickupLongitude    Float?
+  pickupText         String?
   // The delivery charge of the checkout(s) that opened this chat, in whole PKR, worked out by the server (the food
   // delivery fees). null = the chat did not come from a checkout: its charge is then the delivery rate for the ride
   // from the pickup to the drop-off (minimumFeeForChat). Mangwaoo's commission is a percentage of this.
-  deliveryCharge  Int?
+  deliveryCharge     Int?
   // How far the ride is, in km (judged to 0.1 km): the longest restaurant → customer distance of the checkout(s) that opened
   // the chat, or the pickup → drop-off distance of a chat with a pickup point. null = not known (MangwaooMart only, older chats).
   // The tier of the rider's delivery bonus follows it.
   deliveryDistanceKm Float?
-  status          RiderChatStatus @default(OPEN)
-  claimedAt       DateTime?
+  status             RiderChatStatus @default(OPEN)
+  claimedAt          DateTime?
   // The service area (SERVICE_AREAS id) whose Area Sales Manager assigns the rider of this order: set for a chat the customer
   // started with the Chat button while that area had a manager. While OPEN, riders do not see such a chat; the manager picks
   // one. null = the first rider to reply takes it (checkout orders, and areas without a manager).
-  areaId          Int?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  areaId             Int?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 
   messages    RiderChatMessage[]
   attachments RiderChatAttachment[]
-  martOrders  Order[] @relation("RiderChatMartOrders")
-  foodOrders  GulplazaOrder[] @relation("RiderChatFoodOrders")
+  martOrders  Order[]               @relation("RiderChatMartOrders")
+  foodOrders  GulplazaOrder[]       @relation("RiderChatFoodOrders")
+  /// Only staff may dispatch this chat, even when no area manager is available.
+  managerOnly Boolean               @default(false)
 
   @@index([status])
   @@index([areaId, status])
@@ -1047,21 +1061,21 @@ model GulplazaCategory {
 }
 
 model GulplazaProduct {
-  id          String   @id @default(cuid())
+  id          String          @id @default(cuid())
   name        String
   description String?
   price       Decimal
-  stock       Int      @default(0)
-  images      String[] @default([])
+  stock       Int             @default(0)
+  images      String[]        @default([])
   /// A dish sold by weight: the sizes on offer with a price each, e.g. [{"grams":250,"price":300},{"grams":1000,"price":1000}]
   /// (read and checked through lib/food-portions.ts). Null = a dish with one price. `price` then holds the lowest size's
   /// price, so every list can say "From PKR ...".
   portions    Json?
   /// Optional food metadata used by the customer menu search and recommendations. Unknown existing dishes stay unclassified.
-  spiceLevel FoodSpiceLevel?
-  dishTags   String[] @default([])
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  spiceLevel  FoodSpiceLevel?
+  dishTags    String[]        @default([])
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
   /// The picture (an emoji from lib/food-icons.ts FOOD_ICON_CHOICES) the seller chose for the dish; null = automatic, picked
   /// from the dish's name. Shown to customers where the dish has no photo.
   icon        String?
@@ -1071,7 +1085,11 @@ model GulplazaProduct {
   categoryId String
   category   GulplazaCategory @relation(fields: [categoryId], references: [id])
 
-  orderItems GulplazaOrderItem[]
+  orderItems   GulplazaOrderItem[]
+  /// 0 = immediate; otherwise vendor dispatch in 3, 5 or 7 days.
+  deliveryDays Int                 @default(0)
+
+  reels Reel[]
 }
 
 enum FoodSpiceLevel {
@@ -1081,64 +1099,70 @@ enum FoodSpiceLevel {
 }
 
 model GulplazaOrder {
-  id           String      @id @default(cuid())
+  id                        String      @id @default(cuid())
   /// The number customers and sellers see (MW-F10001); starts at 10001, never reused.
-  orderNumber  Int         @unique @default(autoincrement())
-  status       OrderStatus @default(PENDING)
+  orderNumber               Int         @unique @default(autoincrement())
+  status                    OrderStatus @default(PENDING)
   /// The dishes only before Mangwaoo's platform fee. The customer pays this minus `discountAmount` plus `deliveryFee`.
-  totalAmount  Decimal
+  totalAmount               Decimal
   /// Mangwaoo's 10% food-platform fee, rounded up to whole PKR and assessed only on delivery (not deliveryFee).
-  platformCommissionAmount Int       @default(0)
-  platformCommissionPercent Int      @default(0)
+  platformCommissionAmount  Int         @default(0)
+  platformCommissionPercent Int         @default(0)
   /// Fuel cost of the ride from the restaurant to the customer (see lib/delivery.ts), paid to the rider
-  deliveryFee  Decimal     @default(0)
+  deliveryFee               Decimal     @default(0)
   /// Taken off by the coupon and the Loyalty Card together (paid by Mangwaoo, not the seller); `loyaltyDiscount` is the card's part
-  discountAmount Decimal   @default(0)
+  discountAmount            Decimal     @default(0)
   // Optional message from the customer to the vendor, entered at checkout
-  note         String?
+  note                      String?
   // The seller removed this finished order from their dashboard (the customer's history is untouched)
-  sellerHidden Boolean     @default(false)
+  sellerHidden              Boolean     @default(false)
   // When the seller marked it delivered; "products sold" in the seller's stats counts from here
-  deliveredAt  DateTime?
+  deliveredAt               DateTime?
   // When the order reached each of the other steps (the live tracking page's timeline, lib/order-tracking.ts); null = not
   // reached, or reached before tracking existed
-  confirmedAt      DateTime?
-  preparingAt      DateTime?
-  outForDeliveryAt DateTime?
-  cancelledAt      DateTime?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  confirmedAt               DateTime?
+  preparingAt               DateTime?
+  outForDeliveryAt          DateTime?
+  cancelledAt               DateTime?
+  createdAt                 DateTime    @default(now())
+  updatedAt                 DateTime    @updatedAt
 
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id])
-  sellerId   String
-  seller     Seller   @relation(fields: [sellerId], references: [id])
-  addressId  String
-  address    Address  @relation(fields: [addressId], references: [id])
-  couponId   String?
-  coupon     Coupon?  @relation(fields: [couponId], references: [id])
-  redemptionId String?
-  redemption CouponRedemption? @relation(fields: [redemptionId], references: [id])
+  customerId          String
+  customer            Customer           @relation(fields: [customerId], references: [id])
+  sellerId            String
+  seller              Seller             @relation(fields: [sellerId], references: [id])
+  addressId           String
+  address             Address            @relation(fields: [addressId], references: [id])
+  couponId            String?
+  coupon              Coupon?            @relation(fields: [couponId], references: [id])
+  redemptionId        String?
+  redemption          CouponRedemption?  @relation(fields: [redemptionId], references: [id])
   /// The Loyalty Card discount of this order: its share in PKR (part of `discountAmount`), the % the card drew, and the
   /// checkout it belongs to (so it can be given back when every order of that checkout is cancelled).
   loyaltyDiscount     Decimal            @default(0)
   loyaltyPercent      Int?
   loyaltyRedemptionId String?
   loyaltyRedemption   LoyaltyRedemption? @relation(fields: [loyaltyRedemptionId], references: [id], onDelete: SetNull)
-  riderChatId String?
-  riderChat RiderChat? @relation("RiderChatFoodOrders", fields: [riderChatId], references: [id], onDelete: SetNull)
+  riderChatId         String?
+  riderChat           RiderChat?         @relation("RiderChatFoodOrders", fields: [riderChatId], references: [id], onDelete: SetNull)
 
-  items   GulplazaOrderItem[]
-  payment GulplazaPayment?
+  items           GulplazaOrderItem[]
+  payment         GulplazaPayment?
+  /// Checkout snapshot: product edits do not change an existing order's promise.
+  vendorFulfilled Boolean             @default(false)
+  deliveryMinDays Int                 @default(0)
+  deliveryMaxDays Int                 @default(0)
+  areaId          Int?
 
   @@index([riderChatId])
+  @@index([areaId, createdAt])
 }
 
 model GulplazaOrderItem {
-  id       String  @id @default(cuid())
-  quantity Int
+  id           String  @id @default(cuid())
+  quantity     Int
   /// The price of one (of the size ordered, for a dish sold by weight)
-  price    Decimal
+  price        Decimal
   /// A dish sold by weight: the size ordered, in grams. Null = a dish with one price.
   portionGrams Int?
 
@@ -1500,8 +1524,8 @@ model LoyaltySettings {
 /// A customer jersey mockup and order enquiry. The generated fabric swatch and sponsor files stay private in Postgres;
 /// only the admin dashboard reads submitted contact details and the public form can update an unguessable draft.
 model JerseyDesign {
-  id             String             @id @default(cuid())
-  status         JerseyDesignStatus @default(DRAFT)
+  id             String              @id @default(cuid())
+  status         JerseyDesignStatus  @default(DRAFT)
   customerName   String
   phone          String
   playerName     String
@@ -1515,10 +1539,10 @@ model JerseyDesign {
   sleeve         JerseySleeve
   baseImage      Bytes
   baseImageType  String
-  generatedAt    DateTime           @default(now())
+  generatedAt    DateTime            @default(now())
   submittedAt    DateTime?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
   logos          JerseySponsorLogo[]
 
   @@index([status, createdAt])
@@ -1675,4 +1699,68 @@ model MonthlyRiderBooking {
   @@index([areaId, status])
   @@index([riderId, status])
   @@index([customerId, createdAt])
+}
+
+enum ReelStatus {
+  PENDING
+  APPROVED
+  DECLINED
+}
+
+model Reel {
+  id              String           @id @default(cuid())
+  authorId        String
+  author          User             @relation("ReelAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  caption         String
+  status          ReelStatus       @default(PENDING)
+  linkedProductId String?
+  linkedProduct   GulplazaProduct? @relation(fields: [linkedProductId], references: [id], onDelete: SetNull)
+  reviewedById    String?
+  reviewedBy      User?            @relation("ReelModerator", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt      DateTime?
+  declineReason   String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  video           ReelVideo?
+  likes           ReelLike[]
+  comments        ReelComment[]
+
+  @@index([status, createdAt, id])
+  @@index([authorId, createdAt])
+  @@index([linkedProductId])
+  @@index([reviewedById])
+}
+
+/// Bytes stay out of metadata/feed queries, like SellerCover.
+model ReelVideo {
+  id       String @id @default(cuid())
+  reelId   String @unique
+  reel     Reel   @relation(fields: [reelId], references: [id], onDelete: Cascade)
+  mimeType String
+  size     Int
+  data     Bytes
+}
+
+model ReelLike {
+  reelId    String
+  reel      Reel     @relation(fields: [reelId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([reelId, userId])
+  @@index([userId])
+}
+
+model ReelComment {
+  id        String   @id @default(cuid())
+  reelId    String
+  reel      Reel     @relation(fields: [reelId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([reelId, createdAt])
+  @@index([userId])
 }

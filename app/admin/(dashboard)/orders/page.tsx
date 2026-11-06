@@ -46,6 +46,9 @@ type OrderRow = {
   kind: 'MART' | 'GULPLAZA';
   createdAt: Date;
   status: string;
+  vendorFulfilled: boolean;
+  deliveryMinDays: number;
+  deliveryMaxDays: number;
   seller: string;
   customer: string;
   itemCount: number;
@@ -93,6 +96,9 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
       kind: 'MART' as const,
       createdAt: order.createdAt,
       status: order.status,
+      vendorFulfilled: order.vendorFulfilled,
+      deliveryMinDays: order.deliveryMinDays,
+      deliveryMaxDays: order.deliveryMaxDays,
       seller: order.seller.businessName,
       customer: order.customer.user.name,
       itemCount: order.items.reduce((sum, item) => sum + item.quantity, 0),
@@ -108,6 +114,9 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
       kind: 'GULPLAZA' as const,
       createdAt: order.createdAt,
       status: order.status,
+      vendorFulfilled: order.vendorFulfilled,
+      deliveryMinDays: order.deliveryMinDays,
+      deliveryMaxDays: order.deliveryMaxDays,
       seller: order.seller.businessName,
       customer: order.customer.user.name,
       itemCount: order.items.reduce((sum, item) => sum + item.quantity, 0),
@@ -208,7 +217,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
                   </div>
                 </div>
                 {/* Only Mangwaoo (admins and the area's manager) moves an order along; vendors only watch. */}
-                <OrderStatusButtons apiBase="/api/admin/orders" kind={order.kind} id={order.id} orderRef={order.ref} status={order.status} />
+                {order.vendorFulfilled && <p className="mb-2 text-sm font-semibold text-accent">Vendor delivery: {order.deliveryMinDays}{order.deliveryMaxDays !== order.deliveryMinDays ? "-" + order.deliveryMaxDays : ""} days</p>}<OrderStatusButtons apiBase="/api/admin/orders" kind={order.kind} id={order.id} orderRef={order.ref} status={order.status} vendorFulfilled={order.vendorFulfilled} />
               </li>
             );
           })}

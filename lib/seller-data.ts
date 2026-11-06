@@ -50,6 +50,7 @@ export async function getSellerProducts(seller: CurrentSeller): Promise<SellerPr
       categoryId: product.categoryId,
       price: Number(product.price),
       stock: product.stock,
+    deliveryDays: product.deliveryDays,
       isActive: product.isActive,
       category: product.category.name,
       images: product.images,
@@ -75,6 +76,7 @@ export async function getSellerProducts(seller: CurrentSeller): Promise<SellerPr
     categoryId: product.categoryId,
     price: Number(product.price),
     stock: product.stock,
+    deliveryDays: product.deliveryDays,
     isActive: product.isActive,
     category: product.category.name,
     images: product.images,
@@ -97,6 +99,8 @@ export async function getSellerOrders(seller: CurrentSeller, scope: 'incoming' |
       include: {
         items: { include: { product: { select: { name: true } } } },
         payment: true,
+      address: true,
+      customer: { select: { user: { select: { phone: true } } } },
       },
     });
 
@@ -108,6 +112,11 @@ export async function getSellerOrders(seller: CurrentSeller, scope: 'incoming' |
       totalAmount: Number(order.totalAmount),
       createdAt: order.createdAt.toISOString(),
       note: order.note,
+      vendorFulfilled: order.vendorFulfilled,
+      deliveryMinDays: order.deliveryMinDays,
+      deliveryMaxDays: order.deliveryMaxDays,
+      deliveryAddress: order.vendorFulfilled ? order.address.street + ", " + order.address.city : null,
+      customerPhone: order.vendorFulfilled ? (order.address.label?.split(' • ').slice(1).join(' • ') || order.customer.user.phone) : null,
       paymentMethod: order.payment?.method ?? null,
       paymentStatus: order.payment?.status ?? null,
       items: order.items.map((item) => ({
@@ -125,6 +134,8 @@ export async function getSellerOrders(seller: CurrentSeller, scope: 'incoming' |
     include: {
       items: { include: { product: { select: { name: true } } } },
       payment: true,
+      address: true,
+      customer: { select: { user: { select: { phone: true } } } },
     },
   });
 
@@ -136,6 +147,11 @@ export async function getSellerOrders(seller: CurrentSeller, scope: 'incoming' |
     totalAmount: Number(order.totalAmount),
     createdAt: order.createdAt.toISOString(),
     note: order.note,
+    vendorFulfilled: order.vendorFulfilled,
+    deliveryMinDays: order.deliveryMinDays,
+    deliveryMaxDays: order.deliveryMaxDays,
+    deliveryAddress: order.vendorFulfilled ? order.address.street + ", " + order.address.city : null,
+    customerPhone: order.vendorFulfilled ? (order.address.label?.split(' • ').slice(1).join(' • ') || order.customer.user.phone) : null,
     paymentMethod: order.payment?.method ?? null,
     paymentStatus: order.payment?.status ?? null,
     items: order.items.map((item) => ({

@@ -1,0 +1,7 @@
+import Image from 'next/image';
+﻿import Link from 'next/link';
+import { ShoppingBag } from 'lucide-react';
+type Item = { id: string; name: string; price: number; image: string | null; vendor: string };
+export default function HomeCollection({ title, description, href, items }: { title: string; description: string; href: string; items: Item[] }) {
+  return <section className="mx-auto max-w-6xl px-4 py-10"><div className="mb-6 flex items-end justify-between gap-4"><div><h2 className="text-2xl font-extrabold text-ink">{title}</h2><p className="mt-2 text-sm text-brand-gray">{description}</p></div><Link href={href} className="shrink-0 text-sm font-bold text-accent">Explore →</Link></div>{items.length ? <div className="grid grid-cols-2 gap-4 md:grid-cols-4">{items.map(item => <Link key={item.id} href={'/mart/' + item.id} className="overflow-hidden rounded-2xl border border-accent/10 bg-surface"><div className="flex aspect-square items-center justify-center bg-brand-light">{item.image ? <Image unoptimized width={400} height={400} src={item.image} alt={item.name} className="h-full w-full object-cover"/> : <ShoppingBag className="text-accent" size={36}/>}</div><div className="p-4"><h3 className="line-clamp-2 text-sm font-bold text-ink">{item.name}</h3><p className="mt-1 truncate text-xs text-brand-gray">{item.vendor}</p><p className="mt-3 font-bold text-accent">PKR {item.price.toLocaleString()}</p></div></Link>)}</div> : <p className="rounded-2xl bg-brand-light p-6 text-sm text-brand-gray">New listings will appear here as vendors post them.</p>}</section>;
+}

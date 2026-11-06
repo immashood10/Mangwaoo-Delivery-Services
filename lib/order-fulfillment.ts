@@ -50,6 +50,9 @@ export type FulfillmentOrder = {
   /** The rider on this order's delivery chat, when one has taken it. */
   riderName: string | null;
   riderAssigned: boolean;
+  vendorFulfilled?: boolean;
+  deliveryMinDays?: number;
+  deliveryMaxDays?: number;
   /** The Area Sales Manager's area this order belongs to; null = no manager covers it (only admins handle it). */
   areaId: number | null;
   areaName: string | null;
@@ -116,9 +119,12 @@ export async function listFulfillmentOrders(areaId?: number): Promise<Fulfillmen
       total: Number(order.totalAmount) - Number(order.discountAmount),
       createdAt: order.createdAt.toISOString(),
       paymentMethod: order.payment?.method ?? null,
+      vendorFulfilled: order.vendorFulfilled,
+      deliveryMinDays: order.deliveryMinDays,
+      deliveryMaxDays: order.deliveryMaxDays,
       riderName: order.riderChat?.rider?.user.name ?? null,
       riderAssigned: order.riderChat?.status === 'ACTIVE' && !!order.riderChat.riderId,
-      areaId: areaOf(pointOf(order.address, order.seller), covered),
+      areaId: order.areaId ?? areaOf(pointOf(order.address, order.seller), covered),
     })),
     ...food.map((order) => ({
       id: order.id,
@@ -133,9 +139,12 @@ export async function listFulfillmentOrders(areaId?: number): Promise<Fulfillmen
       total: Number(order.totalAmount) - Number(order.discountAmount) + Number(order.deliveryFee),
       createdAt: order.createdAt.toISOString(),
       paymentMethod: order.payment?.method ?? null,
+      vendorFulfilled: order.vendorFulfilled,
+      deliveryMinDays: order.deliveryMinDays,
+      deliveryMaxDays: order.deliveryMaxDays,
       riderName: order.riderChat?.rider?.user.name ?? null,
       riderAssigned: order.riderChat?.status === 'ACTIVE' && !!order.riderChat.riderId,
-      areaId: areaOf(pointOf(order.address, order.seller), covered),
+      areaId: order.areaId ?? areaOf(pointOf(order.address, order.seller), covered),
     })),
   ]
     .filter((row) => areaId === undefined || row.areaId === areaId)
@@ -209,13 +218,13 @@ export async function changeOrderStatus(input: { kind: FulfillmentKind; id: stri
   // A vendor can only move their own orders.
   if (input.sellerId !== undefined && order.sellerId !== input.sellerId) return { kind: 'missing' };
 
-  if (input.areaId !== undefined && areaOf(pointOf(order.address, order.seller), await areasWithManagers()) !== input.areaId) {
+  if (input.areaId !== undefined && (order.areaId ?? areaOf(pointOf(order.address, order.seller), await areasWithManagers())) !== input.areaId) {
     return { kind: 'missing' };
   }
 
   if (!NEXT_STATUSES[order.status]?.includes(input.status)) return { kind: 'invalid-transition', from: order.status };
 
-  if (input.sellerId === undefined && input.status === 'OUT_FOR_DELIVERY' && order.riderChat && (order.riderChat.status !== 'ACTIVE' || !order.riderChat.riderId)) {
+  if (!order.vendorFulfilled && input.sellerId === undefined && input.status === 'OUT_FOR_DELIVERY' && order.riderChat && (order.riderChat.status !== 'ACTIVE' || !order.riderChat.riderId)) {
     return { kind: 'rider-required' };
   }
 
@@ -252,6 +261,7 @@ export async function changeOrderStatus(input: { kind: FulfillmentKind; id: stri
     storeName: order.seller.businessName,
     orderId: order.id,
     customerUserId: order.customer.userId,
+    vendorFulfilled: order.vendorFulfilled,
   });
 
   if (notice) notifyAfterResponse(async () => notice);

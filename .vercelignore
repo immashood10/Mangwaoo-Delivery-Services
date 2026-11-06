@@ -1,0 +1,14 @@
+mobile/
+.env*
+.git/
+.next*/
+.expo/
+node_modules/
+.claude/
+.kilo/
+.agents/
+.codex/
+test-*.mjs
+AGENTS.md
+CLAUDE.md
+*.tsbuildinfo

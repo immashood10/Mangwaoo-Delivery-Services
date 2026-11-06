@@ -215,7 +215,7 @@ export default function OrderTracker({ initial }: { initial: OrderTracking }) {
     }
   }
 
-  const showMap = live && markers.length >= 2;
+  const showMap = live && !tracking.vendorFulfilled && markers.length >= 2;
   const headingName = rider.target === 'STORE' ? store.name : 'you';
 
   return (

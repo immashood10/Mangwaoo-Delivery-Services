@@ -482,3 +482,5 @@ export const STATS = [
   { label: 'Operating Hours', value: '13h', icon: 'Clock' },
   { label: 'Avg Delivery Time', value: '15 min', icon: 'Zap' },
 ];
+
+export const FOOD_FIRST_HOME = { eyebrow: 'Food comes first', title: 'Find your next favourite bite.', description: 'Discover Karachi food, watch real food reels, and order with your local Mangwaoo team.', foodAction: 'Explore food', reelsAction: 'Watch food reels', shoppingTitle: 'Shop online', shoppingDescription: 'Fashion, electronics and more from the same trusted marketplace.', martTitle: 'Everyday essentials', martDescription: 'Groceries, dairy and household favourites on MangwaooMart.' };

@@ -24,6 +24,10 @@ export type OrderQuote = {
   marketplace: Marketplace;
   sellerId: string;
   sellerName: string;
+  vendorFulfilled?: boolean;
+  deliveryMinDays?: number;
+  deliveryMaxDays?: number;
+  label?: string;
   /** The items (what the seller earns). */
   subtotal: number;
   /** Food only: the distance charge from the restaurant to the customer. Always 0 for MangwaooMart. */

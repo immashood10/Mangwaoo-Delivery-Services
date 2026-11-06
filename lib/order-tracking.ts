@@ -51,6 +51,7 @@ export function statusNotice(input: {
   storeName: string;
   orderId: string;
   customerUserId: string;
+  vendorFulfilled?: boolean;
 }): NotifyInput | null {
   const base = { userId: input.customerUserId, type: 'ORDER' as const, href: trackingPath(input.ref), refId: `track:${input.orderId}` };
 
@@ -64,7 +65,7 @@ export function statusNotice(input: {
         message: `${input.storeName} is ${input.kind === 'gulplaza' ? 'preparing' : 'packing'} your order ${input.ref}.`,
       };
     case 'OUT_FOR_DELIVERY':
-      return { ...base, title: 'Your order is on the way!', message: `${input.ref} has left ${input.storeName}. Follow your rider live.` };
+      return { ...base, title: 'Your order is on the way!', message: input.vendorFulfilled ? `${input.ref} has been dispatched by ${input.storeName}. Follow its progress in My Orders.` : `${input.ref} has left ${input.storeName}. Follow your rider live.` };
     case 'CANCELLED':
       return { ...base, title: 'Order cancelled', message: `${input.storeName} cancelled your order ${input.ref}.` };
     default:
@@ -78,6 +79,10 @@ export type TrackingViewer = { userId: string; role: string };
 
 /** One order of either kind, in the shape the tracking page needs. */
 type RawOrder = {
+  vendorFulfilled: boolean;
+  deliveryMinDays: number;
+  deliveryMaxDays: number;
+  riderChatId: string | null;
   id: string;
   kind: OrderKind;
   orderNumber: number;
@@ -127,6 +132,10 @@ async function loadRawOrder(kind: OrderKind, orderNumber: number): Promise<RawOr
     return {
       id: order.id,
       kind,
+      vendorFulfilled: order.vendorFulfilled,
+      deliveryMinDays: order.deliveryMinDays,
+      deliveryMaxDays: order.deliveryMaxDays,
+      riderChatId: order.riderChatId,
       orderNumber: order.orderNumber,
       status: order.status,
       createdAt: order.createdAt,
@@ -165,6 +174,10 @@ async function loadRawOrder(kind: OrderKind, orderNumber: number): Promise<RawOr
   return {
     id: order.id,
     kind,
+    vendorFulfilled: order.vendorFulfilled,
+    deliveryMinDays: order.deliveryMinDays,
+    deliveryMaxDays: order.deliveryMaxDays,
+    riderChatId: order.riderChatId,
     orderNumber: order.orderNumber,
     status: order.status,
     createdAt: order.createdAt,
@@ -208,15 +221,16 @@ export async function loadOrderTracking(ref: string, viewer: TrackingViewer, now
   if (viewer.role !== 'ADMIN' && (viewer.role !== 'CUSTOMER' || order.customerUserId !== viewer.userId)) return null;
 
   // The customer has one live order chat at a time; its rider is whoever delivers every order that customer has going.
-  const chat = isLiveStatus(order.status)
+  const chat = !order.vendorFulfilled && isLiveStatus(order.status)
     ? await prisma.riderChat.findFirst({
-        where: { customerId: order.customerId, status: { in: ['OPEN', 'ACTIVE'] } },
+        where: { ...(order.riderChatId ? { id: order.riderChatId } : {}), customerId: order.customerId, status: { in: ['OPEN', 'ACTIVE'] } },
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,
           status: true,
           riderId: true,
           areaId: true,
+          managerOnly: true,
           latitude: true,
           longitude: true,
           rider: {
@@ -237,7 +251,7 @@ export async function loadOrderTracking(ref: string, viewer: TrackingViewer, now
   const dropOffCoords = order.addressCoords ?? (chat ? coordsOf(chat.latitude, chat.longitude) : null);
   const rider = buildRiderView({
     status: order.status,
-    chat: chat ? { id: chat.id, status: chat.status, managed: chat.areaId !== null } : null,
+    chat: chat ? { id: chat.id, status: chat.status, managed: chat.areaId !== null || chat.managerOnly } : null,
     rider: chat?.rider
       ? {
           name: chat.rider.user.name,
@@ -260,8 +274,9 @@ export async function loadOrderTracking(ref: string, viewer: TrackingViewer, now
     marketplace: order.kind,
     status: order.status,
     isLive: isLiveStatus(order.status),
-    headline,
-    subline,
+    vendorFulfilled: order.vendorFulfilled,
+    headline: order.vendorFulfilled && isLiveStatus(order.status) ? 'Your vendor is handling delivery' : headline,
+    subline: order.vendorFulfilled ? 'Vendor delivery: ' + order.deliveryMinDays + (order.deliveryMaxDays !== order.deliveryMinDays ? '-' + order.deliveryMaxDays : '') + ' days. No Mangwaoo rider will be assigned.' : subline,
     placedAt: order.createdAt.toISOString(),
     store: { name: order.storeName, coords: order.storeCoords },
     dropOff: { text: order.addressText, coords: dropOffCoords },
@@ -275,7 +290,7 @@ export async function loadOrderTracking(ref: string, viewer: TrackingViewer, now
       outForDeliveryAt: order.outForDeliveryAt,
       deliveredAt: order.deliveredAt,
       cancelledAt: order.cancelledAt,
-    }),
+    }).map(step => order.vendorFulfilled && step.key === 'OUT_FOR_DELIVERY' ? { ...step, detail: 'The vendor has dispatched your parcel.' } : step),
     rider,
     items: order.items,
     money: {

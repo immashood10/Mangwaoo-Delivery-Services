@@ -80,6 +80,11 @@ export default function Navbar() {
   const [saveAddressError, setSaveAddressError] = useState('');
 
   const [isOrderChatOpen, setIsOrderChatOpen] = useState(false);
+  useEffect(() => {
+    const openChat = () => setIsOrderChatOpen(true);
+    window.addEventListener('mangwaoo:open-order-chat', openChat);
+    return () => window.removeEventListener('mangwaoo:open-order-chat', openChat);
+  }, []);
   const [orderPickup, setOrderPickup] = useState<PickedLocation | null>(null);
   // Set when the order chat sent the user to pick an address, so it reopens afterwards.
   const [resumeOrderChat, setResumeOrderChat] = useState(false);
@@ -131,6 +136,7 @@ export default function Navbar() {
 
   const showLocationPrompt =
     wantsLocationPrompt &&
+    !['/', '/reels', '/shopping'].includes(pathname) &&
     !selectedAddress &&
     !isSignInOpen &&
     !isOrderChatOpen &&

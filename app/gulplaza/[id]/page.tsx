@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Info, MapPin } from 'lucide-react';
+import { ArrowLeft, Info } from 'lucide-react';
 import { GULPLAZA_CATEGORIES } from '@/lib/data';
-import { farAwayNote, foodReach } from '@/lib/delivery';
+import { foodReach } from '@/lib/delivery';
 import { dishIcon } from '@/lib/food-icons';
 import { readPortions } from '@/lib/food-portions';
 import { isRealLocation, parseCoordinates } from '@/lib/geo';
@@ -71,7 +71,6 @@ export default async function GulplazaProductDetail({
       ? { lat: dbProduct.seller.latitude, lng: dbProduct.seller.longitude }
       : null
   );
-  const outOfArea = origin !== null && reach.status === 'NO_PIN';
   const nearbyHref = origin ? `/gulplaza?lat=${origin.lat}&lng=${origin.lng}` : '/gulplaza';
 
   const details = (
@@ -83,7 +82,7 @@ export default async function GulplazaProductDetail({
         <FavouriteButton kind="DISH" id={product.id} name={product.name} variant="outline" />
       </div>
       <h1 className="text-3xl md:text-4xl font-bold text-ink">{product.name}</h1>
-      <p className="text-sm text-brand-gray">Sold by {product.vendor}</p>
+      <p className="text-sm text-brand-gray">Sold by {product.vendor}</p><p className="text-sm font-semibold text-accent">{dbProduct.deliveryDays ? `Vendor delivery: ${dbProduct.deliveryDays} days` : `Immediate local delivery`}. Orders over 10 km away or to another city use 5-7 day vendor delivery.</p>
       {portions.length > 0 ? (
         <>
           <DishPortionPrice className="text-3xl font-bold text-accent" />
@@ -102,25 +101,11 @@ export default async function GulplazaProductDetail({
         <p className="text-brand-gray leading-relaxed">{product.description}</p>
       </div>
 
-      {outOfArea ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
-          <p className="flex items-center gap-2 font-semibold text-ink">
-            <MapPin className="h-4 w-4 text-warning" />
-            Not available at your address
-          </p>
-          <p className="mt-1 text-brand-gray">
-            {product.vendor} hasn&apos;t set its location on the map yet, so we can&apos;t work out how far it is or what the delivery would cost.
-          </p>
-          <Link href={nearbyHref} className="mt-2 inline-block font-semibold text-accent hover:underline">
-            See food near you
-          </Link>
-        </div>
-      ) : (
-        <>
+      <>
           {reach.status === 'FAR' ? (
             <p role="note" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-ink">
               <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
-              <span>{farAwayNote(reach.distanceKm, product.vendor)}</span>
+              <span>{reach.distanceKm > 10 ? 'Vendor delivery: 5-7 days for addresses more than 10 km away.' : 'Delivery charges are calculated at checkout.'}</span>
             </p>
           ) : null}
           <div className="flex flex-wrap gap-3">
@@ -131,8 +116,7 @@ export default async function GulplazaProductDetail({
             )}
             <ChatWidget sellerId={product.sellerId} sellerName={product.vendor} productName={product.name} />
           </div>
-        </>
-      )}
+      </>
     </div>
   );
 

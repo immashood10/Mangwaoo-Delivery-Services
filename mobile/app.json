@@ -1,14 +1,61 @@
 {
   "expo": {
     "name": "Mangwaoo",
-    "slug": "mangwaoo",
+    "slug": "mangwaoo-delivery-service",
     "scheme": "mangwaoo",
-    "version": "1.0.0",
+    "version": "1.1.0",
+    "extra": {
+      "eas": {
+        "projectId": "7ca367d0-7c54-4787-9895-4c2fdefaec3b"
+      }
+    },
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "ios": { "bundleIdentifier": "pk.mangwaoo.app", "supportsTablet": true },
-    "android": { "package": "pk.mangwaoo.app", "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"] },
-    "plugins": [["expo-location", { "locationWhenInUsePermission": "Mangwaoo uses your location to dispatch deliveries and find nearby food." }]
-    ]
+    "ios": {
+      "bundleIdentifier": "pk.mangwaoo.app",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Mangwaoo uses your microphone when you record a voice message in order chat.",
+        "NSCameraUsageDescription": "Mangwaoo uses your camera when you choose to attach a photo."
+      }
+    },
+    "android": {
+      "package": "pk.mangwaoo.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "CAMERA"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Mangwaoo uses your location to dispatch deliveries and find nearby food."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/mangwaoo-logo.png",
+          "imageWidth": 280,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "image": "./assets/mangwaoo-logo.png",
+            "backgroundColor": "#ffffff"
+          }
+        }
+      ]
+    ],
+    "owner": "mangwaoocomdeliveryservicess-team",
+    "icon": "./assets/icon.png"
   }
 }

@@ -205,7 +205,7 @@ export default async function MartProductDetail({
             )}
 
             <div>
-              <h2 className="text-sm font-bold text-ink mb-2">Description</h2>
+              <p className="mb-4 text-sm font-semibold text-accent">{dbProduct?.deliveryDays ? `Vendor delivery: ${dbProduct.deliveryDays} days` : `Immediate local delivery`}. Orders over 10 km away or to another city use 5-7 day vendor delivery.</p><h2 className="text-sm font-bold text-ink mb-2">Description</h2>
               <p className="text-brand-gray leading-relaxed">{product.description}</p>
             </div>
 

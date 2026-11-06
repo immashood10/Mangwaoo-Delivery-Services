@@ -24,7 +24,9 @@ export default function LocationPicker({
   changeLabel = 'Change pickup location',
   mapTitle = 'Choose the place on the map',
   mapStart = null,
+  allowOutsideServiceArea = false,
 }: {
+  allowOutsideServiceArea?: boolean;
   value: PickedLocation | null;
   onChange: (location: PickedLocation | null) => void;
   placeholder?: string;
@@ -56,7 +58,7 @@ export default function LocationPicker({
 
       try {
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&limit=5&viewbox=${KARACHI_VIEWBOX}&bounded=1&q=${encodeURIComponent(trimmed)}`,
+          `https://nominatim.openstreetmap.org/search?format=json&limit=5&viewbox=${KARACHI_VIEWBOX}&bounded=${allowOutsideServiceArea ? '0&countrycodes=pk' : '1'}&q=${encodeURIComponent(trimmed)}`,
           { signal: controller.signal, headers: { Accept: 'application/json' } }
         );
         if (!response.ok) throw new Error('search failed');
@@ -81,11 +83,11 @@ export default function LocationPicker({
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [query]);
+  }, [query, allowOutsideServiceArea]);
 
   const select = (location: PickedLocation) => {
     // Orders are delivered in Karachi only: a place outside it (the current location of someone in Islamabad) is not taken.
-    if (!isInServiceArea(location)) {
+    if (!allowOutsideServiceArea && !isInServiceArea(location)) {
       setSuggestions([]);
       setError(SERVICE_AREA_MESSAGE);
       return;
@@ -208,6 +210,7 @@ export default function LocationPicker({
 
       {isMapOpen ? (
         <MapPinPicker
+          allowOutsideServiceArea={allowOutsideServiceArea}
           title={mapTitle}
           start={mapStart}
           onClose={() => setIsMapOpen(false)}

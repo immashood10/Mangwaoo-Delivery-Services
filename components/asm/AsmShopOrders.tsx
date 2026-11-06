@@ -58,10 +58,10 @@ export default function AsmShopOrders({ orders, apiBase = '/api/asm/orders' }: {
 
           <p className="mt-3 flex items-center gap-1.5 text-xs text-brand-gray">
             <Bike className="h-3.5 w-3.5" aria-hidden="true" />
-            {order.riderName ? `Rider: ${order.riderName}` : 'No rider has taken this order yet'}
+            {order.vendorFulfilled ? `Vendor delivery: ${order.deliveryMinDays}${order.deliveryMaxDays !== order.deliveryMinDays ? '-' + order.deliveryMaxDays : ''} days` : order.riderName ? `Rider: ${order.riderName}` : 'Waiting for rider assignment'}
           </p>
 
-          <OrderStatusButtons apiBase={apiBase} kind={order.kind} id={order.id} orderRef={order.ref} status={order.status} />
+          <OrderStatusButtons apiBase={apiBase} kind={order.kind} id={order.id} orderRef={order.ref} status={order.status} vendorFulfilled={order.vendorFulfilled} />
         </li>
       ))}
     </ul>

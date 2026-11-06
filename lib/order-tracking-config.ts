@@ -264,6 +264,7 @@ export type TrackItem = { id: string; name: string; quantity: number; price: num
 
 /** Everything the tracking page shows about one order, as GET /api/track/[ref] answers it. */
 export type OrderTracking = {
+  vendorFulfilled?: boolean;
   /** The order number, e.g. MW-F10001. */
   ref: string;
   marketplace: OrderKind;

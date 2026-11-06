@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { DELIVERY_OPTIONS } from '@/lib/delivery-policy';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, ImagePlus, X } from 'lucide-react';
@@ -53,6 +54,7 @@ export default function PostProductForm({
     price: '',
     stock: '',
   });
+  const [deliveryDays, setDeliveryDays] = useState(0);
   const [vehicle, setVehicle] = useState<VehicleDetails>(emptyVehicleDetails);
   const [sizes, setSizes] = useState<SizeDetails>(emptySizeDetails);
   // A food dish can be sold by weight (250 g, 500 g, 1 kg ...) with a price per size instead of one price.
@@ -144,6 +146,7 @@ export default function PostProductForm({
         headers: { 'Content-Type': 'application/json', ...(asStore ? { [STORE_HEADER]: STORE_HEADER_VALUE } : {}) },
         body: JSON.stringify({
           name: form.name,
+          deliveryDays,
           description: form.description,
           categoryId: form.categoryId,
           // A dish sold by weight is priced by its sizes; the server takes the lowest as the dish's own price.
@@ -348,6 +351,7 @@ export default function PostProductForm({
         )}
       </div>
 
+<label className="block text-sm font-semibold text-ink">Delivery time<select value={deliveryDays} onChange={e => setDeliveryDays(Number(e.target.value))} className="mt-2 w-full rounded-xl border border-accent/20 bg-surface p-3 text-ink">{DELIVERY_OPTIONS.map(option => <option key={option.days} value={option.days}>{option.label}</option>)}</select><span className="mt-2 block text-xs font-normal text-brand-gray">Immediate orders within 10 km go to your area team. Longer-distance and intercity orders use vendor delivery in 5-7 days.</span></label>
       {formError ? <p className="text-sm text-danger">{formError}</p> : null}
 
       <button

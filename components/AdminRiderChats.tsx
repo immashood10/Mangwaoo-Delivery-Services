@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Flag, MapPin, Trash2 } from 'lucide-react';
+import AdminAssignRider from './AdminAssignRider';
 import RiderChatThread from './RiderChatThread';
 import RouteSummary from './RouteSummary';
 import { CHAT_FILTERS, type ChatFilter } from '@/lib/admin-chat-filter';
@@ -233,6 +234,7 @@ export default function AdminRiderChats({ initialFilter = 'all', todayStartIso }
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                {selectedChat.status !== 'CLOSED' && <AdminAssignRider chatId={selectedChat.id} onAssigned={() => { void fetch('/api/admin/rider-chats').then(r => r.json()).then(data => setChats(data.chats || [])); }}/>}
                 {selectedChat.status === 'OPEN' && selectedChat.managed && (
                   <button
                     type="button"

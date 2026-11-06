@@ -60,11 +60,11 @@ export async function POST(request: NextRequest) {
     let chat: { id: string } | null = null;
     const chatRequest = parseOrderChat(body?.chat);
 
-    if (chatRequest && dropoff) {
+    const eligible = orders.map((order, index) => ({ order, quote: quote.orders[index] })).filter(row => !row.quote.vendorFulfilled);
+    if (chatRequest && dropoff && eligible.length) {
       try {
         // The longest restaurant → customer ride of this checkout: what the rider's delivery bonus is judged by (MangwaooMart has none).
-        const distanceKm = quote.orders
-          .slice(0, orders.length)
+        const distanceKm = eligible.map(row => row.quote)
           .reduce<number | null>((longest, order) => (order.marketplace === 'gulplaza' && order.distanceKm !== null ? Math.max(longest ?? 0, order.distanceKm) : longest), null);
         const owner = await prisma.user.findUnique({ where: { id: resolved.customer.userId }, select: { name: true } });
         const opened = owner
@@ -74,18 +74,20 @@ export async function POST(request: NextRequest) {
               lng: dropoff.lng,
               addressText: chatRequest.addressText,
               pickup: null,
-              pickupText: chatRequest.pickupText,
-              text: chatRequest.text,
+              pickupText: eligible.map(row => row.quote.sellerName).join(' + '),
+              text: eligible.map(row => row.order.ref + ' - ' + row.order.dispatchText).join('\n'),
               // The server's own number: the delivery fees of the food orders just priced (0 for MangwaooMart).
               deliveryCharge: Math.round(quote.delivery),
               distanceKm,
+              viaManager: true,
+              requireManager: true,
             })
           : null;
 
         chat = opened?.chat ? { id: opened.chat.id } : null;
         if (chat) {
-          const martIds = orders.filter((order) => order.marketplace === 'mart').map((order) => order.id);
-          const foodIds = orders.filter((order) => order.marketplace === 'gulplaza').map((order) => order.id);
+          const martIds = eligible.map(row => row.order).filter((order) => order.marketplace === 'mart').map((order) => order.id);
+          const foodIds = eligible.map(row => row.order).filter((order) => order.marketplace === 'gulplaza').map((order) => order.id);
           await Promise.all([
             martIds.length ? prisma.order.updateMany({ where: { id: { in: martIds }, customerId: resolved.customer.id }, data: { riderChatId: chat.id } }) : Promise.resolve(),
             foodIds.length ? prisma.gulplazaOrder.updateMany({ where: { id: { in: foodIds }, customerId: resolved.customer.id }, data: { riderChatId: chat.id } }) : Promise.resolve(),

@@ -20,12 +20,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if ('error' in resolved) return resolved.error;
   const { seller } = resolved;
 
-  if (!canChangeOrderStatus(seller)) {
-    return NextResponse.json(
-      { error: "Mangwaoo's team updates the status of your orders. You just prepare them: you will be told when the rider has taken and delivered them." },
-      { status: 403 }
-    );
-  }
+
 
   const { id } = await params;
   const body = await request.json().catch(() => null);
@@ -36,6 +31,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: 'Choose an order and the status to move it to.' }, { status: 400 });
   }
 
+  if (!canChangeOrderStatus(seller)) {
+    const owned = marketplace === 'MART'
+      ? await prisma.order.findFirst({ where: { id, sellerId: seller.id, vendorFulfilled: true }, select: { id: true } })
+      : await prisma.gulplazaOrder.findFirst({ where: { id, sellerId: seller.id, vendorFulfilled: true }, select: { id: true } });
+    if (!owned) return NextResponse.json({ error: 'Your area team manages immediate deliveries. You can update your own vendor-shipping orders.' }, { status: 403 });
+  }
   const outcome = await changeOrderStatus({ kind: marketplace, id, status, sellerId: seller.id });
 
   if (outcome.kind !== 'ok') {

@@ -16,15 +16,16 @@ export async function POST(request: NextRequest) {
   const dropoff = parseDropoff(body?.dropoff);
   const couponCode = parseCouponCode(body?.couponCode);
   const customerId = resolved.customer.id;
+  const city = typeof body?.city === 'string' ? body.city.trim().slice(0, 80) : 'Karachi';
 
   try {
-    const { quote } = await priceCheckout({ lines, dropoff, couponCode, customerId });
+    const { quote } = await priceCheckout({ lines, dropoff, couponCode, customerId, city });
 
     return NextResponse.json({ quote });
   } catch (error) {
     if (!(error instanceof CheckoutError) || !couponCode) throw error;
 
-    const { quote } = await priceCheckout({ lines, dropoff, couponCode: null, customerId });
+    const { quote } = await priceCheckout({ lines, dropoff, couponCode: null, customerId, city });
 
     return NextResponse.json({ quote, couponError: error.message });
   }

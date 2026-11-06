@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { MapPin, Search, X } from 'lucide-react';
 import PinMap, { type MapPlace } from '@/components/PinMap';
@@ -20,7 +20,9 @@ export default function MapPinPicker({
   onPick,
   onClose,
   confirmLabel = 'Use this location',
+  allowOutsideServiceArea = false,
 }: {
+  allowOutsideServiceArea?: boolean;
   title: string;
   start: LatLng | null;
   onPick: (location: PickedLocation) => void;
@@ -36,16 +38,16 @@ export default function MapPinPicker({
   const [focus, setFocus] = useState<{ id: string; point: LatLng } | null>(null);
   const searches = useRef(0);
   // The pin is on a place outside the area Mangwaoo delivers in (Karachi): it can't be used.
-  const outsideArea = place !== null && !isInServiceArea(place);
+  const outsideArea = !allowOutsideServiceArea && place !== null && !isInServiceArea(place);
   // The text of the place that was just chosen from the list: it is not searched for again.
   const chosenText = useRef('');
 
-  const runSearch = async (text: string, signal?: AbortSignal) => {
+  const runSearch = useCallback(async (text: string, signal?: AbortSignal) => {
     setIsSearching(true);
     setSearchMessage('');
 
     try {
-      const found = await searchPlaces(text, signal);
+      const found = await searchPlaces(text, signal, allowOutsideServiceArea);
 
       if (signal?.aborted) return;
 
@@ -59,7 +61,7 @@ export default function MapPinPicker({
     } finally {
       if (!signal?.aborted) setIsSearching(false);
     }
-  };
+  }, [allowOutsideServiceArea]);
 
   // Search as the visitor types (after a short pause).
   useEffect(() => {
@@ -79,7 +81,7 @@ export default function MapPinPicker({
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, runSearch]);
 
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();

@@ -1,4 +1,5 @@
 'use client';
+import { DELIVERY_OPTIONS } from '@/lib/delivery-policy';
 
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -27,6 +28,7 @@ import {
 type Category = { id: string; name: string };
 
 type EditableProduct = {
+  deliveryDays?: number;
   id: string;
   name: string;
   description: string | null;
@@ -77,6 +79,7 @@ export default function EditProductModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const [deliveryDays, setDeliveryDays] = useState(product.deliveryDays ?? 0);
   const [form, setForm] = useState({
     name: product.name,
     description: product.description ?? '',
@@ -172,6 +175,7 @@ export default function EditProductModal({
         headers: { 'Content-Type': 'application/json', ...requestHeaders },
         body: JSON.stringify({
           name: form.name,
+          deliveryDays,
           description: form.description,
           categoryId: form.categoryId,
           // A dish sold by weight is priced by its sizes (the server takes the lowest as the dish's own price).
@@ -344,6 +348,7 @@ export default function EditProductModal({
             )}
           </div>
 
+<label className="block text-sm font-semibold text-ink">Delivery time<select value={deliveryDays} onChange={e => setDeliveryDays(Number(e.target.value))} className="mt-2 w-full rounded-xl border border-accent/20 bg-surface p-3 text-ink">{DELIVERY_OPTIONS.map(option => <option key={option.days} value={option.days}>{option.label}</option>)}</select></label>
           {formError ? <p className="text-sm text-danger">{formError}</p> : null}
 
           <div className="flex gap-3 pt-2">

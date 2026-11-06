@@ -40,6 +40,7 @@ export default function CartPage() {
     fullName: '',
     contactNumber: '',
     completeAddress: '',
+    city: 'Karachi',
   });
   const [note, setNote] = useState('');
   const [formError, setFormError] = useState('');
@@ -64,7 +65,7 @@ export default function CartPage() {
       })),
     [items]
   );
-  const quoteKey = JSON.stringify([lines, dropoffLat, dropoffLng, appliedCode]);
+  const quoteKey = JSON.stringify([lines, dropoffLat, dropoffLng, appliedCode, details.city]);
 
   useEffect(() => {
     if (lines.length === 0) return;
@@ -78,6 +79,7 @@ export default function CartPage() {
           items: lines,
           dropoff: dropoffLat !== null && dropoffLng !== null ? { lat: dropoffLat, lng: dropoffLng } : null,
           couponCode: appliedCode,
+          city: details.city,
         }),
         signal: controller.signal,
       })
@@ -93,7 +95,7 @@ export default function CartPage() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [quoteKey, quoteTick, lines, dropoffLat, dropoffLng, appliedCode]);
+  }, [quoteKey, quoteTick, lines, dropoffLat, dropoffLng, appliedCode, details.city]);
 
   const quote = result?.quote ?? null;
   const isPricing = result?.key !== quoteKey;
@@ -185,6 +187,7 @@ export default function CartPage() {
           fullName: details.fullName,
           contactNumber: details.contactNumber,
           completeAddress,
+          city: details.city,
           paymentMethod,
           note: note.trim(),
           dropoff: { lat: dropoff.lat, lng: dropoff.lng },
@@ -284,9 +287,11 @@ export default function CartPage() {
                 />
               </label>
 
+<label className="block text-sm text-ink">Delivery city<input value={details.city} onChange={e => setDetails(prev => ({ ...prev, city: e.target.value }))} className="mt-2 w-full rounded-xl border border-accent/20 bg-surface p-3" required maxLength={80} /></label>
               <div>
                 <p className="mb-1 text-sm text-ink">Delivery location</p>
                 <LocationPicker
+                  allowOutsideServiceArea
                   value={dropoff}
                   onChange={setDropoffOverride}
                   placeholder="Search your area or street"
@@ -498,10 +503,10 @@ export default function CartPage() {
               ) : null}
 
               {/* Delivery is charged on food only: one line per restaurant, by its distance to the delivery location. */}
-              {foodOrders.map((order) => (
-                <div key={order.sellerId} className="flex items-start justify-between gap-3">
+              {quote?.orders.map((order) => (
+                <div key={order.marketplace + order.sellerId} className="flex items-start justify-between gap-3">
                   <span className="min-w-0 text-brand-gray">
-                    Delivery · {order.sellerName}
+                    Delivery · {order.sellerName}{order.label ? <span className="mt-1 block text-xs font-normal text-brand-gray">{order.label}</span> : null}
                     {order.distanceKm !== null ? <span className="block text-xs">{order.distanceKm.toFixed(1)} km from the restaurant</span> : null}
                   </span>
                   {order.deliveryNote ? (
@@ -566,7 +571,8 @@ export default function CartPage() {
                 {SERVICE_AREA_MESSAGE}
               </p>
             ) : null}
-            {formError ? <p className="mt-4 text-sm text-danger">{formError}</p> : null}
+
+      {formError ? <p className="mt-4 text-sm text-danger">{formError}</p> : null}
 
             <button
               type="submit"

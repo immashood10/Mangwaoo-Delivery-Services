@@ -1,243 +1,153 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Image, KeyboardAvoidingView, Linking, Platform, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme } from 'react-native';
-import * as Location from 'expo-location';
+﻿import React, { useEffect, useRef, useState } from 'react';
+import { useCallback } from 'react';
+import { ActivityIndicator, Alert, BackHandler, Linking, Platform, Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
 
-const API = (process.env.EXPO_PUBLIC_API_URL || 'https://mangwaoo.vercel.app').replace(/\/$/, '');
-type Role = 'CUSTOMER' | 'RIDER' | 'SELLER' | 'ADMIN' | 'ASM';
-type User = { id: string; name: string; email?: string; phone?: string | null; role: Role };
-type Product = { id: string; name: string; description?: string | null; price: number; vendor: string; category: string; marketplace: 'mart' | 'gulplaza'; images?: string[] };
-type CartLine = { productId: string; marketplace: 'mart' | 'gulplaza'; quantity: number; portion?: number };
-type Order = { id: string; ref: string; marketplace: string; status: string; totalAmount: number; deliveryFee: number; discountAmount: number; createdAt: string; sellerName: string; address: string; items: { id: string; productName: string; quantity: number; price: number }[] };
-type Verification = { ticket: string; phone: string; retryAfter: number; devCode?: string; firebase?: { phoneNumber: string } };
-type RiderChat = { id: string; addressText?: string; pickupText?: string; distanceKm?: number; deliveryCharge?: number; lastMessage?: string; body?: string };
-type Palette = { bg: string; surface: string; ink: string; muted: string; accent: string; border: string; soft: string; danger: string; success: string; shadow: string };
-
-class ApiError extends Error { data: any; status: number; constructor(data: any, status: number) { super(data?.error || `Request failed (${status})`); this.data = data; this.status = status; } }
-async function api(path: string, init: RequestInit = {}) {
-  const response = await fetch(`${API}${path}`, { ...init, credentials: 'include', headers: { 'Content-Type': 'application/json', ...init.headers } });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new ApiError(data, response.status);
-  return data;
-}
-const money = (value: number) => `PKR ${Number(value || 0).toLocaleString('en-PK')}`;
-const cartKey = (marketplace: string, id: string) => `${marketplace}:${id}`;
+if (Platform.OS !== 'web') void SplashScreen.preventAutoHideAsync().catch(() => {});
+import WebView from 'react-native-webview';
+import * as Location from 'expo-location';
+import { SITE_URL, TABS, isSiteUrl, pageInfo, externalUrlAllowed } from './src/navigation';
+import { AppHistory } from './src/history';
+import { parseNavigationMessage, WEB_NAVIGATION_SCRIPT } from './src/web-navigation';
 
 export default function App() {
+  useEffect(() => { const timer = setTimeout(() => { void SplashScreen.hideAsync().catch(() => {}); }, 900); return () => clearTimeout(timer); }, []);
+  return <SafeAreaProvider><Marketplace /></SafeAreaProvider>;
+}
+
+function Marketplace() {
   const dark = useColorScheme() === 'dark';
-  const palette = dark ? darkTheme : lightTheme;
-  const styles = useMemo(() => makeStyles(palette, dark), [palette, dark]);
-  const [user, setUser] = useState<User | null>(null);
-  const [booting, setBooting] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [authMode, setAuthMode] = useState<'login' | 'signup' | 'verify'>('login');
-  const [verification, setVerification] = useState<Verification | null>(null);
-  const [auth, setAuth] = useState({ name: '', email: '', phone: '', password: '', code: '' });
-  const [customerTab, setCustomerTab] = useState<'home' | 'orders' | 'account' | 'cart'>('home');
-  const [riderTab, setRiderTab] = useState<'orders' | 'history' | 'wallet' | 'account'>('orders');
-  const [profile, setProfile] = useState<any>(null);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [cart, setCart] = useState<Record<string, CartLine>>({});
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<'all' | 'gulplaza' | 'mart'>('all');
-  const [details, setDetails] = useState({ fullName: '', contactNumber: '', completeAddress: '', note: '' });
-  const [online, setOnline] = useState(false);
-  const [rider, setRider] = useState<any>(null);
-  const [history, setHistory] = useState<any>(null);
-  const [wallet, setWallet] = useState<any>(null);
-  const [openChat, setOpenChat] = useState<RiderChat | null>(null);
-  const [chatMessages, setChatMessages] = useState<any[]>([]);
-  const [messageDraft, setMessageDraft] = useState('');
+  const c = dark
+    ? { bg: '#111111', surface: '#1b1b1b', ink: '#faf7f4', muted: '#b8aaa7', accent: '#ff8c87', line: '#342827', soft: '#382020' }
+    : { bg: '#faf7f4', surface: '#ffffff', ink: '#241614', muted: '#7f716d', accent: '#9b0000', line: '#eee4df', soft: '#fff0ec' };
+  const web = useRef<WebView<object>>(null);
+  const history = useRef(new AppHistory(SITE_URL));
+  const source = useRef(SITE_URL);
+  const [sourceUrl, setSourceUrl] = useState(SITE_URL);
+  const [url, setUrl] = useState(SITE_URL);
+  const [loading, setLoading] = useState(true);
+  const [progress, setProgress] = useState(0);
+  const [failed, setFailed] = useState(false);
+  const page = pageInfo(url);
 
-  const loadProfile = useCallback(async () => { const data = await api('/api/mobile/account'); setProfile(data); setDetails((d) => ({ ...d, fullName: data.user.name, contactNumber: data.user.phone || d.contactNumber, completeAddress: data.addresses?.[0]?.street || d.completeAddress })); }, []);
-  const loadRiderProfile = useCallback(async () => { const data = await api('/api/mobile/account'); setProfile(data); }, []);
-  const loadCatalog = useCallback(async () => { const data = await api('/api/mobile/catalog'); setProducts(data.products || []); }, []);
-  const loadCart = useCallback(async () => {
-    const data = await api('/api/cart');
-    const next: Record<string, CartLine> = {};
-    for (const line of data.items || []) next[cartKey(line.marketplace, line.id)] = { productId: line.id, marketplace: line.marketplace, quantity: line.qty, portion: line.portion };
-    setCart(next);
-  }, []);
-  const loadRider = useCallback(async () => { const data = await api('/api/rider/chats'); setRider(data); }, []);
-  const loadRiderHistory = useCallback(async () => { const data = await api('/api/rider/history'); setHistory(data); }, []);
-  const loadWallet = useCallback(async () => { const data = await api('/api/rider/wallet'); setWallet(data); }, []);
-
-  const hydrate = useCallback(async (active: User) => {
-    setUser(active); setError(''); setNotice('');
-    if (active.role === 'CUSTOMER') {
-      const result = await Promise.allSettled([loadProfile(), loadCatalog(), loadCart()]);
-      const failed = result.find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined;
-      if (failed) setError(toMessage(failed.reason));
-    } else if (active.role === 'RIDER') {
-      const result = await Promise.allSettled([loadRider(), loadRiderHistory(), loadWallet(), loadRiderProfile()]);
-      const failed = result.find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined;
-      if (failed) setError(toMessage(failed.reason));
+  const loadPage = useCallback((target: string) => {
+    if (source.current === target) {
+      // Website links can change the visible page without changing source.
+      web.current?.injectJavaScript(`window.location.replace(${JSON.stringify(target)}); true;`);
+    } else {
+      source.current = target;
+      setSourceUrl(target);
     }
-  }, [loadProfile, loadCatalog, loadCart, loadRider, loadRiderHistory, loadWallet, loadRiderProfile]);
+  }, []);
 
-  useEffect(() => { api('/api/auth/me').then((data) => data.user ? hydrate(data.user) : null).catch((e) => setError(toMessage(e))).finally(() => setBooting(false)); }, [hydrate]);
-  useEffect(() => { if (user?.role !== 'RIDER') return; const timer = setInterval(() => { void loadRider().catch(() => undefined); }, 6000); return () => clearInterval(timer); }, [user, loadRider]);
   useEffect(() => {
-    if (user?.role !== 'RIDER' || !online) return;
-    const timer = setInterval(async () => {
-      try { const p = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }); await api('/api/rider/presence', { method: 'POST', body: JSON.stringify({ isAvailable: true, lat: p.coords.latitude, lng: p.coords.longitude }) }); }
-      catch (e) { setError(toMessage(e)); }
-    }, 30000);
-    return () => clearInterval(timer);
-  }, [user, online]);
-  useEffect(() => {
-    if (!openChat) { setChatMessages([]); return; }
-    const refresh = () => api(`/api/rider-chats/${openChat.id}/messages`).then((data) => setChatMessages(data.messages || [])).catch((e) => setError(toMessage(e)));
-    void refresh(); const timer = setInterval(() => void refresh(), 5000); return () => clearInterval(timer);
-  }, [openChat]);
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      const previous = history.current.back();
+      if (!previous) return false;
+      setFailed(false);
+      setUrl(previous);
+      loadPage(previous);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [loadPage]);
 
-  async function login() {
-    setBusy(true); setError(''); setNotice('');
-    try { const data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: auth.email, password: auth.password, remember: true }) }); setAuth((a) => ({ ...a, password: '' })); await hydrate(data.user); }
-    catch (e) {
-      if (e instanceof ApiError && e.data?.verification) { setVerification(e.data.verification); setAuthMode('verify'); }
-      else setError(toMessage(e));
-    } finally { setBusy(false); }
+  function navigate(path: string) {
+    const target = new URL(path, SITE_URL).href;
+    if (!isSiteUrl(target)) return;
+    history.current.visit(target);
+    setFailed(false);
+    setUrl(target);
+    // Keep one WebView and its server session; track Back independently of canGoBack.
+    loadPage(target);
   }
-  async function signup() {
-    setBusy(true); setError(''); setNotice('');
-    try {
-      const data = await api('/api/auth/signup', { method: 'POST', body: JSON.stringify({ fullName: auth.name, email: auth.email, phone: auth.phone, password: auth.password }) });
-      if (data.verification) { setVerification(data.verification); setAuthMode('verify'); }
-      else if (data.user) await hydrate(data.user);
-      else setNotice('Account created. Please log in.');
-    } catch (e) { setError(toMessage(e)); }
-    finally { setBusy(false); }
+  function openExternal(target: string) {
+    if (!externalUrlAllowed(target)) return;
+    void Linking.openURL(target).catch(() => Alert.alert('Unable to open link', 'Please check that the required app is installed.'));
   }
-  async function verifyPhone() {
-    if (!verification) return;
-    if (verification.firebase) { setError('This account uses Firebase SMS verification. Finish phone verification on the Mangwaoo website, then return here and log in.'); return; }
-    setBusy(true); setError('');
-    try { const data = await api('/api/auth/verify-code', { method: 'POST', body: JSON.stringify({ ticket: verification.ticket, code: auth.code, remember: true }) }); setVerification(null); await hydrate(data.user); }
-    catch (e) { setError(toMessage(e)); }
-    finally { setBusy(false); }
-  }
-  async function resendCode() {
-    if (!verification) return;
-    setBusy(true); setError('');
-    try { const data = await api('/api/auth/resend-code', { method: 'POST', body: JSON.stringify({ ticket: verification.ticket }) }); setVerification(data.verification); setAuth((a) => ({ ...a, code: '' })); setNotice('A new verification code has been sent.'); }
-    catch (e) { setError(toMessage(e)); }
-    finally { setBusy(false); }
-  }
-  async function logout() { try { await api('/api/auth/logout', { method: 'POST' }); } catch { /* clear the screen on network loss */ } setUser(null); setProfile(null); setRider(null); setCart({}); setOnline(false); setAuthMode('login'); }
-
-  async function saveCart(next: Record<string, CartLine>) {
-    setCart(next);
-    try { await api('/api/cart', { method: 'PUT', body: JSON.stringify({ items: Object.values(next).map((line) => ({ productId: line.productId, marketplace: line.marketplace.toUpperCase(), quantity: line.quantity, portion: line.portion || 0 })) }) }); }
-    catch (e) { setError(toMessage(e)); }
-  }
-  async function changeCart(product: Product, delta: number) {
-    const key = cartKey(product.marketplace, product.id); const quantity = (cart[key]?.quantity || 0) + delta; const next = { ...cart };
-    if (quantity < 1) delete next[key]; else next[key] = { productId: product.id, marketplace: product.marketplace, quantity };
-    await saveCart(next);
-  }
-  async function checkout() {
-    const lines = Object.values(cart); if (!lines.length) return;
-    setBusy(true); setError(''); setNotice('');
-    try {
-      const permission = await Location.requestForegroundPermissionsAsync(); if (permission.status !== 'granted') throw new Error('Allow location so we can send your order to the right delivery team.');
-      const p = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const vendors = [...new Set(lines.map((line) => products.find((item) => item.id === line.productId && item.marketplace === line.marketplace)?.vendor).filter(Boolean))].join(', ');
-      const data = await api('/api/checkout', { method: 'POST', body: JSON.stringify({ ...details, paymentMethod: 'cod', items: lines.map((line) => ({ productId: line.productId, marketplace: line.marketplace, qty: line.quantity, portion: line.portion })), dropoff: { lat: p.coords.latitude, lng: p.coords.longitude }, chat: { addressText: details.completeAddress, pickupText: vendors, body: `Please deliver my order from ${vendors}.` } }) });
-      await saveCart({}); await loadProfile(); setCustomerTab('orders'); setNotice(data.chat?.id ? 'Order placed. Your delivery team will take it from here.' : 'Order placed successfully.');
-    } catch (e) { setError(toMessage(e)); }
-    finally { setBusy(false); }
-  }
-  async function updateProfile() {
-    setBusy(true); setError('');
-    try { await api('/api/mobile/account', { method: 'PATCH', body: JSON.stringify({ name: profile.user.name }) }); await loadProfile(); setNotice('Your profile is up to date.'); }
-    catch (e) { setError(toMessage(e)); }
-    finally { setBusy(false); }
-  }
-  async function toggleOnline() {
-    setBusy(true); setError('');
-    try {
-      let coords: { lat: number; lng: number } | undefined;
-      if (!online) { const perm = await Location.requestForegroundPermissionsAsync(); if (perm.status !== 'granted') throw new Error('Location permission is needed for nearby delivery requests.'); const p = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }); coords = { lat: p.coords.latitude, lng: p.coords.longitude }; }
-      await api('/api/rider/presence', { method: 'POST', body: JSON.stringify({ isAvailable: !online, ...coords }) }); setOnline(!online); await loadRider();
-    } catch (e) { setError(toMessage(e)); }
-    finally { setBusy(false); }
-  }
-  async function acceptOrder(chat: RiderChat) {
-    setBusy(true); setError('');
-    try { await api(`/api/rider-chats/${chat.id}/messages`, { method: 'POST', body: JSON.stringify({ body: 'I have accepted your order and am on my way.' }) }); await loadRider(); setNotice('Order accepted. The customer can see your update.'); }
-    catch (e) { setError(toMessage(e)); }
-    finally { setBusy(false); }
-  }
-  async function sendChat() {
-    if (!openChat || !messageDraft.trim()) return;
-    try { const data = await api(`/api/rider-chats/${openChat.id}/messages`, { method: 'POST', body: JSON.stringify({ body: messageDraft.trim() }) }); setChatMessages((list) => [...list, data.message]); setMessageDraft(''); }
-    catch (e) { setError(toMessage(e)); }
-  }
-  async function completeOrder(chat: RiderChat) {
-    setBusy(true); setError('');
-    try { const result = await api(`/api/rider-chats/${chat.id}/close`, { method: 'POST' }); await loadRider(); await loadRiderHistory(); setNotice(result?.cancellationFine ? `Delivery marked complete. ${money(result.cancellationFine.amount)} cancellation fine was added to what you owe Mangwaoo.` : 'Delivery marked complete.'); }
-    catch (e) { setError(toMessage(e)); }
-    finally { setBusy(false); }
+  function retry() { setFailed(false); web.current?.reload(); }
+  async function allowLocation() {
+    const permission = await Location.requestForegroundPermissionsAsync();
+    Alert.alert(permission.granted ? 'Location is ready' : 'Location is turned off', permission.granted ? 'Use the location picker on the page to choose your delivery address.' : 'You can still enter your delivery address manually. Enable location in your phone settings to use GPS.');
   }
 
-  const filteredProducts = products.filter((p) => (filter === 'all' || p.marketplace === filter) && `${p.name} ${p.category} ${p.vendor}`.toLowerCase().includes(query.toLowerCase()));
-  const cartLines = Object.values(cart);
-  const cartTotal = cartLines.reduce((sum, line) => sum + (products.find((p) => p.id === line.productId && p.marketplace === line.marketplace)?.price || 0) * line.quantity, 0);
+  if (Platform.OS === 'web') return <SafeAreaView style={[s.screen, { backgroundColor: c.bg }]}><View style={s.center}>
+    <Text style={[s.wordmark, { color: c.accent }]}>mangwaoo.</Text>
+    <Text style={[s.title, { color: c.ink }]}>Your everyday delivery partner</Text>
+    <Text style={[s.description, { color: c.muted }]}>Shop, order and manage your account on Mangwaoo.</Text>
+    <Pressable onPress={() => openExternal(SITE_URL)} style={s.primary}><Text style={s.primaryText}>Open Mangwaoo</Text></Pressable>
+  </View></SafeAreaView>;
 
-  if (booting) return <SafeAreaView style={[styles.safe, styles.center]}><StatusBar style={dark ? 'light' : 'dark'} /><ActivityIndicator size="large" color={palette.accent} /><Text style={styles.muted}>Getting Mangwaoo ready…</Text></SafeAreaView>;
-  if (!user) return <SafeAreaView style={styles.safe}><StatusBar style={dark ? 'light' : 'dark'} /><AuthScreen styles={styles} palette={palette} auth={auth} setAuth={setAuth} mode={authMode} setMode={setAuthMode} verification={verification} error={error} notice={notice} busy={busy} onLogin={login} onSignup={signup} onVerify={verifyPhone} onResend={resendCode} onOpenWebsite={() => void Linking.openURL(`${API}/login`)} onRiderSignup={() => void Linking.openURL(`${API}/rider/signup`)} onSellerSignup={() => void Linking.openURL(`${API}/sell`)} /></SafeAreaView>;
-  if (user.role === 'RIDER') return <SafeAreaView style={styles.safe}><StatusBar style={dark ? 'light' : 'dark'} /><RiderApp user={user} profile={profile} styles={styles} palette={palette} tab={riderTab} setTab={setRiderTab} data={rider} history={history} wallet={wallet} online={online} busy={busy} error={error} notice={notice} chat={openChat} messages={chatMessages} draft={messageDraft} setDraft={setMessageDraft} onLogout={logout} onToggleOnline={toggleOnline} onAccept={acceptOrder} onOpenChat={setOpenChat} onSend={sendChat} onComplete={completeOrder} onRefresh={() => void Promise.all([loadRider(), loadRiderHistory(), loadWallet()])} /></SafeAreaView>;
-  if (user.role !== 'CUSTOMER') return <SafeAreaView style={styles.safe}><StatusBar style={dark ? 'light' : 'dark'} /><View style={styles.authPage}><Brand styles={styles} /><Text style={styles.h1}>Welcome, {user.name.split(' ')[0]}</Text><Text style={styles.muted}>Seller and management tools are available through the Mangwaoo website.</Text><ActionButton styles={styles} title="Open Mangwaoo website" onPress={() => void Linking.openURL(API)} /><ActionButton styles={styles} title="Log out" secondary onPress={() => void logout()} /></View></SafeAreaView>;
-
-  return <SafeAreaView style={styles.safe}><StatusBar style={dark ? 'light' : 'dark'} /><TopBar styles={styles} user={user} title={customerTab === 'orders' ? 'My orders' : customerTab === 'account' ? 'My account' : customerTab === 'cart' ? 'Your basket' : 'Mangwaoo'} onLogout={logout} />
-    {customerTab === 'home' && <FlatList data={filteredProducts} keyExtractor={(p) => cartKey(p.marketplace, p.id)} contentContainerStyle={styles.listContent} refreshing={false} onRefresh={() => void Promise.all([loadCatalog(), loadCart()])} ListHeaderComponent={<View><Hero styles={styles} onCart={() => setCustomerTab('cart')} count={cartLines.reduce((a, l) => a + l.quantity, 0)} /><Text style={styles.h2}>What are you craving?</Text><TextInput style={styles.search} placeholder="Search food, shops or items" placeholderTextColor={palette.muted} value={query} onChangeText={setQuery} /><View style={styles.chips}>{(['all', 'gulplaza', 'mart'] as const).map((item) => <Chip key={item} styles={styles} label={item === 'all' ? 'All' : item === 'gulplaza' ? 'Food' : 'Groceries'} selected={filter === item} onPress={() => setFilter(item)} />)}</View><View style={styles.sectionHead}><Text style={styles.h2}>Popular near you</Text><Text style={styles.caption}>{filteredProducts.length} items</Text></View>{error ? <Feedback styles={styles} text={error} /> : null}{notice ? <Feedback styles={styles} text={notice} success /> : null}</View>} renderItem={({ item }) => <ProductCard styles={styles} product={item} quantity={cart[cartKey(item.marketplace, item.id)]?.quantity || 0} onAdd={() => void changeCart(item, 1)} onRemove={() => void changeCart(item, -1)} />} ListEmptyComponent={<EmptyState styles={styles} title="No items found" text="Try another search or check back soon." />} ListFooterComponent={<View style={{ height: 25 }} />} />}
-    {customerTab === 'orders' && <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={false} onRefresh={() => void loadProfile()} tintColor={palette.accent} />}>{error ? <Feedback styles={styles} text={error} /> : null}{notice ? <Feedback styles={styles} text={notice} success /> : null}<View style={styles.pointsCard}><View><Text style={styles.cardEyebrow}>MANGWAOO POINTS</Text><Text style={styles.points}>{Number(profile?.points || 0).toLocaleString()}</Text></View><Text style={styles.gift}>✦</Text></View>{profile?.loyalty ? <View style={styles.loyaltyCard}><Text style={styles.eyebrow}>LOYALTY CARD</Text><Text style={styles.h3}>{profile.loyalty.status || 'Get more from every order'}</Text><Text style={styles.caption}>{profile.loyalty.canApply ? 'You can apply for a card from your Mangwaoo account.' : 'Your loyalty benefits are linked to your website account.'}</Text></View> : null}<Text style={styles.h2}>Order history</Text>{(profile?.orders || []).length ? profile.orders.map((order: Order) => <OrderCard key={order.id} styles={styles} order={order} onCancel={() => Alert.alert('Cancel this order?', 'This will cancel the order with the seller.', [{ text: 'Keep order', style: 'cancel' }, { text: 'Cancel order', style: 'destructive', onPress: async () => { try { const path = order.marketplace === 'mart' ? 'orders' : 'gulplaza-orders'; await api(`/api/${path}/${order.id}/cancel`, { method: 'PATCH' }); await loadProfile(); } catch (e) { setError(toMessage(e)); } } }])} />) : <EmptyState styles={styles} title="Your orders will show here" text="Once you place an order, you can follow its status here." />}</ScrollView>}
-    {customerTab === 'cart' && <ScrollView contentContainerStyle={styles.page}><Text style={styles.h1}>Your basket</Text>{cartLines.length ? cartLines.map((line) => { const p = products.find((item) => item.id === line.productId && item.marketplace === line.marketplace); return p ? <ProductCard key={cartKey(p.marketplace, p.id)} styles={styles} product={p} quantity={line.quantity} onAdd={() => void changeCart(p, 1)} onRemove={() => void changeCart(p, -1)} compact /> : null; }) : <EmptyState styles={styles} title="Your basket is empty" text="Discover restaurants, groceries and more." action="Explore items" onAction={() => setCustomerTab('home')} />} {cartLines.length > 0 && <><View style={styles.totalRow}><Text style={styles.h3}>Estimated total</Text><Text style={styles.price}>{money(cartTotal)}</Text></View><Text style={styles.caption}>Delivery charges are calculated at checkout. Cash on delivery.</Text><Text style={styles.h3}>Delivery details</Text><Field styles={styles} placeholder="Full name" value={details.fullName} onChangeText={(v: string) => setDetails({ ...details, fullName: v })} /><Field styles={styles} placeholder="Phone number" keyboardType="phone-pad" value={details.contactNumber} onChangeText={(v: string) => setDetails({ ...details, contactNumber: v })} /><Field styles={styles} placeholder="Complete delivery address" value={details.completeAddress} onChangeText={(v: string) => setDetails({ ...details, completeAddress: v })} /><Field styles={styles} placeholder="Delivery note (optional)" value={details.note} onChangeText={(v: string) => setDetails({ ...details, note: v })} />{profile?.addresses?.length ? <Text style={styles.caption}>Saved address: {profile.addresses[0].label} · {profile.addresses[0].street}</Text> : null}{error ? <Feedback styles={styles} text={error} /> : null}<ActionButton styles={styles} title={busy ? 'Placing your order…' : 'Place order'} onPress={() => void checkout()} disabled={busy} /></>}</ScrollView>}
-    {customerTab === 'account' && <ScrollView contentContainerStyle={styles.page}><View style={styles.profileHero}><Avatar styles={styles} name={user.name} large /><Text style={styles.h2}>{profile?.user?.name || user.name}</Text><Text style={styles.caption}>{profile?.user?.email || user.email}</Text></View><View style={styles.infoCard}><Text style={styles.h3}>Personal details</Text><Field styles={styles} placeholder="Full name" value={profile?.user?.name || ''} onChangeText={(v: string) => setProfile({ ...profile, user: { ...profile.user, name: v } })} /><View style={styles.readonlyRow}><Text style={styles.caption}>Verified phone</Text><Text style={styles.bodyBold}>{profile?.user?.phone || 'Not added'}</Text></View><ActionButton styles={styles} title="Save profile" onPress={() => void updateProfile()} disabled={busy} /></View><View style={styles.infoCard}><Text style={styles.h3}>Saved addresses</Text>{profile?.addresses?.length ? profile.addresses.map((a: any) => <View key={a.id} style={styles.addressRow}><Text style={styles.addressPin}>⌖</Text><View style={{ flex: 1 }}><Text style={styles.bodyBold}>{a.label}</Text><Text style={styles.caption}>{a.street}</Text></View></View>) : <Text style={styles.caption}>Your saved addresses appear here.</Text>}</View>{error ? <Feedback styles={styles} text={error} /> : null}{notice ? <Feedback styles={styles} text={notice} success /> : null}<ActionButton styles={styles} title="Log out" secondary onPress={() => void logout()} /></ScrollView>}
-    <BottomBar styles={styles} active={customerTab} onSelect={setCustomerTab} count={cartLines.reduce((a, l) => a + l.quantity, 0)} />
+  return <SafeAreaView edges={['top', 'bottom']} style={[s.screen, { backgroundColor: c.surface }]}>
+    <StatusBar style={dark ? 'light' : 'dark'} />
+    <View style={[s.header, { borderColor: c.line }]}>
+      <View style={{ flex: 1 }}><Text style={[s.eyebrow, { color: c.muted }]}>YOUR EVERYDAY DELIVERY PARTNER</Text><Text accessibilityRole="header" style={[s.wordmark, { color: c.accent }]}>mangwaoo<Text style={{ color: c.ink }}>.</Text></Text></View>
+      <Pressable accessibilityLabel="Reload page" onPress={retry} style={[s.headerButton, { backgroundColor: c.soft }]}><Text style={{ color: c.accent, fontSize: 24 }}>↻</Text></Pressable>
+      <Pressable accessibilityLabel="Enable delivery location" onPress={() => void allowLocation().catch(() => Alert.alert('Location unavailable', 'Please enter your address on the page.'))} style={[s.headerButton, { backgroundColor: c.soft }]}><Text style={{ color: c.accent, fontSize: 22 }}>⌖</Text></Pressable>
+      {!page.dashboard && <Pressable accessibilityLabel="Open basket" onPress={() => navigate('/cart')} style={[s.basket, { backgroundColor: c.soft }]}><Text style={[s.link, { color: c.accent }]}>Basket ↗</Text></Pressable>}
+    </View>
+    <View style={{ height: 2, backgroundColor: c.line }}>{loading && <View style={{ width: `${Math.max(5, progress * 100)}%`, height: 2, backgroundColor: c.accent }} />}</View>
+    <View style={[s.screen, { backgroundColor: c.bg }]}>
+      <WebView<object> ref={web} source={{ uri: sourceUrl }} style={[s.screen, { backgroundColor: c.bg }]}
+        applicationNameForUserAgent="MangwaooApp/1.0" sharedCookiesEnabled geolocationEnabled
+        injectedJavaScript={WEB_NAVIGATION_SCRIPT}
+        onMessage={({ nativeEvent }) => {
+          const message = parseNavigationMessage(nativeEvent.data, nativeEvent.url, SITE_URL);
+          if (!message) return;
+          if (message.mode === 'push') history.current.visit(message.url);
+          else if (message.mode === 'replace') history.current.replace(message.url);
+          else history.current.restore(message.url);
+          setUrl(message.url);
+        }}
+        allowsBackForwardNavigationGestures allowsInlineMediaPlayback mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"
+        pullToRefreshEnabled setSupportMultipleWindows mixedContentMode="never" allowFileAccess={false}
+        originWhitelist={['http://*', 'https://*', 'tel:*', 'mailto:*', 'whatsapp:*', 'geo:*']}
+        onShouldStartLoadWithRequest={(request) => {
+          // The website CSP governs embedded maps and verification frames.
+          if (request.isTopFrame === false) return true;
+          if (isSiteUrl(request.url)) return true;
+          openExternal(request.url); return false;
+        }}
+        onOpenWindow={({ nativeEvent }) => { if (isSiteUrl(nativeEvent.targetUrl)) navigate(nativeEvent.targetUrl); else openExternal(nativeEvent.targetUrl); }}
+        onNavigationStateChange={(state) => {
+          if (!isSiteUrl(state.url)) return;
+          setUrl(state.url);
+        }}
+        onLoadStart={() => { setLoading(true); setProgress(0); }}
+        onLoadProgress={({ nativeEvent }) => setProgress(nativeEvent.progress)}
+        onLoadEnd={() => setLoading(false)}
+        onError={() => { setFailed(true); setLoading(false); }}
+        onHttpError={({ nativeEvent }) => { if (nativeEvent.url === url && nativeEvent.statusCode >= 400) { setFailed(true); setLoading(false); } }}
+        onContentProcessDidTerminate={() => web.current?.reload()} renderError={() => <View />}
+      />
+      {loading && progress < 0.15 && !failed && <View pointerEvents="none" style={[s.loadingPill, { backgroundColor: c.surface, borderColor: c.line }]}><ActivityIndicator size="small" color={c.accent} /><Text style={{ color: c.muted, fontSize: 12 }}>Getting things ready…</Text></View>}
+      {failed && <View style={[s.error, { backgroundColor: c.bg }]}>
+        <View style={[s.errorBadge, { backgroundColor: c.soft }]}><Text style={{ color: c.accent, fontSize: 40 }}>↻</Text></View>
+        <Text style={[s.title, { color: c.ink }]}>Let’s get you connected</Text>
+        <Text style={[s.description, { color: c.muted }]}>We couldn’t load this page. Check your connection and try again.</Text>
+        <Pressable style={s.primary} onPress={retry}><Text style={s.primaryText}>Try again</Text></Pressable>
+        <Pressable style={{ padding: 18 }} onPress={() => navigate('/')}><Text style={[s.link, { color: c.accent }]}>Back to home</Text></Pressable>
+      </View>}
+    </View>
+    {!page.dashboard && <View accessibilityRole="tablist" style={[s.tabs, { borderColor: c.line }]}>{TABS.map((tab) => {
+      const selected = page.tab === tab.id;
+      return <Pressable key={tab.id} accessibilityRole="tab" accessibilityLabel={tab.label} accessibilityState={{ selected }} onPress={() => navigate(tab.path)} style={({ pressed }) => [s.tab, { opacity: pressed ? 0.6 : 1 }]}>
+        <View style={[s.tabIconWrap, { backgroundColor: selected ? c.soft : 'transparent' }]}><Text style={[s.tabIcon, { color: selected ? c.accent : c.muted }]}>{tab.icon}</Text></View>
+        <Text style={{ fontSize: 10, color: selected ? c.accent : c.muted, fontWeight: selected ? '800' : '500' }}>{tab.label}</Text>
+        {selected && <View style={[s.dot, { backgroundColor: c.accent }]} />}
+      </Pressable>;
+    })}</View>}
   </SafeAreaView>;
 }
 
-function AuthScreen({ styles, palette, auth, setAuth, mode, setMode, verification, error, notice, busy, onLogin, onSignup, onVerify, onResend, onOpenWebsite, onRiderSignup, onSellerSignup }: any) {
-  const field = (name: string, placeholder: string, props = {}) => <Field styles={styles} placeholder={placeholder} value={auth[name]} onChangeText={(v: string) => setAuth((a: any) => ({ ...a, [name]: v }))} {...props} />;
-  return <KeyboardAvoidingView style={styles.authPage} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-    <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled"><View style={styles.authBrand}><Brand styles={styles} /><Text style={styles.tagline}>Everything you need, delivered with care.</Text></View>
-      <View style={styles.authCard}>{mode === 'verify' ? <><Text style={styles.eyebrow}>PHONE VERIFICATION</Text><Text style={styles.h1}>Check your phone</Text><Text style={styles.muted}>We sent a code to {verification?.phone || verification?.firebase?.phoneNumber}.</Text>{verification?.firebase ? <><Feedback styles={styles} text="This account uses Firebase SMS verification. Complete verification on the website, then come back and log in here." /><ActionButton styles={styles} title="Continue on Mangwaoo website" onPress={onOpenWebsite} /></> : <>{field('code', '6-digit code', { keyboardType: 'number-pad', maxLength: 6 })}{verification?.devCode ? <Text style={styles.devCode}>Local verification code: {verification.devCode}</Text> : null}<ActionButton styles={styles} title={busy ? 'Verifying…' : 'Verify and continue'} onPress={onVerify} disabled={busy} /><Pressable onPress={onResend} style={styles.textButton}><Text style={styles.link}>Resend code</Text></Pressable></>}<Pressable onPress={() => { setMode('login'); }} style={styles.textButton}><Text style={styles.link}>Back to login</Text></Pressable></> : <><View style={styles.authSwitch}><AuthSwitch styles={styles} selected={mode === 'login'} label="Log in" onPress={() => setMode('login')} /><AuthSwitch styles={styles} selected={mode === 'signup'} label="Create account" onPress={() => setMode('signup')} /></View><Text style={styles.h1}>{mode === 'login' ? 'Welcome back' : 'Join Mangwaoo'}</Text><Text style={styles.muted}>{mode === 'login' ? 'Sign in with your Mangwaoo website account.' : 'Create your customer account to start ordering.'}</Text>{mode === 'signup' ? <>{field('name', 'Full name', { autoCapitalize: 'words' })}{field('phone', 'Phone number', { keyboardType: 'phone-pad' })}</> : null}{field('email', 'Email address', { keyboardType: 'email-address', autoCapitalize: 'none' })}{field('password', 'Password', { secureTextEntry: true, onSubmitEditing: mode === 'login' ? onLogin : onSignup })}{error ? <Feedback styles={styles} text={error} /> : null}{notice ? <Feedback styles={styles} text={notice} success /> : null}<ActionButton styles={styles} title={busy ? 'Please wait…' : mode === 'login' ? 'Log in' : 'Create account'} onPress={mode === 'login' ? onLogin : onSignup} disabled={busy} />{mode === 'login' ? <Pressable onPress={onOpenWebsite} style={styles.textButton}><Text style={styles.link}>Forgot password?</Text></Pressable> : <Text style={styles.terms}>By continuing, you agree to Mangwaoo’s terms and privacy policy.</Text>}</>}</View>
-      <Text style={styles.authFoot}>Food, groceries and everyday essentials</Text><View style={styles.authExtra}><Pressable onPress={onRiderSignup}><Text style={styles.link}>Apply as a rider</Text></Pressable><Pressable onPress={onSellerSignup}><Text style={styles.link}>Become a seller</Text></Pressable></View></ScrollView></KeyboardAvoidingView>;
-}
-function RiderApp({ user, profile, styles, palette, tab, setTab, data, history, wallet, online, busy, error, notice, chat, messages, draft, setDraft, onLogout, onToggleOnline, onAccept, onOpenChat, onSend, onComplete, onRefresh }: any) {
-  if (chat) return <><TopBar styles={styles} user={user} title="Order chat" onLogout={onLogout} /><ScrollView contentContainerStyle={styles.page}><Pressable onPress={() => onOpenChat(null)}><Text style={styles.link}>‹ Back to orders</Text></Pressable><Text style={styles.h2}>{chat.pickupText || 'Pickup'} → {chat.addressText || 'Customer'}</Text>{messages.map((m: any, i: number) => <View key={m.id || i} style={[styles.chatBubble, m.senderRole === 'RIDER' ? styles.chatMine : styles.chatTheirs]}><Text style={styles.chatText}>{m.body}</Text></View>)}</ScrollView><View style={styles.chatInputRow}><TextInput style={[styles.input, { flex: 1 }]} placeholder="Message customer" placeholderTextColor={palette.muted} value={draft} onChangeText={setDraft} /><ActionButton styles={styles} title="Send" onPress={onSend} /></View></>;
-  return <><TopBar styles={styles} user={user} title={tab === 'wallet' ? 'Rider wallet' : tab === 'history' ? 'Delivery history' : tab === 'account' ? 'My account' : 'Rider dashboard'} onLogout={onLogout} />
-    <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={busy} onRefresh={onRefresh} tintColor={palette.accent} />}>
-      {tab === 'orders' && <><View style={styles.riderWelcome}><Text style={styles.eyebrowLight}>MANGWAOO DELIVERY PARTNER</Text><Text style={styles.heroTitle}>Let’s make deliveries.{"\n"}You’ve got this.</Text><View style={styles.onlineRow}><View style={[styles.onlineDot, online && styles.onlineDotOn]} /><Text style={styles.onlineLabel}>{online ? 'You are online' : 'You are offline'}</Text><ActionButton styles={styles} title={online ? 'Go offline' : 'Go online'} secondary={!online} onPress={onToggleOnline} disabled={busy || Boolean(data?.wallet?.hold)} /></View></View>{data?.wallet?.hold ? <Feedback styles={styles} text="Recharge your wallet before receiving new delivery requests." /> : null}<View style={styles.metricGrid}><Metric styles={styles} label="New requests" value={data?.requests?.length || 0} /><Metric styles={styles} label="On delivery" value={data?.chats?.length || 0} /></View><Text style={styles.h2}>New requests</Text>{(data?.requests || []).map((c: RiderChat) => <View key={c.id} style={styles.infoCard}><Text style={styles.eyebrow}>DELIVERY REQUEST</Text><Text style={styles.h3}>{c.pickupText || 'Pickup'} → {c.addressText || 'Drop-off'}</Text><Text style={styles.caption}>{Number(c.distanceKm || 0).toFixed(1)} km away · {money(c.deliveryCharge || 0)} delivery charge</Text><ActionButton styles={styles} title="Accept this order" onPress={() => onAccept(c)} disabled={busy} /></View>)}{!(data?.requests || []).length ? <EmptyState styles={styles} title={online ? 'No nearby requests yet' : 'Ready when you are'} text={online ? 'New customer orders appear here as soon as they are dispatched.' : 'Go online to receive nearby delivery requests.'} /> : null}<Text style={styles.h2}>Active deliveries</Text>{(data?.chats || []).map((c: RiderChat) => <View key={c.id} style={styles.infoCard}><Text style={styles.eyebrow}>IN PROGRESS</Text><Text style={styles.h3}>{c.pickupText || 'Pickup'} → {c.addressText || 'Drop-off'}</Text><Text style={styles.caption}>{c.lastMessage || 'Keep the customer updated as you travel.'}</Text><View style={styles.inlineButtons}><ActionButton styles={styles} title="Open chat" secondary onPress={() => onOpenChat(c)} /><ActionButton styles={styles} title="Delivered" onPress={() => onComplete(c)} disabled={busy} /></View></View>)}{error ? <Feedback styles={styles} text={error} /> : null}{notice ? <Feedback styles={styles} text={notice} success /> : null}</>}
-      {tab === 'history' && <><Text style={styles.h1}>Your deliveries</Text><Text style={styles.muted}>A live record of orders completed from the website and app.</Text><View style={styles.metricGrid}><Metric styles={styles} label="Delivered" value={history?.summary?.delivered || 0} /><Metric styles={styles} label="Commission" value={money(history?.summary?.commission || 0)} /><Metric styles={styles} label="Bonuses" value={money(history?.summary?.bonus || 0)} /><Metric styles={styles} label="Rating" value={history?.rating?.average ? `${history.rating.average} ★` : '—'} /></View>{(history?.items || []).map((item: any, i: number) => <View key={item.id || i} style={styles.infoCard}><Text style={styles.h3}>{item.customerName || 'Delivery'}</Text><Text style={styles.caption}>{item.kind} · {item.endedAt ? new Date(item.endedAt).toLocaleDateString() : new Date(item.takenAt).toLocaleDateString()}</Text><Text style={styles.bodyBold}>Delivery {money(item.deliveryCharge || 0)} · Commission {money(item.commission || 0)} · Bonus {money(item.bonus || 0)}</Text>{item.ratingComment ? <Text style={styles.caption}>Customer: “{item.ratingComment}”</Text> : null}</View>)}</>}
-      {tab === 'wallet' && <><View style={styles.walletHero}><Text style={styles.eyebrowLight}>AVAILABLE BALANCE</Text><Text style={styles.walletAmount}>{money(wallet?.wallet?.balance || data?.wallet?.balance || 0)}</Text><Text style={styles.walletMeta}>{wallet?.wallet?.unpaidOrders || data?.wallet?.unpaidOrders || 0} unpaid orders</Text></View><View style={styles.metricGrid}><Metric styles={styles} label="Orders completed" value={wallet?.wallet?.completedOrders || 0} /><Metric styles={styles} label="Commission" value={`${wallet?.wallet?.commissionPercent || 0}%`} /></View><Text style={styles.h2}>Wallet activity</Text>{(wallet?.entries || []).map((entry: any) => <View key={entry.id} style={styles.ledgerRow}><View style={{ flex: 1 }}><Text style={styles.bodyBold}>{entry.type.replace(/_/g, ' ')}</Text><Text style={styles.caption}>{entry.note || new Date(entry.createdAt).toLocaleDateString()}</Text></View><Text style={[styles.price, entry.amount >= 0 ? styles.greenText : styles.redText]}>{money(entry.amount)}</Text></View>)}</>}
-      {tab === 'account' && <><View style={styles.profileHero}><Avatar styles={styles} name={user.name} large /><Text style={styles.h2}>{profile?.user?.name || user.name}</Text><Text style={styles.caption}>{profile?.user?.email || user.email}</Text><Text style={styles.caption}>Rider account · {profile?.rider?.vehicleType || 'Vehicle not set'}</Text></View><View style={styles.infoCard}><Text style={styles.h3}>Account status</Text><Text style={styles.body}>{profile?.rider?.isApproved === false ? 'Waiting for admin approval' : 'Connected to Mangwaoo dispatch'}</Text></View><ActionButton styles={styles} title="Log out" secondary onPress={onLogout} /></>}
-    </ScrollView><BottomBar styles={styles} active={tab} onSelect={setTab} rider /></>;
-}
-
-function Brand({ styles }: any) { return <Text style={styles.brand}>mangwaoo<Text style={styles.brandDot}>.</Text></Text>; }
-function TopBar({ styles, user, title, onLogout }: any) { return <View style={styles.topBar}><View><Brand styles={styles} /><Text style={styles.topTitle}>{title}</Text></View><Pressable onPress={onLogout} style={styles.topAvatar}><Text style={styles.avatarLetters}>{initials(user.name)}</Text></Pressable></View>; }
-function Hero({ styles, onCart, count }: any) { return <View style={styles.hero}><View style={styles.heroRow}><View style={styles.locationPill}><Text style={styles.pin}>⌖</Text><Text style={styles.locationText}>Karachi · Delivering now</Text></View><Pressable style={styles.cartPill} onPress={onCart}><Text style={styles.cartPillText}>Basket {count ? `(${count})` : '· 0'}</Text></Pressable></View><Text style={styles.heroTitle}>Good food,{"\n"}good mood.</Text><Text style={styles.heroCopy}>Fresh picks from your neighbourhood, delivered to your door.</Text><View style={styles.heroMarks}><Text style={styles.heroMark}>FOOD</Text><Text style={styles.heroMark}>GROCERIES</Text><Text style={styles.heroMark}>EVERYDAY</Text></View></View>; }
-function ProductCard({ styles, product, quantity, onAdd, onRemove, compact }: any) { return <View style={styles.productCard}><View style={styles.productImage}>{product.images?.[0] ? <Image source={{ uri: product.images[0] }} style={styles.image} resizeMode="cover" /> : <Text style={styles.productEmoji}>{product.marketplace === 'gulplaza' ? 'ðŸ²' : 'ðŸ›ï¸'}</Text>}</View><View style={styles.productInfo}><View style={styles.productTags}><Text style={styles.eyebrow}>{product.marketplace === 'gulplaza' ? 'FOOD' : 'MART'}</Text><Text style={styles.caption}> · {product.category}</Text></View><Text style={styles.productName}>{product.name}</Text><Text style={styles.caption} numberOfLines={1}>{product.vendor}</Text>{product.description && !compact ? <Text style={styles.productDesc} numberOfLines={2}>{product.description}</Text> : null}<View style={styles.productBottom}><Text style={styles.price}>{money(product.price)}</Text>{quantity ? <View style={styles.qty}><Pressable onPress={onRemove}><Text style={styles.qtyText}>−</Text></Pressable><Text style={styles.qtyCount}>{quantity}</Text><Pressable onPress={onAdd}><Text style={styles.qtyText}>ï¼‹</Text></Pressable></View> : <Pressable style={styles.addButton} onPress={onAdd}><Text style={styles.addText}>ï¼‹ Add</Text></Pressable>}</View></View></View>; }
-function OrderCard({ styles, order, onCancel }: any) { const cancelable = ['PENDING', 'CONFIRMED', 'PREPARING'].includes(order.status); return <View style={styles.infoCard}><View style={styles.orderTop}><View><Text style={styles.eyebrow}>{order.ref} · {order.marketplace === 'mart' ? 'MANGWAOOMART' : 'FOOD ORDER'}</Text><Text style={styles.h3}>{order.sellerName}</Text><Text style={styles.caption}>{new Date(order.createdAt).toLocaleDateString('en-PK')}</Text></View><Text style={[styles.status, cancelable ? styles.statusActive : styles.statusDone]}>{order.status.replace(/_/g, ' ')}</Text></View>{order.items.map((item: any) => <View key={item.id} style={styles.orderItem}><Text style={styles.body}>{item.productName} × {item.quantity}</Text><Text style={styles.caption}>{money(item.price * item.quantity)}</Text></View>)}<View style={styles.totalRow}><Text style={styles.caption}>Delivery to {order.address}</Text><Text style={styles.price}>{money(order.totalAmount - order.discountAmount + order.deliveryFee)}</Text></View><Pressable style={styles.cancelLink} onPress={() => void Linking.openURL(`${API}/track/${order.ref}`)}><Text style={styles.link}>View order tracking</Text></Pressable>{cancelable ? <Pressable style={styles.cancelLink} onPress={onCancel}><Text style={styles.cancelText}>Cancel order</Text></Pressable> : null}</View>; }
-function BottomBar({ styles, active, onSelect, count = 0, rider }: any) { const items = rider ? [{ key: 'orders', icon: '⌂', label: 'Deliveries' }, { key: 'history', icon: '◷', label: 'History' }, { key: 'wallet', icon: '◈', label: 'Wallet' }, { key: 'account', icon: '○', label: 'Account' }] : [{ key: 'home', icon: '⌂', label: 'Explore' }, { key: 'orders', icon: '▤', label: 'Orders' }, { key: 'cart', icon: 'ðŸ›', label: `Basket${count ? ` ${count}` : ''}` }, { key: 'account', icon: '○', label: 'Account' }]; return <View style={styles.bottomBar}>{items.map((item) => <Pressable key={item.key} style={styles.navItem} onPress={() => onSelect(item.key)}><Text style={[styles.navIcon, active === item.key && styles.navIconActive]}>{item.icon}</Text><Text style={[styles.navLabel, active === item.key && styles.navLabelActive]}>{item.label}</Text></Pressable>)}</View>; }
-function Chip({ styles, label, selected, onPress }: any) { return <Pressable onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}><Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text></Pressable>; }
-function ActionButton({ styles, title, onPress, secondary, disabled }: any) { return <Pressable disabled={disabled} onPress={onPress} style={[styles.actionButton, secondary && styles.actionSecondary, disabled && { opacity: 0.55 }]}><Text style={[styles.actionText, secondary && styles.actionTextSecondary]}>{title}</Text></Pressable>; }
-function Field({ styles, ...props }: any) { return <TextInput {...props} placeholderTextColor={props.placeholderTextColor || '#898781'} style={[styles.input, props.style]} />; }
-function Feedback({ styles, text, success }: any) { return <View style={[styles.feedback, success && styles.feedbackSuccess]}><Text style={[styles.feedbackText, success && styles.feedbackTextSuccess]}>{text}</Text></View>; }
-function EmptyState({ styles, title, text, action, onAction }: any) { return <View style={styles.empty}><Text style={styles.emptyIcon}>✦</Text><Text style={styles.h3}>{title}</Text><Text style={styles.caption}>{text}</Text>{action ? <ActionButton styles={styles} title={action} onPress={onAction} /> : null}</View>; }
-function Avatar({ styles, name, large }: any) { return <View style={[styles.avatar, large && styles.avatarLarge]}><Text style={[styles.avatarLetters, large && styles.avatarLettersLarge]}>{initials(name)}</Text></View>; }
-function Metric({ styles, label, value }: any) { return <View style={styles.metric}><Text style={styles.metricValue}>{value}</Text><Text style={styles.metricLabel}>{label}</Text></View>; }
-function AuthSwitch({ styles, selected, label, onPress }: any) { return <Pressable onPress={onPress} style={[styles.authSwitchItem, selected && styles.authSwitchSelected]}><Text style={[styles.authSwitchText, selected && styles.authSwitchTextSelected]}>{label}</Text></Pressable>; }
-function initials(name = '') { return name.trim().split(/\s+/).slice(0, 2).map((part: string) => part[0]?.toUpperCase()).join('') || 'M'; }
-function toMessage(error: unknown) { return error instanceof Error ? error.message : 'Something went wrong. Please try again.'; }
-
-const lightTheme: Palette = { bg: '#f8f8f8', surface: '#ffffff', ink: '#111111', muted: '#666666', accent: '#9b0000', border: '#e8e8e6', soft: '#f5ece9', danger: '#b42318', success: '#15803d', shadow: '#00000012' };
-const darkTheme: Palette = { bg: '#121211', surface: '#1c1c1a', ink: '#f3f2ef', muted: '#a3a29b', accent: '#ff7a7a', border: '#30302d', soft: '#2b1516', danger: '#f87171', success: '#4ade80', shadow: '#00000044' };
-function makeStyles(p: Palette, dark: boolean) { return StyleSheet.create({
-  safe: { flex: 1, backgroundColor: p.bg }, center: { alignItems: 'center', justifyContent: 'center', gap: 12 }, listContent: { paddingHorizontal: 18, paddingBottom: 24 }, page: { padding: 18, paddingBottom: 36 }, authPage: { flex: 1, paddingHorizontal: 20, paddingVertical: 28, backgroundColor: p.bg }, authBrand: { alignItems: 'center', marginBottom: 25 }, brand: { color: p.accent, fontSize: 31, fontWeight: '900', letterSpacing: -1.8 }, brandDot: { color: '#c1121f' }, tagline: { color: p.muted, fontSize: 13, marginTop: 5 }, authCard: { backgroundColor: p.surface, borderRadius: 24, borderWidth: 1, borderColor: p.border, padding: 21, shadowColor: p.shadow, shadowOpacity: 0.1, shadowRadius: 22, elevation: 3 }, authSwitch: { flexDirection: 'row', padding: 4, backgroundColor: p.bg, borderRadius: 14, marginBottom: 22 }, authSwitchItem: { flex: 1, alignItems: 'center', paddingVertical: 11, borderRadius: 11 }, authSwitchSelected: { backgroundColor: p.surface, elevation: 1 }, authSwitchText: { color: p.muted, fontSize: 13, fontWeight: '700' }, authSwitchTextSelected: { color: p.accent }, authFoot: { color: p.muted, fontSize: 12, textAlign: 'center', marginTop: 22 }, h1: { color: p.ink, fontSize: 27, fontWeight: '900', letterSpacing: -0.7, marginBottom: 7 }, h2: { color: p.ink, fontSize: 20, fontWeight: '800', letterSpacing: -0.3, marginBottom: 10 }, h3: { color: p.ink, fontSize: 16, fontWeight: '700', marginBottom: 6 }, muted: { color: p.muted, fontSize: 14, lineHeight: 21, marginBottom: 15 }, caption: { color: p.muted, fontSize: 12, lineHeight: 18 }, body: { color: p.ink, fontSize: 14, lineHeight: 20 }, bodyBold: { color: p.ink, fontSize: 14, fontWeight: '700' }, eyebrow: { color: p.accent, fontSize: 10, letterSpacing: 1, fontWeight: '800' }, eyebrowLight: { color: '#ffe2dc', fontSize: 10, letterSpacing: 1, fontWeight: '800' }, input: { backgroundColor: p.bg, borderWidth: 1, borderColor: p.border, borderRadius: 13, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: p.ink, marginTop: 10 }, actionButton: { alignItems: 'center', justifyContent: 'center', backgroundColor: p.accent, paddingHorizontal: 17, paddingVertical: 13, borderRadius: 13, marginTop: 12 }, actionText: { color: '#ffffff', fontSize: 14, fontWeight: '700' }, actionSecondary: { backgroundColor: p.soft, borderWidth: 1, borderColor: p.border }, actionTextSecondary: { color: p.accent }, textButton: { padding: 12, alignItems: 'center' }, link: { color: p.accent, fontSize: 13, fontWeight: '700' }, terms: { color: p.muted, fontSize: 11, textAlign: 'center', lineHeight: 16, marginTop: 13 }, devCode: { color: p.accent, backgroundColor: p.soft, padding: 12, borderRadius: 10, marginTop: 9, textAlign: 'center', fontWeight: '700' }, feedback: { borderRadius: 12, padding: 12, backgroundColor: p.soft, marginVertical: 7 }, feedbackText: { color: p.danger, fontSize: 13, lineHeight: 19 }, feedbackSuccess: { backgroundColor: dark ? '#12261a' : '#eaf6ee' }, feedbackTextSuccess: { color: p.success }, topBar: { backgroundColor: p.surface, paddingHorizontal: 18, paddingVertical: 11, minHeight: 66, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderColor: p.border }, topTitle: { color: p.muted, fontSize: 11, marginTop: -2 }, topAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: p.soft, justifyContent: 'center', alignItems: 'center' }, avatarLetters: { color: p.accent, fontSize: 14, fontWeight: '800' }, hero: { backgroundColor: '#9b0000', borderRadius: 24, padding: 19, paddingTop: 17, marginTop: 12, marginBottom: 23, overflow: 'hidden' }, heroRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, locationPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff22', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20 }, pin: { color: '#ffffff', fontSize: 15, marginRight: 5 }, locationText: { color: '#fff', fontSize: 11, fontWeight: '600' }, cartPill: { backgroundColor: '#ffffff', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18 }, cartPillText: { color: '#9b0000', fontSize: 11, fontWeight: '800' }, heroTitle: { color: '#ffffff', fontSize: 31, lineHeight: 36, fontWeight: '900', letterSpacing: -0.8, marginTop: 24 }, heroCopy: { color: '#ffe2dc', fontSize: 13, lineHeight: 19, maxWidth: 265, marginTop: 8 }, heroMarks: { flexDirection: 'row', gap: 8, marginTop: 19 }, heroMark: { color: '#fff', fontSize: 8, fontWeight: '800', letterSpacing: 0.8, borderWidth: 1, borderColor: '#ffffff4d', borderRadius: 20, overflow: 'hidden', paddingHorizontal: 9, paddingVertical: 6 }, search: { backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, borderRadius: 13, padding: 13, color: p.ink, fontSize: 14, marginBottom: 13 }, chips: { flexDirection: 'row', gap: 8, marginBottom: 18 }, chip: { borderWidth: 1, borderColor: p.border, paddingHorizontal: 15, paddingVertical: 9, borderRadius: 20, backgroundColor: p.surface }, chipSelected: { backgroundColor: p.accent, borderColor: p.accent }, chipText: { color: p.muted, fontSize: 12, fontWeight: '700' }, chipTextSelected: { color: '#fff' }, sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }, productCard: { flexDirection: 'row', backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, borderRadius: 18, padding: 10, marginBottom: 11 }, productImage: { width: 94, height: 102, borderRadius: 13, backgroundColor: p.soft, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, image: { width: '100%', height: '100%' }, productEmoji: { fontSize: 31 }, productInfo: { flex: 1, paddingLeft: 12, paddingVertical: 2, justifyContent: 'center' }, productTags: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 }, productName: { color: p.ink, fontSize: 15, lineHeight: 19, fontWeight: '700' }, productDesc: { color: p.muted, fontSize: 11, lineHeight: 15, marginTop: 4 }, productBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 9 }, price: { color: p.accent, fontSize: 15, fontWeight: '900' }, addButton: { backgroundColor: p.soft, paddingHorizontal: 13, paddingVertical: 8, borderRadius: 11 }, addText: { color: p.accent, fontSize: 12, fontWeight: '800' }, qty: { flexDirection: 'row', alignItems: 'center', backgroundColor: p.soft, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 11, gap: 12 }, qtyText: { color: p.accent, fontSize: 18, fontWeight: '700' }, qtyCount: { color: p.ink, fontSize: 13, fontWeight: '800' }, bottomBar: { backgroundColor: p.surface, borderTopWidth: 1, borderColor: p.border, paddingBottom: Platform.OS === 'ios' ? 4 : 8, paddingTop: 5, flexDirection: 'row', justifyContent: 'space-around' }, navItem: { alignItems: 'center', minWidth: 62, paddingVertical: 3 }, navIcon: { color: p.muted, fontSize: 20, height: 24 }, navIconActive: { color: p.accent }, navLabel: { color: p.muted, fontSize: 9, fontWeight: '600' }, navLabelActive: { color: p.accent, fontWeight: '800' }, loyaltyCard: { backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, borderRadius: 16, padding: 15, marginBottom: 20 }, pointsCard: { borderRadius: 20, backgroundColor: '#9b0000', paddingHorizontal: 19, paddingVertical: 17, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }, cardEyebrow: { color: '#ffe2dc', fontSize: 9, fontWeight: '800', letterSpacing: 1.2 }, points: { color: '#fff', fontSize: 29, fontWeight: '900', marginTop: 4 }, gift: { color: '#ffffffa8', fontSize: 36 }, infoCard: { backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, borderRadius: 17, padding: 15, marginBottom: 12 }, orderTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 9, marginBottom: 10 }, status: { alignSelf: 'flex-start', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6, fontSize: 9, fontWeight: '800', overflow: 'hidden' }, statusActive: { color: '#876400', backgroundColor: dark ? '#3a3115' : '#fff5cf' }, statusDone: { color: p.success, backgroundColor: dark ? '#173222' : '#eaf6ee' }, orderItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderTopWidth: 1, borderColor: p.border }, totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderColor: p.border, paddingTop: 11, marginTop: 9, marginBottom: 12 }, cancelLink: { alignSelf: 'flex-end', paddingTop: 10 }, cancelText: { color: p.danger, fontSize: 12, fontWeight: '700' }, profileHero: { alignItems: 'center', padding: 20, marginBottom: 15, backgroundColor: p.surface, borderRadius: 18 }, avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: p.soft, alignItems: 'center', justifyContent: 'center', marginBottom: 9 }, avatarLarge: { width: 68, height: 68, borderRadius: 34, marginBottom: 10 }, avatarLettersLarge: { fontSize: 22 }, readonlyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 13, borderBottomWidth: 1, borderColor: p.border }, addressRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 9, borderTopWidth: 1, borderColor: p.border }, addressPin: { fontSize: 22, color: p.accent }, totalRowDummy: {}, empty: { alignItems: 'center', padding: 26, marginTop: 12, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, borderRadius: 18 }, emptyIcon: { color: p.accent, fontSize: 34, marginBottom: 6 }, riderWelcome: { backgroundColor: '#9b0000', borderRadius: 22, padding: 19, marginBottom: 15 }, riderTitle: { color: '#fff', fontSize: 29, fontWeight: '900' }, onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18 }, onlineDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#b8b6b0' }, onlineDotOn: { backgroundColor: '#48d597' }, onlineLabel: { flex: 1, color: '#fff', fontSize: 12, fontWeight: '700' }, metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginVertical: 12 }, metric: { flexGrow: 1, minWidth: '42%', backgroundColor: p.surface, borderWidth: 1, borderColor: p.border, borderRadius: 15, padding: 14 }, metricValue: { color: p.ink, fontSize: 21, fontWeight: '900' }, metricLabel: { color: p.muted, fontSize: 11, marginTop: 4 }, walletHero: { backgroundColor: '#9b0000', borderRadius: 22, padding: 21, marginBottom: 15 }, walletAmount: { color: '#fff', fontSize: 32, fontWeight: '900', marginTop: 9 }, walletMeta: { color: '#ffe2dc', fontSize: 12, marginTop: 5 }, ledgerRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderColor: p.border, paddingVertical: 13 }, greenText: { color: p.success }, redText: { color: p.danger }, chatBubble: { maxWidth: '85%', borderRadius: 15, padding: 12, marginVertical: 5 }, chatMine: { alignSelf: 'flex-end', backgroundColor: p.soft }, chatTheirs: { alignSelf: 'flex-start', backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }, chatText: { color: p.ink, fontSize: 14 }, chatInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, backgroundColor: p.surface, borderTopWidth: 1, borderColor: p.border }, riderFooter: {}, authExtra: { flexDirection: 'row', justifyContent: 'center', gap: 22, paddingTop: 14 }, inlineButtons: { flexDirection: 'row', gap: 8 }, authBrandLogo: {},
-}); }
+const s = StyleSheet.create({
+  screen: { flex: 1 }, header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 12, gap: 8, borderBottomWidth: StyleSheet.hairlineWidth },
+  eyebrow: { fontSize: 7, fontWeight: '700', letterSpacing: 1.1, marginBottom: 3 }, wordmark: { fontSize: 26, fontWeight: '900', letterSpacing: -1.4 },
+  headerButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 14 }, basket: { minHeight: 38, paddingHorizontal: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }, link: { fontSize: 12, fontWeight: '700' },
+  tabs: { flexDirection: 'row', paddingHorizontal: 8, paddingTop: 8, paddingBottom: 5, borderTopWidth: StyleSheet.hairlineWidth }, tab: { flex: 1, alignItems: 'center', minHeight: 58, gap: 3 }, tabIconWrap: { width: 46, height: 29, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }, tabIcon: { fontSize: 22, fontWeight: '600' }, dot: { width: 4, height: 4, borderRadius: 2 },
+  loadingPill: { position: 'absolute', top: 16, alignSelf: 'center', flexDirection: 'row', gap: 9, alignItems: 'center', paddingHorizontal: 15, paddingVertical: 11, borderRadius: 30, borderWidth: 1 },
+  error: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', padding: 30 }, center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30 }, errorBadge: { width: 78, height: 78, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 22 },
+  title: { fontSize: 23, fontWeight: '800', letterSpacing: -0.6, marginVertical: 10, textAlign: 'center' }, description: { fontSize: 14, lineHeight: 22, textAlign: 'center', maxWidth: 300, marginBottom: 22 }, primary: { backgroundColor: '#9b0000', borderRadius: 16, paddingHorizontal: 36, paddingVertical: 16 }, primaryText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+});

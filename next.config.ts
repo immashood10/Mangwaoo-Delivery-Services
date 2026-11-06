@@ -45,7 +45,7 @@ const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   // Only the features the site uses: the customer's/rider's location and the rider's voice notes.
-  { key: "Permissions-Policy", value: "geolocation=(self), microphone=(self), camera=(), payment=(), usb=(), bluetooth=(), serial=()" },
+  { key: "Permissions-Policy", value: "geolocation=(self), microphone=(self), camera=(self), payment=(), usb=(), bluetooth=(), serial=()" },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
   { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
   ...(isProduction

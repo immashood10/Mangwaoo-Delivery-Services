@@ -25,6 +25,9 @@ type Order = {
   /** The items. What the customer pays is this minus the discounts plus the delivery fee (food only). */
   totalAmount: number;
   deliveryFee: number;
+  vendorFulfilled?: boolean;
+  deliveryMinDays?: number;
+  deliveryMaxDays?: number;
   /** The coupon and the Loyalty Card together; `loyaltyDiscount` is the card's part of it. */
   discountAmount: number;
   loyaltyDiscount: number;
@@ -150,6 +153,7 @@ function OrderCard({ order, onCancelled }: { order: Order; onCancelled: () => vo
         </span>
       </div>
 
+      <div>{order.vendorFulfilled && <p className="mb-3 rounded-xl bg-brand-light p-3 text-sm text-ink">Vendor delivery: {order.deliveryMinDays === order.deliveryMaxDays ? order.deliveryMaxDays : `${order.deliveryMinDays}-${order.deliveryMaxDays}`} days. The vendor handles shipping.</p>}</div>
       {order.discountAmount > 0 || order.deliveryFee > 0 ? (
         <div className="mt-2 space-y-0.5 text-right text-xs text-brand-gray">
           <p>Items PKR {order.totalAmount.toLocaleString()}</p>

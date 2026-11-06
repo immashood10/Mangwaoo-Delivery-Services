@@ -21,12 +21,14 @@ export default function OrderStatusButtons({
   id,
   orderRef,
   status,
+  vendorFulfilled = false,
 }: {
   apiBase: string;
   kind: 'MART' | 'GULPLAZA';
   id: string;
   orderRef: string;
   status: string;
+  vendorFulfilled?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -69,7 +71,7 @@ export default function OrderStatusButtons({
             onClick={() => void move(next.status)}
             className="rounded-lg bg-brand-red-primary px-4 py-2 text-xs font-semibold text-white hover:bg-brand-red-secondary disabled:opacity-60"
           >
-            {busy ? 'Updating…' : next.label}
+            {busy ? 'Updating…' : vendorFulfilled && status === 'PREPARING' ? 'Parcel dispatched' : next.label}
           </button>
         ) : null}
         {canCancel ? (

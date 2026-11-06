@@ -330,7 +330,7 @@ export async function releaseUncoveredAreaChats(client: Tx | typeof prisma, area
 
 /** An admin hands a waiting order to the riders (the first to reply takes it), e.g. when the manager is not answering. */
 export async function releaseChatToRiders(chatId: string): Promise<'released' | 'missing' | 'not-waiting'> {
-  const updated = await prisma.riderChat.updateMany({ where: { id: chatId, status: 'OPEN', riderId: null, areaId: { not: null } }, data: { areaId: null } });
+  const updated = await prisma.riderChat.updateMany({ where: { id: chatId, status: 'OPEN', riderId: null, OR: [{ areaId: { not: null } }, { managerOnly: true }] }, data: { areaId: null, managerOnly: false } });
 
   if (updated.count === 1) return 'released';
 
@@ -482,7 +482,7 @@ export type AssignOutcome =
  * can't both win) and then the rider's row, the order the wallet code locks in too. The rider must be approved, online and
  * not on hold: unpaid commission up to the limit (or an admin's block) means no new order, whoever offers it.
  */
-export async function assignRiderToChat(input: { chatId: string; riderId: string; areaId: number }): Promise<AssignOutcome> {
+export async function assignRiderToChat(input: { chatId: string; riderId: string; areaId?: number }): Promise<AssignOutcome> {
   return prisma.$transaction(async (tx) => {
     const locked = await tx.$queryRaw<{ status: string; areaId: number | null; riderId: string | null }[]>`
       SELECT "status"::text AS "status", "areaId", "riderId" FROM "RiderChat" WHERE "id" = ${input.chatId} FOR UPDATE`;
@@ -492,8 +492,10 @@ export async function assignRiderToChat(input: { chatId: string; riderId: string
     const row = locked[0];
 
     // Another area's order (or one nobody manages) is not theirs to give away; the answer is the same as "not there".
-    if (row.areaId !== input.areaId) return { kind: 'not-managed' } as const;
+    if (input.areaId !== undefined && row.areaId !== input.areaId) return { kind: 'not-managed' } as const;
     if (row.status === 'CLOSED') return { kind: 'closed' } as const;
+    const shippingOnly = await tx.order.count({ where: { riderChatId: input.chatId, vendorFulfilled: true } }) + await tx.gulplazaOrder.count({ where: { riderChatId: input.chatId, vendorFulfilled: true } });
+    if (shippingOnly) return { kind: 'rider-unavailable', error: 'Vendor-shipping orders cannot be assigned to a rider.' } as const;
     if (row.riderId === input.riderId) return { kind: 'same-rider' } as const;
 
     await tx.$queryRaw`SELECT "id" FROM "Rider" WHERE "id" = ${input.riderId} FOR UPDATE`;
