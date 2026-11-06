@@ -73,3 +73,7 @@ APK SHA-256: `7BA5A8BFE71DD98476E58D92C122BB42F76C8141E777B5D8C30D4651FF6A776B`.
 This build requests Android camera and microphone permissions through the native app before recording, supports reels up to 60 seconds, and hides the website footer only inside the app. The public website navbar and footer remain unchanged.
 
 Testing build page: https://expo.dev/accounts/mangwaoocomdeliveryservicess-team/projects/mangwaoo-delivery-service/builds/57334d62-7dea-48e1-babb-bd4d397b0227
+
+Version 1.1.1 (Android build 3) direct APK: https://expo.dev/artifacts/eas/WzInDXqqDnVgnnLSPVI4oDloEJtMGr0H1uKYuXnFpks.apk
+
+APK SHA-256: `3C7A0507287D2C4531BA27479C5367247F78E5C878CA005A7DD41ED497CAC5E9`.
