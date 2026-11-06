@@ -27,7 +27,7 @@ export default function ReelComposer({ onPosted }: { onPosted: () => void }) {
   }
   async function choose(next: File) {
     setError('');
-    if (next.size > MAX_REEL_BYTES) { setError('This video is larger than 3 MB. Use Record here for a smaller food clip.'); return; }
+    if (next.size > MAX_REEL_BYTES) { setError('This video is larger than 4 MB. Use Record here for a smaller food clip.'); return; }
     const url = URL.createObjectURL(next); const video = document.createElement('video'); video.preload = 'metadata';
     try { const duration = await new Promise<number>((resolve, reject) => { video.onloadedmetadata = () => video.videoWidth > 0 ? resolve(video.duration) : reject(new Error('Choose a video with a picture.')); video.onerror = () => reject(new Error('This video cannot be played. Use MP4 or WebM.')); video.src = url; }); if (Number.isFinite(duration) && duration > MAX_REEL_SECONDS + 1) throw new Error('Keep your reel to 1 minute or less.'); setFile(next); setPreview(URL.createObjectURL(next)); } catch(e) { setError((e as Error).message); } finally { URL.revokeObjectURL(url); video.removeAttribute('src'); video.load(); }
   }
@@ -39,8 +39,8 @@ export default function ReelComposer({ onPosted }: { onPosted: () => void }) {
       const input = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 720 }, height: { ideal: 1280 } }, audio: true }); stream.current = input;
       if (!mounted.current) { input.getTracks().forEach(t => t.stop()); return; }
       const mimeType = ['video/webm;codecs=vp8,opus','video/webm','video/mp4'].find(type => MediaRecorder.isTypeSupported(type));
-      // Keep a full minute below the server's 3 MB upload ceiling, including container overhead.
-      const next = new MediaRecorder(input, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 280000, audioBitsPerSecond: 32000 }); recorder.current = next;
+      // Keep a full minute below the server's 4 MB upload ceiling, including container overhead.
+      const next = new MediaRecorder(input, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 400_000, audioBitsPerSecond: 48_000 }); recorder.current = next;
       const chunks: Blob[] = []; next.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
       next.onstop = () => { input.getTracks().forEach(t => t.stop()); if (timer.current) clearInterval(timer.current); setRecording(false); const blob = new Blob(chunks, { type: next.mimeType || 'video/webm' }); void choose(new File([blob], 'food-reel.' + (blob.type.includes('mp4') ? 'mp4' : 'webm'), { type: blob.type })); };
       next.start(500); setRecording(true); setSeconds(0);

@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   const caption = typeof form?.get('caption') === 'string' ? String(form.get('caption')).trim() : '';
   const productId = typeof form?.get('productId') === 'string' ? String(form.get('productId')).trim() : '';
   const file = form?.get('video');
-  if (!caption || caption.length > 500 || !(file instanceof File) || !file.size || file.size > MAX_REEL_BYTES) return NextResponse.json({ error: 'Add a caption (1-500 characters) and an MP4/WebM video up to 3 MB.' }, { status: 400 });
+  if (!caption || caption.length > 500 || !(file instanceof File) || !file.size || file.size > MAX_REEL_BYTES) return NextResponse.json({ error: 'Add a caption (1-500 characters) and an MP4/WebM video up to 4 MB.' }, { status: 400 });
   const data = new Uint8Array(await file.arrayBuffer()); const mimeType = detectReelVideo(data);
   if (!mimeType) return NextResponse.json({ error: 'Choose a valid MP4 or WebM video.' }, { status: 400 });
   if (productId && !await prisma.gulplazaProduct.findFirst({ where: { id: productId, isActive: true, seller: { isApproved: true, user: { isActive: true, deletedAt: null } } }, select: { id: true } })) return NextResponse.json({ error: 'That dish is no longer available.' }, { status: 400 });

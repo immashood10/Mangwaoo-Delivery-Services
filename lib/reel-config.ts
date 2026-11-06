@@ -1,4 +1,5 @@
-﻿export const MAX_REEL_BYTES = 3 * 1024 * 1024;
+// Vercel Functions accept at most 4.5 MB request bodies; 4 MiB leaves room for multipart fields.
+export const MAX_REEL_BYTES = 4 * 1024 * 1024;
 export const MAX_REEL_SECONDS = 60;
 export const REEL_CAPTION_LIMIT = 500;
 export function detectReelVideo(bytes: Uint8Array): 'video/mp4' | 'video/webm' | null {

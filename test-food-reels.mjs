@@ -44,12 +44,14 @@ stubs['@/lib/area-managers']={areasWithManagers:async()=>[1],notifyAreaManagers(
 const users=[];
 const base='reels-test-'+Date.now();
 const json=(data,method='POST')=>new Request('http://localhost/api/reels',{method,headers:{'content-type':'application/json'},body:JSON.stringify(data)});
-let reelId;
+let reelId, raisedLimitReelId;
 try {
  for (const role of ['CUSTOMER','CUSTOMER','ADMIN']) users.push(await prisma.user.create({data:{name:'Reel Test',email:base+users.length+'@example.invalid',password:'disabled-test-account',role,phoneVerifiedAt:new Date()}}));
  const actAs=index=>{session=index===null?null:{userId:users[index].id,role:users[index].role};};
  const feed=load('app/api/reels/route.ts');const video=load('app/api/reels/[id]/video/route.ts');const moderation=load('app/api/admin/reels/[id]/route.ts');const like=load('app/api/reels/[id]/like/route.ts');const comment=load('app/api/reels/[id]/comments/route.ts');const remove=load('app/api/reels/[id]/route.ts');
  actAs(0);
+ const raisedBytes=new Uint8Array(3*1024*1024+1024);raisedBytes.set([0,0,0,32,102,116,121,112],0);const raisedForm=new FormData();raisedForm.set('caption','Temporary raised-limit reel');raisedForm.set('video',new File([raisedBytes],'raised-limit.mp4',{type:'video/mp4'}));
+ const raisedPosted=await feed.POST(new Request('http://localhost/api/reels',{method:'POST',body:raisedForm}));assert.equal(raisedPosted.status,201);raisedLimitReelId=(await raisedPosted.json()).reel.id;check((await prisma.reelVideo.findUnique({where:{reelId:raisedLimitReelId}})).size>3*1024*1024,'reel upload above the old 3 MiB limit succeeds');await remove.DELETE(new Request('http://localhost/api/reels/'+raisedLimitReelId),{params:Promise.resolve({id:raisedLimitReelId})});raisedLimitReelId=undefined;
  const form=new FormData();form.set('caption','Temporary test food reel');const bytes=new Uint8Array(32);bytes.set([0,0,0,32,102,116,121,112],0);form.set('video',new File([bytes],'test.mp4',{type:'video/mp4'}));
  const posted=await feed.POST(new Request('http://localhost/api/reels',{method:'POST',body:form}));assert.equal(posted.status,201);reelId=(await posted.json()).reel.id;
  const context={params:Promise.resolve({id:reelId})};const req=new Request('http://localhost/api/reels?id='+reelId);
@@ -74,6 +76,7 @@ try {
  await deliveryChecks();
  console.log(checks+' checks passed; only temporary fixtures used; notifications stubbed.');
 } finally {
+ if(raisedLimitReelId) await prisma.reel.deleteMany({where:{id:raisedLimitReelId}});
  if(reelId) await prisma.reel.deleteMany({where:{id:reelId}});
  await prisma.user.deleteMany({where:{id:{in:users.map(u=>u.id)}}});
  await prisma.$disconnect();
