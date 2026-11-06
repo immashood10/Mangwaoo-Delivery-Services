@@ -11,20 +11,36 @@ export default function ReelComposer({ onPosted }: { onPosted: () => void }) {
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; if (recorder.current) { recorder.current.onstop = null; recorder.current.ondataavailable = null; if (recorder.current.state === 'recording') recorder.current.stop(); } stream.current?.getTracks().forEach(t => t.stop()); if (timer.current) clearInterval(timer.current); }; }, []);
   useEffect(() => { const abort = new AbortController(); const timeout = setTimeout(() => { void fetch('/api/reels/dishes?q=' + encodeURIComponent(query), { signal: abort.signal }).then(r => r.json()).then(data => setDishes(data.dishes || [])).catch(() => {}); }, 300); return () => { clearTimeout(timeout); abort.abort(); }; }, [query]);
+  async function requestNativeMediaPermission() {
+    if (!navigator.userAgent.includes('MangwaooApp/')) return;
+    const bridge = (window as Window & { ReactNativeWebView?: { postMessage: (message: string) => void } }).ReactNativeWebView;
+    if (!bridge) return;
+    const granted = await new Promise<boolean>((resolve) => {
+      let settled = false;
+      const finish = (allowed: boolean) => { if (settled) return; settled = true; window.removeEventListener('mangwaoo:media-permission', receive as EventListener); window.clearTimeout(timeout); resolve(allowed); };
+      const receive = (event: CustomEvent<{ granted?: boolean }>) => finish(event.detail?.granted === true);
+      const timeout = window.setTimeout(() => finish(false), 60_000);
+      window.addEventListener('mangwaoo:media-permission', receive as EventListener, { once: true });
+      bridge.postMessage(JSON.stringify({ type: 'mangwaoo:request-media-permission' }));
+    });
+    if (!granted) throw new Error('Camera and microphone permission is required. Allow both in Mangwaoo app settings, then try again.');
+  }
   async function choose(next: File) {
     setError('');
     if (next.size > MAX_REEL_BYTES) { setError('This video is larger than 3 MB. Use Record here for a smaller food clip.'); return; }
     const url = URL.createObjectURL(next); const video = document.createElement('video'); video.preload = 'metadata';
-    try { const duration = await new Promise<number>((resolve, reject) => { video.onloadedmetadata = () => video.videoWidth > 0 ? resolve(video.duration) : reject(new Error('Choose a video with a picture.')); video.onerror = () => reject(new Error('This video cannot be played. Use MP4 or WebM.')); video.src = url; }); if (Number.isFinite(duration) && duration > MAX_REEL_SECONDS + 1) throw new Error('Keep your reel to 45 seconds or less.'); setFile(next); setPreview(URL.createObjectURL(next)); } catch(e) { setError((e as Error).message); } finally { URL.revokeObjectURL(url); video.removeAttribute('src'); video.load(); }
+    try { const duration = await new Promise<number>((resolve, reject) => { video.onloadedmetadata = () => video.videoWidth > 0 ? resolve(video.duration) : reject(new Error('Choose a video with a picture.')); video.onerror = () => reject(new Error('This video cannot be played. Use MP4 or WebM.')); video.src = url; }); if (Number.isFinite(duration) && duration > MAX_REEL_SECONDS + 1) throw new Error('Keep your reel to 1 minute or less.'); setFile(next); setPreview(URL.createObjectURL(next)); } catch(e) { setError((e as Error).message); } finally { URL.revokeObjectURL(url); video.removeAttribute('src'); video.load(); }
   }
   async function record() {
     setError(''); setBusy(true);
     try {
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') throw new Error('Recording is unavailable here. Choose a video from your phone instead.');
+      await requestNativeMediaPermission();
       const input = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 720 }, height: { ideal: 1280 } }, audio: true }); stream.current = input;
       if (!mounted.current) { input.getTracks().forEach(t => t.stop()); return; }
       const mimeType = ['video/webm;codecs=vp8,opus','video/webm','video/mp4'].find(type => MediaRecorder.isTypeSupported(type));
-      const next = new MediaRecorder(input, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 350000, audioBitsPerSecond: 48000 }); recorder.current = next;
+      // Keep a full minute below the server's 3 MB upload ceiling, including container overhead.
+      const next = new MediaRecorder(input, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 280000, audioBitsPerSecond: 32000 }); recorder.current = next;
       const chunks: Blob[] = []; next.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
       next.onstop = () => { input.getTracks().forEach(t => t.stop()); if (timer.current) clearInterval(timer.current); setRecording(false); const blob = new Blob(chunks, { type: next.mimeType || 'video/webm' }); void choose(new File([blob], 'food-reel.' + (blob.type.includes('mp4') ? 'mp4' : 'webm'), { type: blob.type })); };
       next.start(500); setRecording(true); setSeconds(0);

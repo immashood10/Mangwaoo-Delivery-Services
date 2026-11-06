@@ -1,5 +1,5 @@
 ﻿export const MAX_REEL_BYTES = 3 * 1024 * 1024;
-export const MAX_REEL_SECONDS = 45;
+export const MAX_REEL_SECONDS = 60;
 export const REEL_CAPTION_LIMIT = 500;
 export function detectReelVideo(bytes: Uint8Array): 'video/mp4' | 'video/webm' | null {
   if (bytes.length < 16) return null;

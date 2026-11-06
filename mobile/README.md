@@ -67,3 +67,9 @@ Testing build page: https://expo.dev/accounts/mangwaoocomdeliveryservicess-team/
 Version 1.1.0 (Android build 2) direct APK: https://expo.dev/artifacts/eas/WGGJU0C2lqn0YTgKes1HUT_BrW3MoJDMmXzC1NswNIk.apk
 
 APK SHA-256: `7BA5A8BFE71DD98476E58D92C122BB42F76C8141E777B5D8C30D4651FF6A776B`. Installed successfully as an update on the Samsung SM-A075F; Android reported package `pk.mangwaoo.app`, `versionName=1.1.0`, `versionCode=2`.
+
+## Version 1.1.1 camera-fix build
+
+This build requests Android camera and microphone permissions through the native app before recording, supports reels up to 60 seconds, and hides the website footer only inside the app. The public website navbar and footer remain unchanged.
+
+Testing build page: https://expo.dev/accounts/mangwaoocomdeliveryservicess-team/projects/mangwaoo-delivery-service/builds/57334d62-7dea-48e1-babb-bd4d397b0227

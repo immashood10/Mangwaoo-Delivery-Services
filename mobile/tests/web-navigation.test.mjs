@@ -25,10 +25,19 @@ test('the injected bridge preserves History calls and reports only real URL chan
     pushState(state, title, url) { window.location.href = new URL(url, window.location.href).href; return 'preserved'; },
     replaceState(state, title, url) { window.location.href = new URL(url, window.location.href).href; },
   };
-  const context = vm.createContext({ window });
+  const styles = new Map();
+  const document = {
+    head: { appendChild(node) { styles.set(node.id, node); } },
+    documentElement: { appendChild(node) { styles.set(node.id, node); } },
+    getElementById(id) { return styles.get(id) ?? null; },
+    createElement() { return { id: '', textContent: '' }; },
+  };
+  const context = vm.createContext({ window, document });
   vm.runInContext(WEB_NAVIGATION_SCRIPT, context);
   vm.runInContext(WEB_NAVIGATION_SCRIPT, context); // idempotent across repeated injection
   assert.equal(messages.length, 0);
+  assert.equal(styles.get('mangwaoo-native-app-style').textContent, 'footer{display:none!important}');
+  assert.equal(styles.size, 1);
   assert.equal(window.history.pushState({}, '', '/mart'), 'preserved');
   window.history.replaceState({}, '', '/mart?category=1');
   window.history.replaceState({}, '', '/mart?category=1');

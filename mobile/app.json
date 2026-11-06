@@ -3,7 +3,7 @@
     "name": "Mangwaoo",
     "slug": "mangwaoo-delivery-service",
     "scheme": "mangwaoo",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "extra": {
       "eas": {
         "projectId": "7ca367d0-7c54-4787-9895-4c2fdefaec3b"

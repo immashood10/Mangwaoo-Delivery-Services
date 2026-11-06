@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import { useCallback } from 'react';
-import { ActivityIndicator, Alert, BackHandler, Linking, Platform, Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { ActivityIndicator, Alert, BackHandler, Linking, PermissionsAndroid, Platform, Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -72,6 +72,18 @@ function Marketplace() {
     const permission = await Location.requestForegroundPermissionsAsync();
     Alert.alert(permission.granted ? 'Location is ready' : 'Location is turned off', permission.granted ? 'Use the location picker on the page to choose your delivery address.' : 'You can still enter your delivery address manually. Enable location in your phone settings to use GPS.');
   }
+  async function allowMediaCapture() {
+    let granted = true;
+    if (Platform.OS === 'android') {
+      const result = await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+      ]);
+      granted = result[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED
+        && result[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED;
+    }
+    web.current?.injectJavaScript(`window.dispatchEvent(new CustomEvent('mangwaoo:media-permission',{detail:{granted:${granted}}}));true;`);
+  }
 
   if (Platform.OS === 'web') return <SafeAreaView style={[s.screen, { backgroundColor: c.bg }]}><View style={s.center}>
     <Text style={[s.wordmark, { color: c.accent }]}>mangwaoo.</Text>
@@ -91,9 +103,20 @@ function Marketplace() {
     <View style={{ height: 2, backgroundColor: c.line }}>{loading && <View style={{ width: `${Math.max(5, progress * 100)}%`, height: 2, backgroundColor: c.accent }} />}</View>
     <View style={[s.screen, { backgroundColor: c.bg }]}>
       <WebView<object> ref={web} source={{ uri: sourceUrl }} style={[s.screen, { backgroundColor: c.bg }]}
-        applicationNameForUserAgent="MangwaooApp/1.0" sharedCookiesEnabled geolocationEnabled
+        applicationNameForUserAgent="MangwaooApp/1.1" sharedCookiesEnabled geolocationEnabled
         injectedJavaScript={WEB_NAVIGATION_SCRIPT}
         onMessage={({ nativeEvent }) => {
+          if (isSiteUrl(nativeEvent.url)) {
+            try {
+              const request = JSON.parse(nativeEvent.data) as { type?: string };
+              if (request.type === 'mangwaoo:request-media-permission') {
+                void allowMediaCapture().catch(() => {
+                  web.current?.injectJavaScript("window.dispatchEvent(new CustomEvent('mangwaoo:media-permission',{detail:{granted:false}}));true;");
+                });
+                return;
+              }
+            } catch { /* Navigation messages are parsed below. */ }
+          }
           const message = parseNavigationMessage(nativeEvent.data, nativeEvent.url, SITE_URL);
           if (!message) return;
           if (message.mode === 'push') history.current.visit(message.url);

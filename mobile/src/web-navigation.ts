@@ -14,6 +14,12 @@ export function parseNavigationMessage(raw: string, senderUrl: string, origin: s
 // Report only actual URL changes; document load events never write history.
 export const WEB_NAVIGATION_SCRIPT = `
 (function () {
+  if (!document.getElementById('mangwaoo-native-app-style')) {
+    var style = document.createElement('style');
+    style.id = 'mangwaoo-native-app-style';
+    style.textContent = 'footer{display:none!important}';
+    (document.head || document.documentElement).appendChild(style);
+  }
   if (window.__mangwaooNavigationInstalled) return;
   window.__mangwaooNavigationInstalled = true;
   var lastUrl = window.location.href;
